@@ -283,22 +283,28 @@ Tracks every practice session with a real-time live view and a full history tabl
 ### 4.2. Study Dashboard
 *(Popup — Command Palette: `Open Study Dashboard`, quick code `sdb`)*
 
-A filterable popup that summarizes your **Incremental, Dismissed, and Flashcard activity** across the whole knowledge base or scoped to a single document, with an expandable hierarchy view showing time, reps, retention, and speed at every level of the rem tree.
+A filterable popup that summarizes your **Incremental, Dismissed, and Flashcard activity** across the whole knowledge base or scoped to a single document, with an expandable hierarchy view showing time, reps, retention, and speed at every level of the rem tree, and a tab that plots the same period as timeline graphs.
+
+**Tabs:** *Summary & Hierarchy* and *Graphs*. The filters sit above the tabs, so the context and period apply to both.
 
 **Filters:**
 - **Context:** *Global* (whole KB) or *Document* (rem-rooted).
 - **Scope** (Document only): *Descendants Only* or *Comprehensive* (matches the plugin's standard comprehensive scope — descendants, portals, folder queue, sources recursively, referencing rems, PDF extracts).
 - **Period:** Today / Yesterday / Week / This Week / Last Week / Month / This Month / Last Month / Year / This Year / Last Year / All, plus explicit Start/End date inputs for custom ranges.
 
-**Summary:** Three rows (Incremental / Dismissed / Flashcards) plus a bold Total row, with columns for Items, Items with reps in the period, Reps, Time, and (for Flashcards) average Retention and Speed in cpm.
+**Summary:** Three rows (Incremental / Dismissed / Flashcards) plus a bold Total row, with columns for Items, Items with reps in the period, Reps, Time, and (for Flashcards) average Retention and Speed. The Speed heading toggles between cards-per-minute and seconds-per-card, sharing that preference with the Practiced Queues summary table and the Speed chart.
 
 **Hierarchy:** Lists every top-level rem with activity in the period, sorted by total time descending. Expandable into the full ancestor tree, with structural-only ancestor nodes (italic, no own data) keeping the tree connected when the *Comprehensive* scope pulls rems from outside the document. Each row shows Total Time, Cards (reps + time), Inc. Rems (reps + time, summing Incremental and Dismissed histories), Retention %, and Speed.
+
+**Graphs:** Five timeline charts over the selected period, bucketed *Daily / Weekly / Monthly / Yearly*. **Reviews** puts flashcard reps on the left axis and IncRem reps on the right (the counts differ by an order of magnitude); **Time** keeps one scale and stacks flashcard and IncRem time, so the bar height is the bucket total — uncheck *Stacked* to put them side by side instead. **Retention** and **Speed** draw the Summary's own `Ret.` and `Speed` columns as lines over the rep counts behind them, and **Answer breakdown** splits each bucket into Forgot / Hard / Good / Easy shares, Good on its own axis. A *Trend lines* checkbox adds a reps-weighted fit and its slope to the three rate charts. Drag across any chart to zoom them all, with a *Reset Data Range* button; every axis fits itself to what's on screen — counts from zero, rates to a band around their own values. Numbers come from the same histories the Summary uses, so the tabs always agree.
 
 **Performance:** Bulk-fetches *Incremental*, *Dismissed*, and *cardPriority* `taggedRem()` sets plus a single `card.getAll()`. Because `cardPriority` typically covers every card-bearing rem, ancestor chain walks need almost no per-rem `findOne` calls. Loaded data is cached per session, so changing the **period** re-aggregates in memory only (instant) — only changing the **context** or **scope** triggers a reload. Global mode pre-builds every top-level rem's subtree at load time, so expanding any top-level row is also instant.
 
 📖 **Full documentation:** [Study Dashboard](Study-Dashboard.md)
 
 ![Study Dashboard](assets/study-dashboard.png){ width="900" }
+
+![Study Dashboard — Graphs tab](assets/study-dashboard-graphs.png){ width="800" }
 
 ---
 
@@ -513,6 +519,33 @@ The plugin's hub, at the bottom of the left sidebar. Header controls: **⚙** op
 Below the shortcuts it shows **one onboarding tip per session**, with **I Got It** (retires the tip permanently, per knowledge base), **✕** (returns it to the pile; the panel also goes quiet for two hours) and **Learn More** (opens the tip's documentation section). Either answer closes the tip area until the next start — it never chains into a second tip.
 
 📖 **Full documentation:** [The Incremental RemNote Panel](Getting-Started.md#the-incremental-plugin-panel)
+
+### 6.11. Empty Extra Card Detail Popup
+**Trigger:** `Delete Empty Extra Card Detail Rems` command (quick code `decd`)
+
+Scan, review and delete in one popup — but deliberately in **two stages**, because unlike the image scan this one removes Rems and cannot be undone by re-running.
+
+- **Stage one — scope.** The same two buttons as the Image Scan popup: the **focused Rem** (or open document), named on the button, or the **whole knowledge base**. `↑`/`↓` move, `Enter` scans, `Esc` cancels. **Nothing is written** by this stage.
+- **Stage two — review.** How many Extra Card Detail Rems were checked, how many are completely empty and safe to delete, how many were **kept and why** (children, other tags, references, cards, sources, aliases), a **sample of what will go** listed by the Rem each blank sits under, and an estimate of how long deleting will take.
+- **`Enter` is inert here.** It ran the scan on the previous screen; the red **Delete N Rems** button has to be clicked. **Back** returns to the scope choice, **Cancel** closes without touching anything.
+- **Live progress** during the delete, and `Esc` is ignored while it runs so a reflex press can't abort it.
+- **The report stays on screen**: how many were deleted, how many failed, and how long it took. **Scan again** starts over; **?** in the header opens this feature's documentation.
+
+📖 **Full documentation:** [Delete Empty Extra Card Detail Rems](Utilities.md#delete-empty-extra-card-detail-rems)
+
+### 6.12. Clean Priority Review Documents Popup
+**Trigger:** `Clean Priority Review Documents` command (quick code `cprd`)
+
+Two stages, like the Empty Extra Card Detail popup and for the same reason: the scan writes nothing, and you confirm against real counts before any Rem is deleted.
+
+- **Stage one — the scan** runs as soon as the popup opens and is read-only. It reads every document tagged *Priority Review Queue* and works out which of its entries still have something due.
+- **Stage two — review.** One row per document, most recently built first: **still due / reviewed / total entries**, the date it was built, and a note of anything being kept back. **Show** expands the row into the entries themselves, by name and with their `INC` / `FC` tag, split into *To remove*, *Reviewed, but kept*, and *Still due, staying*.
+- **Tick the documents to clean.** Every document with work to do starts ticked; untick to leave one alone. The button counts what you have selected and estimates how long it will take.
+- **`Enter` is inert here** — the red **Remove N entries** button has to be clicked. `Esc` is ignored while the scan or the deletion runs.
+- **The report stays on screen**: how many entries were removed, and which documents are left holding nothing due at all — those are finished and can be deleted.
+- **The console holds the full readout**: a table per document with every entry's status, kind, name and Rem ID, which is the quickest way to see what a review document is still carrying.
+
+📖 **Full documentation:** [Cleaning a Review Document](Priority-Review-Document.md#cleaning-a-review-document)
 
 ---
 

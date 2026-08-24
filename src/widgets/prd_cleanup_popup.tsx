@@ -1,0 +1,430 @@
+import { renderWidget, usePlugin } from '@remnote/plugin-sdk';
+import React, { useEffect, useRef, useState } from 'react';
+import '../style.css';
+import '../App.css';
+import {
+  cleanPriorityReviewDocuments,
+  KEEP_REASON_LABELS,
+  KeepReason,
+  PrdCleanResult,
+  PrdDocReport,
+  PrdEntry,
+  PrdScanResult,
+  scanPriorityReviewDocuments,
+} from '../lib/priority_review_document/clean';
+
+type Phase = 'scanning' | 'review' | 'cleaning' | 'done' | 'error';
+
+/** Entries listed per document when a row is expanded. */
+const PREVIEW_LIMIT = 200;
+
+const formatElapsed = (ms: number): string => {
+  const seconds = ms / 1000;
+  if (seconds < 90) return `${seconds.toFixed(1)}s`;
+  const mins = Math.floor(seconds / 60);
+  return `${mins}m ${Math.round(seconds - mins * 60)}s`;
+};
+
+/** ~74ms per write on this bridge (measured in lib/image_scan.ts), serialized. */
+const estimateDeleteTime = (count: number): string => formatElapsed(count * 74);
+
+const formatDate = (ms: number): string =>
+  ms
+    ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
+
+/**
+ * Scan → review → delete for entries left behind in Priority Review Documents.
+ *
+ * A PRD is a snapshot of what was due when it was built, and its entries never
+ * update. Once an item has been reviewed its entry keeps feeding the document's
+ * queue, which is what lets an old review document crowd out the priorities you
+ * built it to reach. This finds those entries and removes them.
+ *
+ * Two stages, like the Empty ECD popup and for the same reason: the scan writes
+ * nothing, and you confirm per document against real counts before a single Rem
+ * is deleted. The scan alone is also useful on its own — it is the readout of
+ * what each review document is still carrying.
+ */
+export function PrdCleanupPopup() {
+  const plugin = usePlugin();
+
+  const [phase, setPhase] = useState<Phase>('scanning');
+  const [progress, setProgress] = useState('Starting…');
+  const [scan, setScan] = useState<PrdScanResult | null>(null);
+  const [clean, setClean] = useState<PrdCleanResult | null>(null);
+  const [error, setError] = useState('');
+  /** Documents ticked for cleaning. Seeded with every document that has work. */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const result = await scanPriorityReviewDocuments(plugin, (m) => setProgress(m));
+        setScan(result);
+        setSelected(
+          new Set(result.docs.filter((d) => d.removableEntries.length > 0).map((d) => d.docRemId))
+        );
+        setPhase('review');
+      } catch (e) {
+        console.error('[PRD Clean] scan failed:', e);
+        setError((e as any)?.message ?? String(e));
+        setPhase('error');
+      }
+    };
+    run();
+  }, []);
+
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, [phase]);
+
+  const close = () => plugin.widget.closePopup();
+
+  const toggleDoc = (docId: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(docId)) next.delete(docId);
+      else next.add(docId);
+      return next;
+    });
+
+  const toggleExpanded = (docId: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(docId)) next.delete(docId);
+      else next.add(docId);
+      return next;
+    });
+
+  const selectedDocs: PrdDocReport[] =
+    scan?.docs.filter((d) => selected.has(d.docRemId) && d.removableEntries.length > 0) ?? [];
+  const selectedCount = selectedDocs.reduce((n, d) => n + d.removableEntries.length, 0);
+
+  const runClean = async () => {
+    if (selectedCount === 0) return;
+    setPhase('cleaning');
+    setProgress(`Removing 0 of ${selectedCount}…`);
+    try {
+      setClean(await cleanPriorityReviewDocuments(plugin, selectedDocs, (m) => setProgress(m)));
+      setPhase('done');
+    } catch (e) {
+      console.error('[PRD Clean] deletion failed:', e);
+      setError((e as any)?.message ?? String(e));
+      setPhase('error');
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      // Not mid-run: Esc is a reflex, and here it would abort work in progress.
+      if (phase === 'scanning' || phase === 'cleaning') return;
+      e.preventDefault();
+      close();
+      return;
+    }
+    // No Enter-to-delete on the review screen — the destructive button is clicked.
+    if ((phase === 'done' || phase === 'error') && e.key === 'Enter') {
+      e.preventDefault();
+      close();
+    }
+  };
+
+  const primaryButton: React.CSSProperties = {
+    background: '#3B82F6',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+  };
+  const secondaryButton: React.CSSProperties = {
+    background: 'transparent',
+    color: 'var(--rn-clr-content-primary)',
+    border: '1px solid var(--rn-clr-border-opaque, rgba(128,128,128,0.3))',
+    cursor: 'pointer',
+  };
+  const dangerButton: React.CSSProperties = {
+    background: '#dc2626',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+  };
+
+  const header = (
+    <div className="flex items-center gap-2">
+      <span style={{ fontSize: 18 }}>🧹</span>
+      <span className="font-semibold text-base">Clean Priority Review Documents</span>
+    </div>
+  );
+
+  const kindChip = (kind: PrdEntry['kind']) => (
+    <span
+      className="text-xs font-mono px-1 rounded"
+      style={{
+        background: 'var(--rn-clr-background-elevation-20)',
+        color: 'var(--rn-clr-content-secondary)',
+      }}
+    >
+      {kind.toUpperCase()}
+    </span>
+  );
+
+  const entryRow = (entry: PrdEntry, muted: boolean) => (
+    <div
+      key={entry.entryRemId}
+      className="flex items-center gap-2 text-xs py-0.5"
+      style={{ color: muted ? 'var(--rn-clr-content-tertiary)' : 'var(--rn-clr-content-secondary)' }}
+    >
+      {kindChip(entry.kind)}
+      <span className="truncate flex-1">{entry.targetName}</span>
+      {entry.status === 'missing' && <span style={{ fontStyle: 'italic' }}>deleted Rem</span>}
+      {entry.keepReason && (
+        <span style={{ fontStyle: 'italic' }}>{KEEP_REASON_LABELS[entry.keepReason]}</span>
+      )}
+    </div>
+  );
+
+  const docRow = (doc: PrdDocReport) => {
+    const removable = doc.removableEntries.length;
+    const isOpen = expanded.has(doc.docRemId);
+    const hasWork = removable > 0;
+    const keptByReason = doc.keptEntries.reduce<Record<string, number>>((acc, e) => {
+      if (e.keepReason) acc[e.keepReason] = (acc[e.keepReason] || 0) + 1;
+      return acc;
+    }, {});
+
+    return (
+      <div
+        key={doc.docRemId}
+        className="rounded p-2"
+        style={{ background: 'var(--rn-clr-background-elevation-10)' }}
+      >
+        <div className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={selected.has(doc.docRemId)}
+            disabled={!hasWork}
+            onChange={() => toggleDoc(doc.docRemId)}
+            className="mt-1"
+            style={{ cursor: hasWork ? 'pointer' : 'not-allowed' }}
+          />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm truncate" title={doc.docName}>
+              {doc.docName}
+            </div>
+            <div className="text-xs mt-0.5" style={{ color: 'var(--rn-clr-content-secondary)' }}>
+              <span className="font-bold">{doc.dueEntries.length}</span> still due ·{' '}
+              <span className="font-bold" style={{ color: removable ? '#dc2626' : undefined }}>
+                {removable}
+              </span>{' '}
+              reviewed · {doc.totalEntries} entries
+              {doc.createdAt ? ` · built ${formatDate(doc.createdAt)}` : ''}
+            </div>
+            {doc.keptEntries.length > 0 && (
+              <div className="text-xs mt-0.5" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                Keeping{' '}
+                {Object.entries(keptByReason)
+                  .map(([reason, n]) => `${n} that ${KEEP_REASON_LABELS[reason as KeepReason]}`)
+                  .join(', ')}
+              </div>
+            )}
+            {doc.unknownEntries.length > 0 && (
+              <div className="text-xs mt-0.5" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                {doc.unknownEntries.length} INC {doc.unknownEntries.length === 1 ? 'entry' : 'entries'}{' '}
+                could not be judged
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => toggleExpanded(doc.docRemId)}
+            onMouseDown={(e) => e.preventDefault()}
+            className="text-xs px-2 py-0.5 rounded shrink-0"
+            style={secondaryButton}
+          >
+            {isOpen ? 'Hide' : 'Show'}
+          </button>
+        </div>
+
+        {isOpen && (
+          <div
+            className="mt-2 pl-6 flex flex-col"
+            style={{ maxHeight: 220, overflowY: 'auto' }}
+          >
+            {removable > 0 && (
+              <>
+                <div className="text-xs font-semibold mb-1">To remove ({removable})</div>
+                {doc.removableEntries.slice(0, PREVIEW_LIMIT).map((e) => entryRow(e, false))}
+                {removable > PREVIEW_LIMIT && (
+                  <div className="text-xs" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                    …and {removable - PREVIEW_LIMIT} more — the full list is in the console.
+                  </div>
+                )}
+              </>
+            )}
+            {doc.keptEntries.length > 0 && (
+              <>
+                <div className="text-xs font-semibold mt-2 mb-1">
+                  Reviewed, but kept ({doc.keptEntries.length})
+                </div>
+                {doc.keptEntries.slice(0, PREVIEW_LIMIT).map((e) => entryRow(e, true))}
+              </>
+            )}
+            {doc.dueEntries.length > 0 && (
+              <>
+                <div className="text-xs font-semibold mt-2 mb-1">
+                  Still due, staying ({doc.dueEntries.length})
+                </div>
+                {doc.dueEntries.slice(0, PREVIEW_LIMIT).map((e) => entryRow(e, true))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="flex flex-col gap-3 p-4"
+      style={{ outline: 'none' }}
+    >
+      {header}
+
+      {(phase === 'scanning' || phase === 'cleaning') && (
+        <div className="flex flex-col gap-2 py-4">
+          <div className="text-sm font-medium">
+            {phase === 'scanning'
+              ? '🔍 Reading every review document…'
+              : '🧹 Removing reviewed entries…'}
+          </div>
+          <div className="text-xs" style={{ color: 'var(--rn-clr-content-secondary)' }}>
+            {progress}
+          </div>
+          <div className="text-xs" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+            {phase === 'scanning'
+              ? 'Nothing is written yet. Closing this popup stops the scan.'
+              : 'Keep this popup open until it finishes — closing it stops the run, and entries already removed stay removed.'}
+          </div>
+        </div>
+      )}
+
+      {phase === 'review' && scan && (
+        <>
+          <div className="text-sm" style={{ color: 'var(--rn-clr-content-secondary)' }}>
+            {scan.scannedDocs === 0 ? (
+              'No Priority Review Documents found in this knowledge base.'
+            ) : (
+              <>
+                <span className="font-bold">{scan.scannedDocs}</span> review document
+                {scan.scannedDocs === 1 ? '' : 's'} ·{' '}
+                <span className="font-bold">{scan.totalEntries.toLocaleString()}</span> entries →{' '}
+                <span className="font-bold">{scan.totalDue.toLocaleString()}</span> still due,{' '}
+                <span className="font-bold" style={{ color: '#dc2626' }}>
+                  {scan.totalRemovable.toLocaleString()}
+                </span>{' '}
+                already reviewed. Read in {formatElapsed(scan.elapsedMs)}.
+              </>
+            )}
+          </div>
+
+          {scan.incCacheUnavailable && (
+            <div
+              className="text-xs p-2 rounded"
+              style={{ background: 'rgba(220,38,38,0.1)', color: 'var(--rn-clr-content-primary)' }}
+            >
+              The incremental-Rem cache is empty, so INC entries were left alone — an unbuilt cache
+              looks exactly like "everything has been reviewed". Reopen the queue once and run this
+              again to include them.
+            </div>
+          )}
+
+          {scan.scannedDocs > 0 && (
+            <div className="flex flex-col gap-2" style={{ maxHeight: 360, overflowY: 'auto' }}>
+              {scan.docs.map(docRow)}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+              {selectedCount > 0
+                ? `About ${estimateDeleteTime(selectedCount)}. This cannot be undone.`
+                : 'Nothing selected.'}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={close} className="px-3 py-1.5 text-sm rounded" style={secondaryButton}>
+                Cancel
+              </button>
+              <button
+                onClick={runClean}
+                disabled={selectedCount === 0}
+                className="px-4 py-1.5 text-sm font-medium rounded"
+                style={
+                  selectedCount === 0
+                    ? { ...secondaryButton, opacity: 0.5, cursor: 'not-allowed' }
+                    : dangerButton
+                }
+              >
+                Remove {selectedCount.toLocaleString()} entr{selectedCount === 1 ? 'y' : 'ies'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {phase === 'done' && clean && (
+        <>
+          <div className="text-sm">
+            Removed <span className="font-bold">{clean.deleted.toLocaleString()}</span> reviewed
+            entr{clean.deleted === 1 ? 'y' : 'ies'}
+            {clean.failed > 0 ? ` — ${clean.failed} could not be deleted (see the console)` : '.'}
+          </div>
+          {clean.emptiedDocs.length > 0 && (
+            <div
+              className="text-xs p-3 rounded flex flex-col gap-1"
+              style={{
+                background: 'var(--rn-clr-background-elevation-10)',
+                color: 'var(--rn-clr-content-secondary)',
+              }}
+            >
+              <div className="font-semibold">
+                {clean.emptiedDocs.length} document
+                {clean.emptiedDocs.length === 1 ? ' holds' : 's hold'} nothing due any more — you can
+                delete {clean.emptiedDocs.length === 1 ? 'it' : 'them'}:
+              </div>
+              {clean.emptiedDocs.slice(0, 10).map((d) => (
+                <div key={d.docRemId} className="truncate">
+                  {d.docName}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <button onClick={close} className="px-4 py-1.5 text-sm font-medium rounded" style={primaryButton}>
+              Close
+            </button>
+          </div>
+        </>
+      )}
+
+      {phase === 'error' && (
+        <>
+          <div className="text-sm" style={{ color: '#dc2626' }}>
+            {error || 'Something went wrong — see the console.'}
+          </div>
+          <div className="flex justify-end">
+            <button onClick={close} className="px-4 py-1.5 text-sm font-medium rounded" style={primaryButton}>
+              Close
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+renderWidget(PrdCleanupPopup);

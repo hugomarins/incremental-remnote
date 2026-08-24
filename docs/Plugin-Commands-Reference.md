@@ -45,7 +45,7 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   Displays a comprehensive history popup. For Incremental Rems, opens the [IncRem Repetition History](Getting-Started.md#repetition-history-statistics). For regular flashcards, opens the [Flashcard Repetition History](Reviewing-Items-in-the-Queue.md#flashcard-repetition-history).
 
 - **[Open Study Dashboard](Study-Dashboard.md)** — `quick: sdb`
-  Opens the [Study Dashboard](Study-Dashboard.md): a filterable summary of Incremental, Dismissed, and Flashcard activity (Global or Document scope, with multiple period presets and a custom date range), plus an expandable hierarchy of every rem with activity showing total time, reps, retention, and speed. Auto-detects the focused rem in the editor or the current card in the queue to use as the Document-mode root; falls back to Global mode otherwise.
+  Opens the [Study Dashboard](Study-Dashboard.md): a filterable summary of Incremental, Dismissed, and Flashcard activity (Global or Document scope, with multiple period presets and a custom date range), plus an expandable hierarchy of every rem with activity showing total time, reps, retention, and speed, and a [Graphs tab](Study-Dashboard.md#graphs-tab) plotting reviews, time, retention, speed and the answer-grade split per day, week, month or year. Auto-detects the focused rem in the editor or the current card in the queue to use as the Document-mode root; falls back to Global mode otherwise.
 
 - **[Execute Incremental Rem Repetition (Review in Editor)](Reviewing-Items-in-the-Editor.md#1-execute-repetition-command)** (`Ctrl+Shift+J`) — `quick: er`
   Open the Editor Review Timer to log a spaced-repetition event directly from your document, without needing to enter the queue.
@@ -108,6 +108,9 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
 
 - **[Create Priority Review Document](Priority-Review-Document.md)** (`Opt+Shift+R` / `Alt+Shift+R`) — `quick: prd`
   Generate a custom document that compiles your absolute highest priority Rems mixed with standard Flashcards for subset review.
+
+- **[Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document)** — `quick: cprd`
+  Scans every Priority Review Document, finds the entries whose Rem no longer has anything due — reviewed flashcards and Incremental Rems — and removes them after you confirm, per document. Entries you have written notes under are never touched.
 
 - **[Open Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)** — `quick: sort`
   Brings up the Sorting dialog to manipulate the flashcard:increm ratio and queue randomization.
@@ -191,8 +194,18 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
   - **Invisible tag:** the `HasImage` chip is hidden from the editor tag bar (your own tags on the same Rem stay visible).
 
   **Use Case:** reviewing all the figures of a chapter, or finding the images you have not yet turned into occlusion cards — neither of which RemNote's search can do, because an image carries no indexed text.
+  - **Cost:** reading Rems is fast; writing tags is not. The **first** whole-KB run is slow in proportion to the images it finds (~30 min for 23,000 tags on a 413k-Rem knowledge base), and every run after it takes seconds because there is nothing left to write.
 
   📖 See [Utilities → Filter a Document by Images](Utilities.md#filter-a-document-by-images) for the full workflow.
+
+- **Remove `HasImage` Tags** — `quick: rmimg`
+  Takes the **`HasImage`** tag off every Rem that carries it, in the focused Rem's subtree (or open document) or across the **whole knowledge base**. Same popup, same scopes and keys as the scan above.
+  - **Nothing is lost:** the tag is derived from the images themselves, so **Tag Rems With Images** rebuilds it exactly. Re-running the scan *is* the undo — which is why this command has none of its own.
+  - **Cost:** the same per tag as applying them, so clearing a whole knowledge base takes as long as tagging it. Prefer the document scope unless you want the tag gone everywhere.
+
+  **Use Case:** you ran a whole-KB scan, decided you would rather not carry the tag on tens of thousands of Rems, and want it gone — something RemNote itself cannot do in bulk.
+
+  📖 See [Utilities → Clearing the tag](Utilities.md#clearing-the-tag).
 
 - **Bulletize Inline Selected Text** (`Shift+F8`) — `quick: bul`
   Toggles a `• ` prefix at the start of each line **within a single rem**, across a multi-line selection. Built for restoring bullets that a **PDF highlight flattened** into soft-wrapped text (lines joined by `Shift+Enter`) before turning the highlight into an IncRem.
@@ -294,6 +307,19 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Jump to Rem by ID**
   Utility to navigate quickly based on raw IDs.
+
+- **Delete Empty Extra Card Detail Rems** — `quick: decd`
+  Finds Rems tagged **Extra Card Detail** that hold **nothing at all** and deletes them after you confirm the count. Two scopes, as above: the focused Rem (or open document), or the whole knowledge base.
+  - **Scan first, delete second:** the scan writes nothing. It reports the full funnel (Rems walked → blank → blank *and* ECD → deletable), how many it kept and **why**, and a sample of what will go listed by the Rem each blank sits under. Only then is the delete button offered — and `Enter` deliberately does not trigger it.
+  - **A high bar for "empty":** must be a **plain Rem** — not a **portal** (which has no text of its own but displays other Rems), Concept, Descriptor, slot or property — with no text or back text (an image, Rem reference, LaTeX, audio or annotation counts as content; cosmetic formatting on nothing does not), **no children**, nothing displayed portal-style, no tag or powerup beyond Extra Card Detail, nothing referencing it, no cards, no source, no alias. Anything failing a check is kept and counted with its reason.
+  - **Backed up first:** a JSON manifest of every Rem id and the Rem it sits under is saved to the device and offered as a file download **before** anything is deleted; if it cannot be written, the run stops. Every id is also logged to the developer console.
+  - **Cost:** the scan is quick even whole-KB (reading every Rem takes seconds, and only blank Rems are questioned further); deleting is ~0.1s per Rem because RemNote applies deletions one at a time. The review screen estimates it before you commit.
+
+  **Use Case:** after an **Anki import**. Anki's *Extra* field is HTML, so every paragraph break becomes its own child Rem — and the empty ones appear as **Unnamed** items in the queue. RemNote's search cannot find them, because search indexes text and these have none.
+
+  ![Two empty Extra Card Detail Rems, boxed in red, between real ECD content under a flashcard](assets/empty-ecd-rems.png){ width="800" }
+
+  📖 See [Utilities → Delete Empty Extra Card Detail Rems](Utilities.md#delete-empty-extra-card-detail-rems).
 
 ## System & Maintenance Commands
 

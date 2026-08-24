@@ -1,6 +1,6 @@
 # Utilities
 
-Commands and powerups that support the incremental workflow without being part of the queue itself — reshaping text and outlines, finding Rems and sources, and controlling what the queue displays.
+Commands and powerups that support the incremental workflow without being part of the queue itself — reshaping text and outlines, finding Rems and sources, controlling what the queue displays, and clearing out Rems an import left behind.
 
 ---
 
@@ -544,7 +544,7 @@ RemNote's search indexes **text**. An image carries no searchable token, so neit
 1. Put your cursor in the Rem you want to scan — or simply open the document — and run **Tag Rems With Images** from the Omnibar (`Cmd+/`).
 2. The **Image Scan popup** opens with two scopes to choose from:
     - **Scan this Rem and its descendants** — the button **names the exact Rem**, so you can be sure of the target before anything is written. The scope is the **focused Rem** when your cursor is in one, and the **open document** otherwise. (With neither, this button is disabled.)
-    - **Scan the whole knowledge base** — every Rem, every document. Slow on a large knowledge base, so reach for it when you want the tag applied everywhere once, and use the scoped run for day-to-day work.
+    - **Scan the whole knowledge base** — every Rem, every document. The **first** such run is slow in proportion to how many images it finds ([how long it takes](#how-long-it-takes-the-first-whole-kb-run-is-slow)), so reach for it when you want the tag applied everywhere once, and use the scoped run for day-to-day work.
 
     The popup is **fully keyboard-driven**: `↑`/`↓` move between the two scopes, `Enter` runs the selected one, `Esc` cancels. (`Esc` is ignored *while a scan is running*, so a reflex press can't abort a long run.)
 
@@ -569,6 +569,34 @@ Any image element in a Rem's **front text or back text** — pasted, dragged, ad
 The command is **idempotent and self-correcting**. On every run it also *removes* the tag from Rems inside the scope that carry it but no longer hold an image — so deleting a figure and re-running leaves no stale mark behind. Rems **outside** the scanned scope are never touched, so a scoped run cannot disturb tags applied in other documents (only a whole-KB run reaches them).
 
 Only Rems whose state actually changes are written to, which is what makes a re-scan of a large document cheap.
+
+#### How long it takes — the first whole-KB run is slow
+
+**Finding the images is fast. Applying the tags is not.** Reading every Rem in a large knowledge base takes seconds; writing a tag costs a round trip to RemNote, and those happen one at a time. So the cost of a run is set almost entirely by **how many tags it has to write**, not by how many Rems it looks at.
+
+Measured on a knowledge base of **413,000 Rems** holding **23,000 images**:
+
+| Run | Writes | Time |
+| --- | --- | --- |
+| Reading every Rem, before any tagging | — | **~10 seconds** |
+| First whole-KB run, tagging everything it finds | 23,000 | **~30 minutes** |
+| Every whole-KB run after that | ~0 | **~10 seconds** |
+| One document (12,000 Rems, 1,200 images) | 1,200 | **~90 seconds** |
+
+So the whole-KB scan is a **one-time cost**, and only on a knowledge base of that size — the write cost per tag also grows with the knowledge base, so a smaller one is disproportionately quicker. After the first pass there is nothing left to write, and a re-scan only has to write the handful of Rems whose images changed since. Day-to-day, run it on a document and it finishes while you watch.
+
+If you would rather not sit through the first pass, run it **per document as you go**; the tag accumulates, and a whole-KB run afterwards finds most of the work already done.
+
+!!! tip "Leave it running"
+    The scan lives inside the popup, so keep it open. If you do close it, nothing breaks — the tags already written stay correct, and running the command again picks up where it left off.
+
+#### Clearing the tag
+
+**Remove `HasImage` Tags** (`quick: rmimg`) takes the tag **off** every Rem that carries it, in the focused Rem's subtree or across the whole knowledge base. It exists because a whole-KB scan can mark tens of thousands of Rems and RemNote offers no way to take a tag off in bulk.
+
+**Nothing is lost.** The tag is derived from the images themselves, so **Tag Rems With Images** rebuilds it exactly — the same relationship *Remove All Priority Band Tags* has to *Refresh Priority Badges*. That is why there is no undo: re-running the scan *is* the undo.
+
+The scopes and keys match the scan's, and it costs the same per tag — clearing 23,000 tags takes about as long as applying them, so prefer the document scope unless you really do want the tag gone everywhere.
 
 #### The tag is invisible in the outline
 
@@ -729,6 +757,89 @@ All commands above can be triggered directly while reviewing a flashcard in the 
 
 - **No Hierarchy, Hide Parent, Hide Grandparent, Remove Parent, Remove Grandparent:** automatically apply the powerup directly to the current card.
 - **Hide in Queue and Remove from Queue:** since these are designed to be applied to *parent/ancestor* Rems rather than the flashcard itself (applying them to the current card would make the card vanish), triggering them in the queue opens a confirmation prompt offering to apply the powerup to the card's parent instead.
+
+---
+
+## Cleaning Up
+
+---
+
+### Delete Empty Extra Card Detail Rems
+
+**`Delete Empty Extra Card Detail Rems`** (`quick: decd`) finds Rems tagged **Extra Card Detail** that hold *nothing at all*, and deletes them once you have confirmed the count.
+
+#### Why they exist
+
+They come from **Anki imports**. Anki's *Extra* / *Back Extra* field is HTML, where a paragraph break is a structural element rather than a character. An importer that maps that field onto RemNote's **Extra Card Detail** powerup therefore creates a child Rem for every `<br>` and `</p>` — and the ones carrying no text arrive as Rems holding literally nothing.
+
+In the outline they are easy to miss — a pair of blank bullets among the green ECD ones, betrayed only by the `✎ ✕` controls sitting on otherwise empty rows:
+
+![Two empty Extra Card Detail Rems, boxed in red, between real ECD content under a flashcard](assets/empty-ecd-rems.png){ width="800" }
+
+In the **queue** they are not missable, because every item shown has to be named and these have no name — so each one surfaces as **Unnamed** while you review.
+
+#### Why the normal search cannot find them
+
+RemNote's search indexes **text**, and these Rems have none. Neither `Ctrl+F` nor a query can isolate a Rem by its emptiness.
+
+Asking the **Extra Card Detail** powerup for its members does not work either — RemNote does not expose membership for its *built-in* powerups, so that list comes back nearly empty on a knowledge base full of them. (The same limitation shows up elsewhere in this plugin, with PDF Highlights and uploaded files.)
+
+So the command works by **walking the scope and asking each Rem directly** whether it carries the powerup. That sounds expensive and is not, because of the order it works in: whether a Rem is blank is readable without asking RemNote anything, so the blank test runs first and reduces a whole knowledge base to the few Rems worth a question.
+
+#### How to use it
+
+Run it from the omnibar. Two scopes, as with the image scan:
+
+* **This Rem and its descendants** — the focused Rem, or the open document when the cursor is not in a Rem.
+* **The whole knowledge base** — every Extra Card Detail Rem there is.
+
+**The scan writes nothing.** It reports what it found and waits; nothing is deleted until you press the red button.
+
+#### What counts as empty
+
+The bar is set high on purpose, because this command *deletes*.
+
+!!! warning "Blank text is not the same as empty"
+    Some Rems hold **no text at all and are still doing something** — a **portal** is the clearest case: it has no text of its own because it is a window onto other Rems, and its contents are not its children either, so neither a text test nor a child test notices it. The signal is the Rem's *type*, which is why the checks below start there. This was found the hard way, by a scan that offered a portal as "safe to delete".
+
+A Rem is only a candidate when **every one** of these holds:
+
+* **It is a plain Rem.** Not a **portal**, not a **table** (nor a row or cell of one), and not a **Concept**, **Descriptor**, slot, powerup property or document. A typed Rem with no text is someone's unfinished structure, not import debris.
+* **It carries no other RemNote powerup.** Every built-in powerup is asked about individually, because several of them — **divider**, **embedded website**, **search portal**, **code block**, **uploaded file**, **table of contents** — render real content while holding no text at all, and RemNote does not list built-in powerups among a Rem's tags.
+* **No text and no back text.** Blank means blank after whitespace, `&nbsp;` and zero-width characters are discounted — but an image, a Rem reference, LaTeX, audio, a drawing or an annotation counts as content even with no letters around it. Purely cosmetic formatting (bold, italic, highlight, colour) on nothing is still nothing; a **cloze**, a **link** or a **comment** is not, even when it renders as empty.
+* **No children.** Deleting a Rem takes its descendants with it, so a blank Rem with anything underneath it is never touched.
+* **It displays nothing.** Asked directly whether it includes any Rem the way a portal does — a second guard behind the type check, since this is the mistake with the worst consequences.
+* **No tag or powerup other than Extra Card Detail.** Anything else is a mark somebody put there deliberately.
+* **Nothing references it**, it has **no flashcards of its own**, **no source**, and **no alias**.
+
+Anything that fails a check is **kept and counted**, with the reason shown — so a run that deletes fewer Rems than you expected explains itself rather than leaving you guessing.
+
+#### Confirming before the delete
+
+The review screen gives you the numbers first:
+
+* the **funnel** — how many Rems were walked, how many hold nothing, and how many of *those* carry Extra Card Detail — so a surprising result shows you which stage it narrowed at,
+* how many are completely empty and safe to delete,
+* how many were kept, broken down by reason,
+* a **sample of what will go**, listed by the Rem each blank sits under — so you can recognise the documents involved before agreeing,
+* a rough estimate of how long deleting will take.
+
+`Enter` deliberately does **not** trigger the delete. It ran the scan on the previous screen, and carrying that reflex into an irreversible action is the mistake the two-stage flow exists to prevent — the red button has to be clicked.
+
+#### If you need something back
+
+**A manifest is written before anything is deleted.** Every candidate's id, and the id and text of the Rem it sits under, are saved to this device *and* offered as a **JSON file download**. If neither can be written, the run stops and deletes nothing — the same rule the [card-priority migration](Changelog.md) follows.
+
+That manifest is the recovery path worth relying on. The Rems themselves hold nothing, so what you would ever need back is the knowledge that one existed and *where* — which is exactly what it records. Every id is also written to the developer console before removal.
+
+Whether RemNote's own trash retains plugin-deleted Rems is not something this page will promise; treat the manifest as the backup and, for a large run, take a knowledge-base export first.
+
+#### How long it takes
+
+The **scan is quick**, even across a whole knowledge base: reading every Rem takes seconds, the blank test costs nothing on top of that, and only the blank Rems pay for a question to RemNote. **Deleting is the slow part**, at roughly a tenth of a second per Rem, because RemNote applies deletions one at a time. The review screen estimates it before you commit; a few hundred Rems is under a minute, and several thousand is worth starting when you can leave the popup open.
+
+!!! tip "Leave it running"
+    The work lives inside the popup. Closing it mid-delete stops the run — Rems already deleted stay deleted, and running the command again clears the rest.
 
 ---
 

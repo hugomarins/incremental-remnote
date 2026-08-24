@@ -38,6 +38,7 @@ import {
   priorityBandVerboseLogsKey,
   enableMasteryDrillId,
   enableFlashcardPrioritisationId,
+  hasImagePowerupName,
 } from '../lib/consts';
 import { computeWeightedShieldBreakdown, formatDuration } from '../lib/utils';
 import {
@@ -1452,6 +1453,25 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     },
   });
 
+  // Clean-up pass over the documents the command above creates.
+  //
+  // A Priority Review Document is a snapshot: its entries are Rem references
+  // chosen from what was due when it was built, and nothing updates them
+  // afterwards. Once an item has been reviewed its entry keeps feeding the
+  // document's queue, so an older document goes on serving what you have
+  // already done — which under RemNote's current gathering rules is what
+  // crowds out the priorities the document existed to reach.
+  plugin.app.registerCommand({
+    id: 'clean-priority-review',
+    name: 'Clean Priority Review Documents',
+    description:
+      'Finds the entries in your Priority Review Documents whose Rem no longer has anything due — reviewed flashcards and incremental Rems — and removes them after you confirm, per document.',
+    quickCode: 'cprd',
+    action: async () => {
+      await plugin.widget.openPopup('prd_cleanup_popup');
+    },
+  });
+
   // Command to manually refresh the card priority cache ---
   //
   // forceCold is not optional in spirit. Startup reads the saved copy and only
@@ -1795,6 +1815,69 @@ export async function registerCommands(plugin: ReactRNPlugin) {
       const scopeName = rawName.length > 80 ? rawName.slice(0, 80) + '…' : rawName;
 
       await plugin.widget.openPopup('image_scan_popup', {
+        scopeRemId: scope?._id ?? null,
+        scopeName,
+      });
+    },
+  });
+
+  // The cleanup half of the command above. Destroys nothing: the tag is derived
+  // from the images themselves, so "Tag Rems With Images" rebuilds it exactly —
+  // the same relationship "Remove All Priority Band Tags" has to "Refresh
+  // Priority Badges (Tables)". It exists because a whole-KB scan can mark 20k+
+  // rems and RemNote's own UI offers no way to take a tag off in bulk.
+  plugin.app.registerCommand({
+    id: 'remove-image-tags',
+    name: `Remove ${hasImagePowerupName} Tags`,
+    description: `Takes the ${hasImagePowerupName} tag off every Rem that carries it, in the focused Rem's subtree or across the whole knowledge base. Rebuild it any time with "Tag Rems With Images".`,
+    quickCode: 'rmimg',
+    action: async () => {
+      // Same scope resolution as the scan, and for the same reason: by the time
+      // the widget mounts the editor has lost focus.
+      let scope = await plugin.focus.getFocusedRem();
+      if (!scope) {
+        const paneId = await plugin.window.getFocusedPaneId();
+        const openRemId = await plugin.window.getOpenPaneRemId(paneId);
+        scope = openRemId ? (await plugin.rem.findOne(openRemId)) || undefined : undefined;
+      }
+
+      const rawName = scope ? await safeRemTextToString(plugin, scope.text) : '';
+      const scopeName = rawName.length > 80 ? rawName.slice(0, 80) + '…' : rawName;
+
+      await plugin.widget.openPopup('image_scan_popup', {
+        scopeRemId: scope?._id ?? null,
+        scopeName,
+        mode: 'remove',
+      });
+    },
+  });
+
+  // Cleanup for Anki imports. Anki's Extra field is HTML, so an importer that
+  // maps it onto Extra Card Detail turns every paragraph break into its own
+  // child Rem — and the empty ones surface in the queue as "Unnamed". They hold
+  // no text, so RemNote's own search cannot find them; the powerup's membership
+  // list is the only way to enumerate them.
+  plugin.app.registerCommand({
+    id: 'delete-empty-ecd-rems',
+    name: 'Delete Empty Extra Card Detail Rems',
+    description:
+      'Finds Rems tagged Extra Card Detail that hold nothing at all — the blank bullets an Anki import leaves behind, which appear as "Unnamed" in the queue — and deletes them after you confirm the count.',
+    quickCode: 'decd',
+    action: async () => {
+      // Same scope resolution as the image scan, and for the same reason: by the
+      // time the widget mounts the editor has lost focus, so getFocusedRem()
+      // would come back empty.
+      let scope = await plugin.focus.getFocusedRem();
+      if (!scope) {
+        const paneId = await plugin.window.getFocusedPaneId();
+        const openRemId = await plugin.window.getOpenPaneRemId(paneId);
+        scope = openRemId ? (await plugin.rem.findOne(openRemId)) || undefined : undefined;
+      }
+
+      const rawName = scope ? await safeRemTextToString(plugin, scope.text) : '';
+      const scopeName = rawName.length > 80 ? rawName.slice(0, 80) + '…' : rawName;
+
+      await plugin.widget.openPopup('empty_ecd_popup', {
         scopeRemId: scope?._id ?? null,
         scopeName,
       });
@@ -3580,6 +3663,75 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     action: async () => {
       await plugin.storage.setSession(pluginHubHiddenKey, false);
       await plugin.app.toast('Plugin panel restored.');
+    },
+  });
+
+  // Diagnostic for "what does this Rem actually carry?".
+  //
+  // Written to settle whether Extra Card Detail was the right marker for the
+  // empty-ECD cleanup, and kept because the question recurs: built-in powerup
+  // membership is NOT enumerable in RemNote (see lib/synced_key_audit.ts and
+  // lib/priority_bands.ts), so `taggedRem()` on a built-in reports a fraction of
+  // its real membership — three Rems on a knowledge base holding thousands.
+  // Asking a Rem directly is the only reliable answer, and this prints it.
+  //
+  // Focus the FLASHCARD (the parent), not the blank row — the blanks are hard to
+  // click, and this walks the children for you.
+  plugin.app.registerCommand({
+    id: 'debug-probe-ecd',
+    name: 'Debug: Probe Extra Card Detail',
+    description:
+      'Dumps what the focused Rem and each of its children actually carry — every built-in powerup that reports true, plus tags, type and text. Results go to the developer console.',
+    quickCode: 'dpecd',
+    action: async () => {
+      const focused = await plugin.focus.getFocusedRem();
+      if (!focused) {
+        await plugin.app.toast('Focus a Rem first (the flashcard, not the blank row).');
+        return;
+      }
+
+      // Ask every built-in code rather than only ExtraCardDetail: if these Rems
+      // are marked by something else entirely, that is what needs to be seen.
+      const codes = Object.entries(BuiltInPowerupCodes) as [string, string][];
+
+      const probe = async (rem: PluginRem, label: string) => {
+        const powerups: string[] = [];
+        for (const [name, code] of codes) {
+          try {
+            if (await rem.hasPowerup(code)) powerups.push(`${name}(${code})`);
+          } catch {
+            /* a code this build does not know — not interesting */
+          }
+        }
+        let tags: string[] = [];
+        try {
+          tags = (await rem.getTagRems()).map((t) => t._id);
+        } catch (e) {
+          tags = [`<getTagRems threw: ${e}>`];
+        }
+        console.log(`[ProbeECD] ${label}`, {
+          id: rem._id,
+          text: rem.text,
+          textIsEmpty: !rem.text || rem.text.length === 0,
+          backText: rem.backText,
+          childCount: rem.children?.length ?? 0,
+          type: rem.type,
+          powerupsReportingTrue: powerups,
+          tagRemIds: tags,
+        });
+      };
+
+      console.log('[ProbeECD] ==================== START ====================');
+      await probe(focused, 'FOCUSED');
+      const children = await focused.getChildrenRem();
+      for (let i = 0; i < children.length; i++) {
+        await probe(children[i], `CHILD ${i}`);
+      }
+      console.log('[ProbeECD] ===================== END =====================');
+
+      await plugin.app.toast(
+        `Probed ${children.length + 1} Rems — open the developer console to read the result.`
+      );
     },
   });
 

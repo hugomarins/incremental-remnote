@@ -2,6 +2,184 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.57 - August 24th, 2026
+
+### ✨ New - clean the reviewed entries out of a Priority Review Document
+
+A Priority Review Document is a snapshot: its entries are chosen from what was due when you built it, and nothing updates them afterwards. Work through it over a few days and it ends up mostly made of items you have already reviewed — still feeding the document's queue, crowding out the priorities it was built to reach.
+
+**Clean Priority Review Documents** (quick code `cprd`) reads every review document in the knowledge base and removes the entries whose Rem no longer has anything due. `FC` entries are judged on the referenced Rem's own cards, `INC` entries on its next repetition date; entries whose Rem has been deleted go too. "Due" means due at any point up to the end of today, so a card sitting in a learning step is not thrown away.
+
+Nothing is deleted until you confirm. The review screen lists each document with how many entries are still due, how many have been reviewed and how many it holds, expandable to the entries by name — useful on its own as a readout of what a document is still carrying. Tick which documents to clean. Entries you have written notes under, or typed next to, are never deleted and are listed separately.
+
+📖 [Cleaning a Review Document](Priority-Review-Document.md#cleaning-a-review-document)
+
+#### Technical explanation
+
+Two knowledge-base-wide reads — one `card.getAll()` and the IncRem session cache — answer every entry in every document, so the per-entry cost is a map lookup rather than a round trip; children and targets are fetched per document with `findMany`. Entry kind comes from the `INC`/`FC` tag the builder wrote, resolved with two `taggedRem()` calls, falling back to inspecting the target when a tag has been removed.
+
+The due cutoff is the end of today rather than the builder's `now`. The builder is choosing what to serve at this instant; this is deciding what to throw away, and a card answered *Forgot* an hour ago is ten minutes out — not due by `now`, but returning in the same session. For `INC` entries the two coincide, since `nextRepDate` is a Daily Document date at midnight.
+
+An empty IncRem cache is treated as "cannot judge", not as "nothing is due": `INC` entries are reported as unjudgeable and left alone, since an unbuilt cache and a fully reviewed knowledge base look identical. Cards in paused documents still read as due and are kept. `remove()` deletes descendants, so an entry with children is never a candidate whatever its state.
+
+## v1.0.53 - August 21st, 2026
+
+### ✨ New - an Incremental Rem no longer spoils its own flashcard
+
+When a Rem is both an Incremental Rem and a flashcard, the extract used to turn up before the card as often as after it — handing you the answer, so the recall was not a recall and the grade measured nothing.
+
+The Incremental Rem is now **held back while any flashcard on that same Rem is still due**. Grade the card and the extract returns to the running, normally a few items later in the same session. It is a change of order, not of content: a held item is released as soon as its card is graded, or when nothing unspoiled is left to show instead, or when no flashcards remain — so it is never postponed past the end of the session.
+
+Only cards on the Rem itself count; children are not checked. New, never-practiced cards do count, and disabled card directions do not. Normal queue only — *Practice All* and *In Order* are unaffected. Switch it off with **Hold Back Spoiler IncRems** under *Queue*.
+
+📖 [Spoiler Protection](Reviewing-Items-in-the-Queue.md#spoiler-protection)
+
+#### Technical explanation
+
+The check runs in the prefetch buffer, never in `GetNextCard` — that callback has a ~1s deadline after which RemNote silently discards its answer, so it stays free of awaits. The candidate's `rem.getCards()` read is issued concurrently with the IncRem verification that path already performs, so protection adds no wall time.
+
+Spoilers go to a second buffer rather than being filtered out, and are served when the build has walked the entire eligible list without finding an unspoiled candidate — "the buffer is empty" alone would be ambiguous, since an exhausted verification budget looks the same, and falling through on that would leave the protection doing nothing on a busy build. Due-ness uses `(nextRepetitionTime ?? Infinity) <= now`, matching the due counts in the priority shields so the two cannot disagree about what "due" means. Disabled directions are absent from `getCards()` entirely, and new cards carry a real `nextRepetitionTime`; both were measured rather than assumed, and the predicate fails open either way.
+
+## v1.0.52 - August 21st, 2026
+
+### ✨ New - the Study Dashboard has a Graphs tab
+
+The dashboard is now split into two tabs, **Summary & Hierarchy** and **Graphs**. The Context and Period box sits above them, so the scope you pick applies to both.
+
+![The Graphs tab: reviews per day on two scales, and time per day stacked](assets/study-dashboard-graphs.png){ width="800" }
+
+Five charts, all over the same timeline. **Reviews** and **Time** answer *how much*: flashcard reps against IncRem reps, and flashcard time against IncRem time. **Retention**, **Speed** and **Answer breakdown** answer *how well* — the Summary's own `Ret.` and `Speed` columns, plus the Forgot / Hard / Good / Easy split behind them, spread over time instead of collapsed into a single number.
+
+![Retention, Speed and Answer breakdown, with trend lines switched on](assets/study-dashboard-retention-speed-answerbreakdown.png){ width="820" }
+
+**Daily, Weekly, Monthly or Yearly** buckets the period along the x-axis. A year at daily granularity is 366 bars — readable when you want the detail, and one click from the weekly or monthly shape:
+
+![Zooming into a year of data, then switching it between daily, weekly and monthly buckets](assets/study-dashboard-graph-zooming-bucket-sizing.gif){ width="750" }
+
+On the Time chart, **Stacked** (on by default) makes the bar height the bucket's total. Unchecking it puts flashcards and IncRems side by side on the same baseline, which is easier to compare — at the cost of the per-bucket total. **Drag across any chart to zoom** into a range: all five follow, and the totals underneath describe what you can see, not the whole period.
+
+![Toggling Stacked, then dragging to zoom both charts into a shorter range](assets/study-dashboard-graph-time-stacking-zooming.gif){ width="700" }
+
+A **Trend lines** checkbox fits a straight line through retention, speed and each grade, and prints its slope — `Retention: 92% (↑ 0.20 pts/wk)`. The fit is weighted by the reps behind each bucket, so a three-rep week cannot pull it like an eight-hundred-rep one, and weeks you did not study are left out rather than counted as failures.
+
+Every axis fits itself to the values actually on screen, so the bars and lines fill the plot instead of huddling at the bottom. The numbers come from the same histories the Summary counts, so the two tabs always agree.
+
+📖 [Graphs tab](Study-Dashboard.md#graphs-tab)
+
+#### Technical explanation
+
+The dashboard builds a sparse per-day series (`buildTimelineDays`) alongside the Summary, reusing its rep predicates and its response-time cap — the charts cannot drift from the table above them. Rolling those days up into weeks, months or years happens in the chart (`lib/study_timeline.ts`), so switching granularity costs no recompute over the knowledge base and no RPCs; totals hold steady across all four bucket sizes because the roll-up only regroups. Buckets are keyed by calendar identity rather than by timestamp, gaps are filled with zero buckets so the x-axis reads as a timeline, and the span runs first-activity → last-activity rather than edge-to-edge of the period. Past 800 bars the granularity coarsens a step at a time and says so.
+
+Rates never average their buckets: retention, speed and each grade's share are recomputed from the summed reps inside whatever range is visible, and the trend fits are weighted least squares over the same counts. Percentage and rate axes are band-fitted around their own values rather than growing from zero, since a retention that lives between 88% and 95% drawn against 0–100% is a flat line. Zoom state is shared by all five charts, since they are five readings of one timeline.
+
+### ✨ New - one speed unit across the whole plugin
+
+The **Speed** columns in the Study Dashboard's Summary and Hierarchy tables now read in **cards per minute or seconds per card**, and the column heading is the switch — it says which unit is in force and toggles when clicked.
+
+It is the same preference the [Practiced Queues](History-Queue-Dashboard-and-Mastery-Drill.md#practiced-queues-history-live-dashboard) summary table already had, and the one the new Speed chart uses, so changing it anywhere changes it everywhere.
+
+📖 [Speed unit](Study-Dashboard.md#speed-unit)
+
+#### Technical explanation
+
+All three read the device-local `summarySpeedUnit` key rather than keeping their own copies. The dashboard carries it by React context, so a hierarchy row several components deep doesn't have to be handed it as a prop and hundreds of rows don't each open a storage subscription. Colour still comes from cards-per-minute whatever the display unit: the scale runs slow-to-fast, so colouring off a seconds-per-card figure would swap red for green.
+
+### 🐛 Fixed - changing a filter while the dashboard loaded restarted the load
+
+Switching period or context while the Study Dashboard was still loading threw away everything it had read and started again from zero. On a large knowledge base that could be a long wait repeated for every click — and a period change should never have cost a load at all, since the same data answers every period.
+
+📖 [Performance notes](Study-Dashboard.md#performance-notes)
+
+#### Technical explanation
+
+The stale-run guard ran *before* the result was cached, so a superseded run discarded a fully loaded knowledge base and the next run found an empty cache. The two runs also overlapped: the second started its own `loadGlobalData` while the first was still in flight, so the walks competed with each other. The result is now cached before the staleness check — the data belongs to the knowledge base, not to the run that asked for it — and loads go through a one-slot in-flight cache (`lib/shared_load.ts`), so a filter change joins the load already running. A failed load clears the slot rather than leaving every later caller to inherit a rejected promise. Progress reporting hands over to whichever run is on screen, so the bar keeps climbing instead of freezing at a superseded run's last value.
+
+## v1.0.51 - August 18th, 2026
+
+### 🐛 Fixed - a cleared priority could be served a pre-migration number
+
+On a knowledge base migrated to the hidden slot, a Rem whose priority was **cleared** afterwards could still resolve to the number it carried *before* the migration — the plugin fell back to the old slot when the hidden one was empty, and that slot still holds a frozen copy.
+
+Deleting the old `Priority` row never cleared the value behind it, and once the slot is retired that value cannot be removed: a retired slot can be read but not written, and registering it again creates a *new* slot definition that masks the old values rather than exposing them. So the fix is on the reading side — the priority read now settles whether the slot is retired **before** consulting it, instead of consulting it and preferring the hidden value afterwards.
+
+📖 [The old value can linger behind the deleted row](Priorities-for-Flashcards.md#stale-visible-value)
+
+#### Technical explanation
+
+`rawCardPriorityReads` skips the deprecated slot only when the realm knows it is retired, and that flag starts unknown everywhere — so a widget realm, which never writes, consulted the old slot for its entire life. `getCardPriority` now resolves the flag first; it is memoised, so this costs one synced-storage read per realm rather than one per Rem.
+
+The startup check that retires the slot was also counting the wrong thing: it looked for visible property *rows*, which the migration deletes, and so certified a knowledge base "empty" while 45,178 Rems still held a value in that slot. It now counts values as well and refuses to retire while any remain — the state it was creating is the one that cannot be repaired.
+
+### 🐛 Fixed - the debug widget reported an out-of-date priority
+
+The **Card Priority** panel showed the value a Rem had *before* the hidden-slot migration, and then flagged the current one as a stale cache. The number in use — in the Priority popup, the queue and everywhere else — was always the right one.
+
+Deleting a `Priority` row does not clear the value behind it, so a Rem prioritised before the migration still answers the old slot with the number it held back then. The panel read that slot. It now reads the hidden one, shows any leftover separately, and says which state this knowledge base's migration is in. Migration runs from this version on clear the value as well as the row.
+
+📖 [The old value can linger behind the deleted row](Priorities-for-Flashcards.md#stale-visible-value)
+
+#### Technical explanation
+
+Every diagnostic that still probed `cardPriority/priority` now goes through `slot_access` — the raw slot dump and read-path diagnostic report both slots side by side; the KB slot scan asks the hidden slot before calling a leftover the only surviving copy of a value; the imported-priority scan compares against the effective value rather than declaring every orphan recoverable; and the `updatedAt` probe writes the slot actually in use, which on a migrated knowledge base also stops it recreating the very property row the migration deleted.
+
+## v1.0.50 - August 17th, 2026
+
+### ✨ New - clear out the empty Rems an Anki import leaves behind
+
+**Delete Empty Extra Card Detail Rems** (`quick: decd`) finds Rems tagged **Extra Card Detail** that hold nothing at all, and deletes them once you confirm the count.
+
+They come from Anki imports: the *Extra* field is HTML, so an importer that maps it onto Extra Card Detail creates a child Rem for every paragraph break — and the empty ones show up in the queue as **Unnamed**. RemNote's own search cannot find them, because search indexes text and these have none.
+
+Rems that are also kept: **tables** (a row or cell that is not itself typed as a portal), **documents**, and any Rem carrying **another built-in powerup** — divider, embedded website, search portal, code block, uploaded file, table of contents. All of those render something while holding no text at all.
+
+**A manifest is written before the first deletion** — every Rem id and the id and text of the Rem it sat under, saved to this device *and* offered as a JSON file — and the run refuses to proceed if neither can be written. Deleting thousands of Rems was the one destructive operation in the plugin without that guard; the card-priority migration has always had it.
+
+![Two empty Extra Card Detail Rems, boxed in red, between real ECD content under a flashcard](assets/empty-ecd-rems.png){ width="800" }
+
+The scan writes nothing. It reports how many Extra Card Detail Rems it checked, how many are safe to delete, how many it kept and why, and a sample of what will go listed by the Rem each blank sits under. Only then is the delete button offered.
+
+The bar for "empty" is high, because this one deletes. **Blank text is not the same as empty** — a **portal** has no text of its own, since it is a window onto other Rems, and its contents are not its children either, so neither a text test nor a child test notices it. Candidates must therefore be plain Rems: not portals, Concepts, Descriptors, slots or properties. On top of that: no text or back text (an image, reference, LaTeX or annotation counts as content, cosmetic formatting on nothing does not), no children, nothing displayed portal-style, no tag beyond Extra Card Detail, nothing referencing it, no cards, no source, no alias. Anything that fails a check is kept and counted with its reason.
+
+📖 [Delete Empty Extra Card Detail Rems](Utilities.md#delete-empty-extra-card-detail-rems)
+
+#### Technical explanation
+
+**Membership is tested per Rem, not read from a list.** Asking the powerup for its members with `taggedRem()` was the obvious approach and is wrong: on a knowledge base whose Anki imports hold thousands of Extra Card Detail Rems it returned **three**, while `hasPowerup('x')` on those same Rems returned true. This is a known RemNote limitation already recorded twice in this plugin — built-in powerup membership is not enumerable, which is why PDF Highlights are reached by harvesting links instead (`priority_bands.ts`) and why the key audit probes all Rems rather than trusting a tag list (`synced_key_audit.ts`). `getTagRems()` is no substitute either: it comes back empty for Rems that demonstrably carry ECD, while returning ids for a Rem carrying *plugin* powerups.
+
+So the scope is walked and each Rem asked directly — which is affordable only because of the order the phases run in. Text and back text come off the synchronous snapshot, so the blank test filters the whole knowledge base for free and reduces a 400k-Rem walk to the few worth a round trip. Only those are asked `hasPowerup`, and only the blank ECD ones pay for the five verification reads (tags, referencing Rems, cards, sources, aliases). Reads are issued at 16 in flight, because they overlap freely on a bridge measured at ~1,800-2,000 calls/s. The deletes stay strictly sequential, on the finding recorded in v1.0.49: RemNote applies writes one at a time, so overlapping them multiplies latency and leaves throughput flat. Deletion runs under a renewable suppression lease, so the plugin's own `GlobalRemChanged` listener does not process events for writes it just made, and a closed popup expires the lease instead of leaving it stuck.
+
+The review screen reports the whole funnel — Rems walked → blank → blank *and* ECD → deletable — because a scan that finds nothing needs to say which stage it narrowed at. Reporting only the final count is what let the `taggedRem()` bug read as "your knowledge base is clean".
+
+`Enter` is inert on the review screen. It ran the scan on the previous one, and inheriting that keystroke into an irreversible delete is the failure the two-stage flow exists to prevent.
+
+## v1.0.49 - August 17th, 2026
+
+### ✨ New - clear the HasImage tag in bulk
+
+**Remove `HasImage` Tags** (`quick: rmimg`) takes the image tag off every Rem that carries it — in the focused Rem's subtree, or across the whole knowledge base. A whole-KB scan can mark tens of thousands of Rems, and RemNote has no way to remove a tag in bulk, so there was no way back.
+
+Nothing is lost: the tag is derived from the images themselves, so **Tag Rems With Images** rebuilds it exactly. Re-running the scan *is* the undo, which is why the command needs none of its own.
+
+📖 [Clearing the tag](Utilities.md#clearing-the-tag)
+
+### ⚡ Improved - Tag Rems With Images is about three times faster
+
+A first whole-KB run on a large knowledge base took **90 minutes**; the same run now takes about **30**. A re-scan, which has almost nothing left to write, takes **10 seconds**.
+
+The documentation now states what a run actually costs, because the shape of it is not obvious: reading every Rem is fast (10 seconds for 413,000 of them) and **writing the tags is the whole cost**. A run's length is set by how many tags it must write, not how many Rems it reads — so the first whole-KB pass is slow once, and every one after it is quick.
+
+📖 [How long it takes](Utilities.md#how-long-it-takes-the-first-whole-kb-run-is-slow)
+
+#### Technical explanation
+
+The scan never suppressed the plugin's own `GlobalRemChanged` listener, so every tag write fired an event straight back into it — a `findOne`, session reads, and a debounced tail per write, all of it pointless for a write the plugin had just made itself. Every other bulk operation here already suppressed it. Doing the same took the measured cost from **232ms to 74ms per write** on a 413k-Rem knowledge base.
+
+Suppression is a **renewable lease** rather than the plain `true` the other callers use, because this scan runs in a popup the user is invited to close, and a torn-down iframe never reaches its `finally` — a stuck `true` would silently disable the listener for the rest of the session. `plugin_operation_active` now accepts either shape: a boolean, or a deadline that expires on its own (`lib/operation_suppression.ts`). Both of the listener's check sites read it through one helper, at the same cost as before — one session read.
+
+The scan is also split into a walk that decides and a pass that writes, which is what lets progress count **writes** — the only slow part — instead of Rems inspected.
+
+Two other things were measured and rejected, recorded here so they are not retried blind. **Yielding to the event loop less often** (every 5,000 Rems rather than 200) was kept, but it is worth ~10 seconds of a 90-minute run, not more. **Overlapping writes** did nothing at all: at 16 in flight, per-write latency rose from 74ms to ~1,180ms — almost exactly 16× — while throughput stayed at 13/s. RemNote applies tag writes strictly one at a time, so concurrent requests only queue behind each other. There is no bulk tag API in the plugin SDK, so ~74ms per tag is the floor.
+
 ## v1.0.48 - August 17th, 2026
 
 ### 📝 Changed - the plugin is now called Incremental RemNote

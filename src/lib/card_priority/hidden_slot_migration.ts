@@ -75,6 +75,16 @@ export interface VisibleSlotScan {
   sampled: number;
   /** Rems found carrying a visible `priority` property child. */
   withVisibleChild: number;
+  /**
+   * Rems whose visible `priority` slot still HOLDS A VALUE.
+   *
+   * Not the same question as the row count, and the difference is what made the
+   * retirement premature on a real knowledge base: deleting the property child
+   * does not clear the value behind it, so a KB with zero rows can have a value on
+   * every single tagged rem. Counting rows alone is what let an "empty" verdict be
+   * issued over 45,178 rems that were not empty at all.
+   */
+  withValue: number;
   /** False when the priority slot definition rem could not be resolved, in which
    *  case withVisibleChild is meaningless and no migration should be offered. */
   resolved: boolean;
@@ -190,7 +200,7 @@ export async function scanVisiblePrioritySlots(
   const slot = await getPowerupSlotByCodeSafe(plugin, CARD_PRIORITY_CODE, PRIORITY_SLOT);
   if (!slot) {
     console.warn(`${LOG} could not resolve the visible priority slot — nothing to scan.`);
-    return { tagged: 0, sampled: 0, withVisibleChild: 0, resolved: false };
+    return { tagged: 0, sampled: 0, withVisibleChild: 0, withValue: 0, resolved: false };
   }
 
   const powerup = await plugin.powerup.getPowerupByCode(CARD_PRIORITY_CODE);
@@ -198,22 +208,29 @@ export async function scanVisiblePrioritySlots(
   const targets = opts.sample ? strideSample(tagged, DETECT_SAMPLE) : tagged;
 
   let withVisibleChild = 0;
+  let withValue = 0;
   let sampled = 0;
   for (let i = 0; i < targets.length; i += BATCH) {
     const batch = targets.slice(i, i + BATCH);
+    // Rows AND values, in one pass: they are independent, and only their union
+    // answers "is there anything left in this slot?".
     const hits = await Promise.all(
-      batch.map((rem) => findVisiblePriorityChildren(rem, slot._id))
+      batch.map(async (rem) => ({
+        rows: await findVisiblePriorityChildren(rem, slot._id),
+        value: await rem.getPowerupProperty(CARD_PRIORITY_CODE, PRIORITY_SLOT).catch(() => null),
+      }))
     );
     sampled += batch.length;
-    withVisibleChild += hits.filter((rows) => rows.length > 0).length;
+    withVisibleChild += hits.filter((h) => h.rows.length > 0).length;
+    withValue += hits.filter((h) => !!h.value).length;
     // The probe only has to answer "any?", so stop as soon as it knows.
-    if (opts.sample && withVisibleChild > 0) break;
+    if (opts.sample && (withVisibleChild > 0 || withValue > 0)) break;
     if (!opts.sample && i % (BATCH * 20) === 0) {
       opts.onProgress?.(`Scanning: ${sampled}/${targets.length}`);
     }
   }
 
-  return { tagged: tagged.length, sampled, withVisibleChild, resolved: true };
+  return { tagged: tagged.length, sampled, withVisibleChild, withValue, resolved: true };
 }
 
 // ── Migration ───────────────────────────────────────────────────────────────
@@ -316,21 +333,31 @@ export async function migrateCardPriorityToHiddenSlot(
             // Deleting a property row takes its whole subtree with it, so a row
             // that has children of its own is left alone — a priority row with
             // children is not something this migration should be guessing about.
-            const removeRowsSafely = async (): Promise<void> => {
+            /** Returns how many rows had to be kept, so the caller knows whether
+             *  clearing the slot value would blank a row still on screen. */
+            const removeRowsSafely = async (): Promise<number> => {
+              let kept = 0;
               for (const row of rows) {
                 const grandChildren = await row.getChildrenRem().catch(() => []);
                 if (grandChildren && grandChildren.length > 0) {
                   keptWithChildren++;
+                  kept++;
                   continue;
                 }
                 await row.remove();
                 childrenRemoved++;
               }
+              return kept;
             };
 
-            // Clearing the visible slot is the fallback for a rem whose value is
-            // safe in the hidden slot but whose property child is not there to
-            // delete — RemNote may already have dropped it.
+            // Clearing the visible slot is NOT just the fallback for a rem whose
+            // property child is missing: deleting the child does not clear the
+            // slot value. Observed on a migrated KB — a rem whose row was removed
+            // still answered getPowerupProperty(cardPriority, 'priority') with its
+            // pre-migration number months later, while a rem created after the
+            // migration answered nothing. Left behind, that value is a stale
+            // second copy the fallback read would resurrect the moment the hidden
+            // slot came back empty. So every path clears it, row or no row.
             const clearVisibleSlot = () =>
               rem.setPowerupProperty(CARD_PRIORITY_CODE, PRIORITY_SLOT, []).catch(() => undefined);
 
@@ -353,8 +380,10 @@ export async function migrateCardPriorityToHiddenSlot(
             if (hidden) {
               if (hidden === visible) alreadyHidden++;
               else staleVisible++;
-              if (hasRows) await removeRowsSafely();
-              else await clearVisibleSlot();
+              // A row kept because it has children stays as it is — clearing the
+              // slot would blank a row the user can still see, and the point of
+              // keeping it was not to touch it.
+              if ((hasRows ? await removeRowsSafely() : 0) === 0) await clearVisibleSlot();
               return;
             }
 
@@ -373,8 +402,7 @@ export async function migrateCardPriorityToHiddenSlot(
             }
             moved++;
 
-            if (hasRows) await removeRowsSafely();
-            else await clearVisibleSlot();
+            if ((hasRows ? await removeRowsSafely() : 0) === 0) await clearVisibleSlot();
           } catch (err) {
             errors++;
             if (errorSamples.length < 10) errorSamples.push(`${rem._id}: ${err}`);
@@ -631,6 +659,21 @@ async function completeIfVisibleSlotIsEmpty(plugin: RNPlugin): Promise<boolean> 
     console.log(
       `${LOG} ${scan.withVisibleChild} of ${scan.tagged} rem(s) still carry a visible Priority ` +
         `row. Run "Migrate Card Priorities to Hidden Slot…" to move them.`
+    );
+    return false;
+  }
+  // Rows gone, values still there. Retiring now strands every one of them: a
+  // retired slot can still be READ, so those numbers stay visible to any reader
+  // that consults the slot, but it cannot be WRITTEN, so nothing can ever correct
+  // or remove them. Measured on the knowledge base that produced this check —
+  // zero rows and a value on all 45,178 tagged rems, unreachable in both
+  // directions once retired. Clearing them has to happen while the slot is still
+  // registered, which is what the migration does from v1.0.51 on.
+  if (scan.withValue > 0) {
+    console.log(
+      `${LOG} no visible Priority rows left, but ${scan.withValue} of ${scan.tagged} rem(s) still ` +
+        `hold a VALUE in that slot — deleting the row does not clear it. NOT retiring the slot: ` +
+        `run "Migrate Card Priorities to Hidden Slot…" once more, which now clears the values too.`
     );
     return false;
   }

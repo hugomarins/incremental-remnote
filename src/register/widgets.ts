@@ -170,6 +170,27 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
     },
   });
 
+  // Scan → review → delete for the blank Rems an Anki import leaves under the
+  // Extra Card Detail powerup. Taller than the image scan popup because the
+  // review stage shows a skip tally and a sample of what will be removed —
+  // deleting is irreversible, so the numbers come before the decision.
+  plugin.app.registerWidget('empty_ecd_popup', WidgetLocation.Popup, {
+    dimensions: {
+      width: 520,
+      height: 'auto',
+    },
+  });
+
+  // Scan → review → delete for entries left behind in Priority Review Documents.
+  // Tall and scrollable because the review stage is also the diagnostic: it lists
+  // every document with what it still carries, and you tick which ones to clean.
+  plugin.app.registerWidget('prd_cleanup_popup', WidgetLocation.Popup, {
+    dimensions: {
+      width: 620,
+      height: 'auto',
+    },
+  });
+
   plugin.app.registerWidget('card_info_bar', WidgetLocation.FlashcardUnder, {
     powerupFilter: 'cardPriority',
     dimensions: {
@@ -296,7 +317,7 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
   plugin.app.registerWidget('study_dashboard', WidgetLocation.Popup, {
     dimensions: {
       width: '900px',
-      height: 850,
+      height: 950,
     },
   });
 

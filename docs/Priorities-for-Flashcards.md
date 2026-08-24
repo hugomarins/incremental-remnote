@@ -96,20 +96,22 @@ It is offered on **every start** until it has been done, because until then your
 
 Deleting the values does not delete the *slot*, so a bare `Priority — Empty` row is left behind: RemNote draws a row for every slot the plugin registers, whether or not it holds anything. It goes away once the plugin stops registering that slot — and it only does that on **positive proof** that nothing is left in it: a migration run that finished with no failures, no rows kept back and no errors, or a full scan of every tagged Rem finding none.
 
-Until then the slot stays registered, which is deliberate. An unregistered slot cannot be read, so retiring one that still held a value would turn that value into an unreadable one rather than a visible row. A knowledge base whose migration was interrupted, or finished before that check existed, gets the full scan automatically on the next start; expect one extra pass of a few seconds, once, then a reload to see the row disappear.
+Until then the slot stays registered, which is deliberate. An unregistered slot can still be *read* — but it can no longer be *written*: the plugin's write returns without error, RemNote reports a slot that doesn't exist, and nothing changes. Retiring one that still held a value would therefore strand that value where nothing can correct it. A knowledge base whose migration was interrupted, or finished before that check existed, gets the full scan automatically on the next start; expect one extra pass of a few seconds, once, then a reload to see the row disappear.
 
-!!! note "Undoing takes two steps once the slot is retired"
-    A retired slot cannot be written either, so restoring into it would silently write nothing. The first run of **Undo Card Priority Hidden-Slot Migration…** un-retires the slot and asks you to reload; the second actually restores the values. Your priorities stay readable in the hidden slot in between.
+### The old value can linger behind the deleted row { #stale-visible-value }
 
-!!! warning "One thing you lose"
-    Priorities can no longer be typed straight into the outline, because there is no longer a row to type into. Use the [Priority widget](#1-the-unified-priority-widget-altp) (`Alt+P`), [Quick Priority](Keyboard-Shortcuts.md#priority-commands) or the [batch tools](#3-unified-batch-priority-change) instead.
+Deleting the `Priority` row does not clear the *value* underneath it. On knowledge bases migrated before v1.0.51, a Rem prioritised back then still answers the old slot with the number it held at migration time — the row is gone from your outline, but a second, frozen copy of the number stayed behind it.
 
-Two commands drive it manually:
+**It changes nothing about your priorities.** The hidden slot is what every part of the plugin reads, and it wins whenever both hold a value; a Rem prioritised after the migration has nothing in the old slot at all. What it did affect was the *debug widget*, which read the old slot and so reported that frozen number as the stored priority — and then flagged the correct, current value as a stale cache. Both now report the hidden slot, and show the leftover separately, labelled for what it is.
 
-* **Migrate Card Priorities to Hidden Slot…** — runs it now, and is also how you retry after a partial run. Rems that failed keep their visible row, so a second run picks up exactly those.
-* **Undo Card Priority Hidden-Slot Migration…** — restores the backup, which puts the visible rows back. The table problem comes back with them; that is what makes it a true undo.
+From v1.0.51 the migration clears the value as well as the row, so new runs leave nothing behind.
 
-Until a knowledge base is migrated the plugin writes **both** slots, so hand edits of the `Priority` row keep working in the meantime. Reads always prefer the hidden slot and fall back to the visible one, so a half-migrated knowledge base — or one migrated on your desktop and not yet synced to your phone — reads correctly throughout.
+**On a knowledge base where the old slot has already been retired, those leftovers are permanent.** This was tested to a conclusion, and every route out is closed:
+
+* A retired slot can be **read** but not **written** — the plugin's write returns without error, RemNote reports a slot that doesn't exist, and nothing changes.
+* Registering the slot again does not expose them either. Slot values belong to a slot *definition* Rem, not to the slot's name, so registering mints a **new** definition and the old values end up masked behind it: while it is registered the slot reads empty, and when it is retired again the old numbers come back.
+
+They are inert, and the plugin no longer reads them: the priority read now settles the retirement question before it consults that slot, rather than consulting it and preferring the hidden value afterwards. The difference matters for a Rem whose priority was cleared after the migration — without it, a frozen number could have been served in place of the inherited one.
 
 ## Setting & Managing Priorities
 

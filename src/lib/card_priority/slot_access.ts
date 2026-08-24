@@ -84,11 +84,18 @@ export interface HiddenSlotMigrationRecord {
    * an exhaustive scan that found none.
    *
    * This is the REGISTRATION gate, and it is deliberately stricter than
-   * `migratedAt`: once set, the deprecated visible slot is not registered at all,
-   * which is what finally removes the empty "Priority" row from the editor. It
-   * also means `getPowerupProperty` on that slot stops resolving, so the
-   * fallback read returns nothing — which is safe only when nothing is left
-   * there. Never infer it; only a positive, exhaustive check may set it.
+   * `migratedAt`: once set, the deprecated visible slot is not registered at all
+   * (widgets/index.tsx reads this before registerPluginPowerups, which then omits
+   * the slot), which is what finally removes the empty "Priority" row from the
+   * editor.
+   *
+   * What that does to the slot is NOT symmetrical, measured 18/08/2026:
+   * `getPowerupProperty` on it keeps working and keeps returning whatever was
+   * left there, while `setPowerupProperty` becomes a silent no-op — it returns
+   * without error, RemNote toasts "a slot which doesn't exist", and nothing
+   * changes. So a value stranded here is not unreadable, as this comment used to
+   * claim; it is unfixable, which is the stricter reason to require a positive,
+   * exhaustive check before setting this. Never infer it.
    */
   completedAt?: number;
   /** Rems whose value was moved, from the run that set migratedAt. */

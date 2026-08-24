@@ -5,6 +5,8 @@ import '../App.css';
 import {
   ImageScanResult,
   ImageScanScope,
+  ImageTagRemovalResult,
+  removeImageTags,
   scanAndTagImages,
 } from '../lib/image_scan';
 import { hasImagePowerupName } from '../lib/consts';
@@ -31,7 +33,30 @@ const openDocs = () => {
   }
 };
 
+/**
+ * Elapsed time for the report line. Minutes once a run is long enough for
+ * seconds to stop being readable — a first whole-KB pass is measured in tens of
+ * minutes, where "1704.3s" is a number nobody parses.
+ */
+const formatElapsed = (ms: number): string => {
+  const seconds = ms / 1000;
+  if (seconds < 90) return `${seconds.toFixed(1)}s`;
+  const mins = Math.floor(seconds / 60);
+  return `${mins}m ${Math.round(seconds - mins * 60)}s`;
+};
+
 type Phase = 'confirm' | 'running' | 'done' | 'error';
+
+/**
+ * Tagging and cleanup share this popup because they share everything that is
+ * awkward: scope resolution, the two scope buttons and their keyboard handling,
+ * the progress line, and the cost breakdown. Only the copy and the one call in
+ * the middle differ. A third button on the tag dialog was the alternative, but
+ * that overloads a dialog whose arrow-key selection is already scope-specific,
+ * and it would hide a destructive action behind the same Enter key that runs a
+ * harmless one.
+ */
+type Mode = 'tag' | 'remove';
 
 /**
  * Confirmation + report for the "Tag Rems With Images" command.
@@ -47,9 +72,11 @@ export function ImageScanPopup() {
 
   const [scopeRemId, setScopeRemId] = useState<string | null>(null);
   const [scopeName, setScopeName] = useState<string>('');
+  const [mode, setMode] = useState<Mode>('tag');
   const [phase, setPhase] = useState<Phase>('confirm');
   const [progress, setProgress] = useState('');
   const [result, setResult] = useState<ImageScanResult | null>(null);
+  const [removal, setRemoval] = useState<ImageTagRemovalResult | null>(null);
   const [ranOnKb, setRanOnKb] = useState(false);
   const [error, setError] = useState('');
 
@@ -63,6 +90,7 @@ export function ImageScanPopup() {
       const remId = (ctx?.contextData?.scopeRemId as string) ?? null;
       setScopeRemId(remId);
       setScopeName((ctx?.contextData?.scopeName as string) ?? '');
+      setMode((ctx?.contextData?.mode as Mode) === 'remove' ? 'remove' : 'tag');
       // With no scope Rem the first option is disabled, so the keyboard starts
       // on the only one that can actually run.
       if (!remId) setSelected(1);
@@ -82,9 +110,13 @@ export function ImageScanPopup() {
     setRanOnKb(scope.kind === 'kb');
     setPhase('running');
     setProgress('Starting…');
+    const onProgress = (message: string) => setProgress(message);
     try {
-      const r = await scanAndTagImages(plugin, scope, (message) => setProgress(message));
-      setResult(r);
+      if (mode === 'remove') {
+        setRemoval(await removeImageTags(plugin, scope, onProgress));
+      } else {
+        setResult(await scanAndTagImages(plugin, scope, onProgress));
+      }
       setPhase('done');
     } catch (e) {
       console.error('[ImageScan] scan failed:', e);
@@ -144,7 +176,9 @@ export function ImageScanPopup() {
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
         <span style={{ fontSize: 18 }}>🖼️</span>
-        <span className="font-semibold text-base">Tag Rems With Images</span>
+        <span className="font-semibold text-base">
+          {mode === 'remove' ? `Remove ${hasImagePowerupName} Tags` : 'Tag Rems With Images'}
+        </span>
       </div>
       <button
         onClick={openDocs}
@@ -218,10 +252,22 @@ export function ImageScanPopup() {
       {phase === 'confirm' && (
         <>
           <div className="text-sm" style={{ color: 'var(--rn-clr-content-primary)' }}>
-            Scans for images in each Rem's <span className="font-semibold">front and back
-            text</span> and tags every one that holds an image with{' '}
-            <span className="font-semibold">#{hasImagePowerupName}</span>. Rems inside the
-            scanned scope that carry the tag but no longer hold an image lose it.
+            {mode === 'remove' ? (
+              <>
+                Takes <span className="font-semibold">#{hasImagePowerupName}</span> off every Rem
+                that carries it, so a knowledge base full of tags can be cleared in one go.{' '}
+                <span className="font-semibold">Nothing is lost</span> — the tag is derived from
+                the images themselves, so{' '}
+                <span className="font-semibold">Tag Rems With Images</span> rebuilds it exactly.
+              </>
+            ) : (
+              <>
+                Scans for images in each Rem's <span className="font-semibold">front and back
+                text</span> and tags every one that holds an image with{' '}
+                <span className="font-semibold">#{hasImagePowerupName}</span>. Rems inside the
+                scanned scope that carry the tag but no longer hold an image lose it.
+              </>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -237,7 +283,11 @@ export function ImageScanPopup() {
                 ...selectionRing(selected === 0 && !!scopeRemId),
               }}
             >
-              <div>Scan this Rem and its descendants</div>
+              <div>
+                {mode === 'remove'
+                  ? 'Clear tags in this Rem and its descendants'
+                  : 'Scan this Rem and its descendants'}
+              </div>
               <div className="text-xs font-normal opacity-90 mt-0.5" style={{ fontStyle: 'italic' }}>
                 {scopeRemId ? scopeName || 'Untitled' : 'No focused Rem or open document'}
               </div>
@@ -249,12 +299,18 @@ export function ImageScanPopup() {
               className="w-full py-2 px-3 text-sm font-medium rounded text-left"
               style={{ ...secondaryButton, ...selectionRing(selected === 1) }}
             >
-              <div>Scan the whole knowledge base</div>
+              <div>
+                {mode === 'remove'
+                  ? 'Clear every tag in the knowledge base'
+                  : 'Scan the whole knowledge base'}
+              </div>
               <div
                 className="text-xs font-normal mt-0.5"
                 style={{ color: 'var(--rn-clr-content-tertiary)' }}
               >
-                Every Rem, every document — slow on a large knowledge base
+                {mode === 'remove'
+                  ? 'One write per tagged Rem — minutes if there are thousands'
+                  : 'Every Rem, every document — slow on a large knowledge base'}
               </div>
             </button>
           </div>
@@ -275,7 +331,8 @@ export function ImageScanPopup() {
       {phase === 'running' && (
         <div className="flex flex-col gap-2 py-4">
           <div className="text-sm font-medium">
-            🔍 Scanning {ranOnKb ? 'the whole knowledge base' : `"${scopeName || 'Untitled'}"`}…
+            {mode === 'remove' ? '🧹 Clearing tags in ' : '🔍 Scanning '}
+            {ranOnKb ? 'the whole knowledge base' : `"${scopeName || 'Untitled'}"`}…
           </div>
           <div className="text-xs" style={{ color: 'var(--rn-clr-content-secondary)' }}>
             {progress}
@@ -284,13 +341,51 @@ export function ImageScanPopup() {
               work already written stays valid — the command is idempotent — but
               the run would be incomplete, which matters most on a KB scan. */}
           <div className="text-xs" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
-            Keep this popup open until it finishes — closing it stops the scan
-            (anything already tagged stays, and re-running resumes the work).
+            {mode === 'remove'
+              ? 'Keep this popup open until it finishes — closing it stops the cleanup (tags already removed stay removed, and re-running clears the rest).'
+              : 'Keep this popup open until it finishes — closing it stops the scan (anything already tagged stays, and re-running resumes the work).'}
           </div>
         </div>
       )}
 
-      {phase === 'done' && result && (
+      {phase === 'done' && mode === 'remove' && removal && (
+        <>
+          <div className="text-sm">
+            Cleared <span className="font-bold">{removal.removed}</span> #{hasImagePowerupName} tag
+            {removal.removed === 1 ? '' : 's'} in{' '}
+            {ranOnKb ? 'the whole knowledge base' : `"${scopeName || 'Untitled'}"`}.
+          </div>
+
+          {removal.failed > 0 && (
+            <div className="text-sm" style={{ color: '#ef4444' }}>
+              ⚠ <span className="font-bold">{removal.failed}</span> failed to write — see the console
+            </div>
+          )}
+
+          {removal.considered === 0 && (
+            <div className="text-sm" style={{ color: 'var(--rn-clr-content-secondary)' }}>
+              Nothing carried the tag here, so there was nothing to clear.
+            </div>
+          )}
+
+          <div className="text-xs" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+            Took {formatElapsed(removal.timing.totalMs)}.
+          </div>
+
+          <div className="text-xs" style={{ color: 'var(--rn-clr-content-secondary)' }}>
+            Run <span className="font-semibold">Tag Rems With Images</span> at any time to rebuild
+            the tag from scratch.
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button onClick={close} className="px-4 py-1.5 text-sm font-medium rounded" style={primaryButton}>
+              Done
+            </button>
+          </div>
+        </>
+      )}
+
+      {phase === 'done' && mode === 'tag' && result && (
         <>
           <div className="text-sm">
             Scanned <span className="font-bold">{result.scanned}</span> Rem
@@ -313,6 +408,10 @@ export function ImageScanPopup() {
                 ⚠ <span className="font-bold">{result.failed}</span> failed to write — see the console
               </div>
             )}
+          </div>
+
+          <div className="text-xs" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+            Took {formatElapsed(result.timing.totalMs)}.
           </div>
 
           {howToFilter}

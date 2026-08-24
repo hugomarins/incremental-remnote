@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
     BuiltInPowerupCodes,
     Card,
     PluginRem,
     QueueInteractionScore,
     renderWidget,
+    useLocalStorageState,
     usePlugin,
     useRunAsync,
     WidgetLocation,
@@ -24,9 +25,16 @@ import { formatDuration, tryParseJson } from '../lib/utils';
 import { Period, resolvePeriod, parseDateInput, formatDateForDisplay } from '../lib/period';
 import { resolveRemTextSegments } from '../lib/richTextRemRefs';
 import { RemText, RemTextSegments } from '../components';
+import {
+    StudyTimelineCharts,
+    TIMELINE_GRANULARITIES,
+    TimelineDay,
+    TimelineGranularity,
+} from '../components/StudyTimelineCharts';
 import '../style.css';
 import '../App.css';
 import { getIESetting } from '../lib/settings';
+import { SharedLoadSlot, emptySlot, sharedLoad } from '../lib/shared_load';
 
 // ---------------------------------------------------------------------------
 // Style helpers (mirroring the statistics plugin's chartHelpers)
@@ -63,6 +71,7 @@ function getButtonStyle(isSelected: boolean): React.CSSProperties {
 // ---------------------------------------------------------------------------
 
 type ContextMode = 'global' | 'document';
+type DashboardTab = 'overview' | 'graphs';
 type ScopeMode = 'descendants' | 'comprehensive';
 
 interface CardData {
@@ -285,6 +294,76 @@ function statsFromRem(
         if (cardHasReps) s.cardsWithRepsCount += 1;
     }
     return { self: s, hasIncReps, hasDismReps };
+}
+
+/**
+ * Per-day activity for the Graphs tab. Built from the same histories, the same
+ * rep predicates, and the same response-time cap the Summary uses, so the bars
+ * and the Summary can never disagree. Sparse — only days that actually saw a
+ * rep get an entry; the chart fills the gaps when it rolls days up into weeks,
+ * months or years.
+ */
+function buildTimelineDays(
+    rems: Iterable<RemData>,
+    startMs: number,
+    endMs: number,
+    cardCapMs: number,
+    ignorePreReset: boolean
+): TimelineDay[] {
+    const byDay = new Map<number, TimelineDay>();
+    const dayBucket = (dateMs: number): TimelineDay => {
+        const d = new Date(dateMs);
+        d.setHours(0, 0, 0, 0);
+        const key = d.getTime();
+        let bucket = byDay.get(key);
+        if (!bucket) {
+            bucket = {
+                startMs: key,
+                cardReps: 0,
+                cardForgot: 0,
+                cardHard: 0,
+                cardGood: 0,
+                cardEasy: 0,
+                incReps: 0,
+                cardTimeMs: 0,
+                incTimeMs: 0,
+            };
+            byDay.set(key, bucket);
+        }
+        return bucket;
+    };
+
+    for (const rd of rems) {
+        // Dismissed reps count as IncRem reps here, matching statsFromRem.
+        for (const history of [rd.incHistory, rd.dismHistory]) {
+            for (const rep of history) {
+                if (!rep || typeof rep.date !== 'number') continue;
+                if (rep.date < startMs || rep.date >= endMs) continue;
+                if (!isRealIncRep(rep.eventType)) continue;
+                const b = dayBucket(rep.date);
+                b.incReps += 1;
+                b.incTimeMs += (rep.reviewTimeSeconds || 0) * 1000;
+            }
+        }
+        for (const card of rd.cards) {
+            for (const rep of effectiveCardHistory(card.history, ignorePreReset)) {
+                if (!rep || typeof rep.date !== 'number') continue;
+                if (rep.date < startMs || rep.date >= endMs) continue;
+                if (!isRealCardScore(rep.score)) continue;
+                const b = dayBucket(rep.date);
+                b.cardReps += 1;
+                b.cardTimeMs += Math.min(Math.max(0, rep.responseTime || 0), cardCapMs);
+                // isRealCardScore already dropped skips, so these four partition
+                // the bucket's reps.
+                if (rep.score === QueueInteractionScore.AGAIN) b.cardForgot += 1;
+                else if (rep.score === QueueInteractionScore.HARD) b.cardHard += 1;
+                else if (rep.score === QueueInteractionScore.GOOD) b.cardGood += 1;
+                else if (rep.score === QueueInteractionScore.EASY) b.cardEasy += 1;
+            }
+        }
+    }
+
+    return Array.from(byDay.values()).sort((a, b) => a.startMs - b.startMs);
 }
 
 // Fast tag/history fetch (avoids the heavier getIncrementalRemFromRem)
@@ -1370,6 +1449,69 @@ function retentionColor(rate: number): string {
     return '#ca8a04';
 }
 
+/**
+ * Unit the Speed columns render in, shared with the Practiced Queues summary
+ * table and the Graphs tab's Speed chart through one device-local key — one
+ * speed unit for the whole plugin. Carried by context rather than threaded as a
+ * prop so a hierarchy row deep in the tree doesn't have to be handed it, and so
+ * hundreds of rows don't each subscribe to storage.
+ */
+type SpeedUnit = 'cpm' | 'spc';
+const SPEED_UNIT_KEY = 'summarySpeedUnit';
+const SpeedUnitContext = React.createContext<{
+    unit: SpeedUnit;
+    toggle: () => void;
+}>({ unit: 'cpm', toggle: () => {} });
+
+/**
+ * A speed, in whichever unit is in force. Always *coloured* by cards-per-minute,
+ * because the scale runs slow-to-fast: in seconds-per-card the good end is the
+ * low one, and colouring off the displayed number would invert the meaning.
+ */
+function SpeedCell({ cardReps, cardTimeMs }: { cardReps: number; cardTimeMs: number }) {
+    const { unit } = useContext(SpeedUnitContext);
+    if (cardReps <= 0 || cardTimeMs <= 0) {
+        return <span style={{ color: 'var(--rn-clr-content-tertiary)' }}>-</span>;
+    }
+    const cpm = cardReps / (cardTimeMs / 60000);
+    return (
+        <span style={{ color: speedColor(cpm), fontWeight: 600 }}>
+            {unit === 'cpm' ? cpm.toFixed(1) : `${(cardTimeMs / 1000 / cardReps).toFixed(1)}s`}
+        </span>
+    );
+}
+
+/** The Speed column heading, which doubles as the unit switch. */
+function SpeedHeader() {
+    const { unit, toggle } = useContext(SpeedUnitContext);
+    return (
+        <div style={{ textAlign: 'right' }}>
+            <button
+                onClick={toggle}
+                title={
+                    unit === 'cpm'
+                        ? 'Showing cards per minute — click for seconds per card'
+                        : 'Showing seconds per card — click for cards per minute'
+                }
+                style={{
+                    font: 'inherit',
+                    color: 'inherit',
+                    letterSpacing: 'inherit',
+                    textTransform: 'inherit',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    textDecoration: 'underline dotted',
+                    textUnderlineOffset: 2,
+                }}
+            >
+                Speed ({unit === 'cpm' ? 'cpm' : 's/card'})
+            </button>
+        </div>
+    );
+}
+
 function speedColor(cpm: number): string {
     if (cpm <= 0) return 'var(--rn-clr-content-tertiary)';
     let hue: number;
@@ -1385,8 +1527,6 @@ function SummaryCard({ summary }: { summary: SummaryStats }) {
     const dismPct =
         totalIncDism > 0 ? Math.round((summary.dismTaggedCount / totalIncDism) * 100) : 0;
 
-    const cpm =
-        summary.cardTimeMs > 0 ? summary.cardReps / (summary.cardTimeMs / 60000) : 0;
     const remembered = Math.max(0, summary.cardReps - summary.cardForgot);
     const retention = summary.cardReps > 0 ? (remembered / summary.cardReps) * 100 : 0;
 
@@ -1424,7 +1564,7 @@ function SummaryCard({ summary }: { summary: SummaryStats }) {
                 <div style={{ textAlign: 'right' }}>Reps</div>
                 <div style={{ textAlign: 'right' }}>Time</div>
                 <div style={{ textAlign: 'right' }}>Ret.</div>
-                <div style={{ textAlign: 'right' }}>Speed</div>
+                <SpeedHeader />
             </div>
             <div style={rowStyle}>
                 <div style={{ color: '#22c55e', fontWeight: 500 }}>
@@ -1470,14 +1610,7 @@ function SummaryCard({ summary }: { summary: SummaryStats }) {
                     )}
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                    {summary.cardReps > 0 ? (
-                        <span style={{ color: speedColor(cpm), fontWeight: 600 }}>
-                            {cpm.toFixed(1)}
-                            <span style={{ fontSize: 10, marginLeft: 2, color: 'var(--rn-clr-content-tertiary)' }}>cpm</span>
-                        </span>
-                    ) : (
-                        <span style={{ color: 'var(--rn-clr-content-tertiary)' }}>-</span>
-                    )}
+                    <SpeedCell cardReps={summary.cardReps} cardTimeMs={summary.cardTimeMs} />
                 </div>
             </div>
             {(() => {
@@ -1534,7 +1667,7 @@ const HierarchyHeader = () => (
         <div style={{ textAlign: 'right' }}>Cards</div>
         <div style={{ textAlign: 'right' }}>Inc. Rems</div>
         <div style={{ textAlign: 'right' }}>Ret.</div>
-        <div style={{ textAlign: 'right' }}>Speed</div>
+        <SpeedHeader />
         <div />
     </div>
 );
@@ -1560,7 +1693,6 @@ function HierarchyRow({
 
     const a = node.aggr;
     const totalTimeMs = a.cardTimeMs + a.incRemTimeSec * 1000;
-    const cpm = a.cardTimeMs > 0 ? a.cardReps / (a.cardTimeMs / 60000) : 0;
     const remembered = Math.max(0, a.cardReps - a.cardForgot);
     const retention = a.cardReps > 0 ? (remembered / a.cardReps) * 100 : 0;
     const isStructural = !node.selfData;
@@ -1692,13 +1824,7 @@ function HierarchyRow({
                 )}
             </div>
             <div style={{ textAlign: 'right' }}>
-                {a.cardReps > 0 ? (
-                    <span style={{ color: speedColor(cpm), fontWeight: 600 }}>
-                        {cpm.toFixed(1)}
-                    </span>
-                ) : (
-                    '-'
-                )}
+                <SpeedCell cardReps={a.cardReps} cardTimeMs={a.cardTimeMs} />
             </div>
             <button
                 onClick={async (e) => {
@@ -1880,6 +2006,28 @@ function StudyDashboardPopup() {
     // skew retention, time, and CPM.
     const [ignorePreReset, setIgnorePreReset] = useState<boolean>(false);
     const [contextMode, setContextMode] = useState<ContextMode>('global');
+    const [tab, setTab] = useState<DashboardTab>('overview');
+    const [granularity, setGranularity] = useState<TimelineGranularity>('day');
+    // Stacked by default: the bar height then *is* the bucket's total time.
+    const [stackedTime, setStackedTime] = useState(true);
+    // Trend lines start off: they are an overlay on the rate charts, and the
+    // data should be what you see first.
+    const [showTrends, setShowTrends] = useState(false);
+
+    // Shared with the Practiced Queues summary table and the Speed chart.
+    const [storedSpeedUnit, setSpeedUnit] = useLocalStorageState<SpeedUnit>(
+        SPEED_UNIT_KEY,
+        'cpm'
+    );
+    // Guard a stale or garbled stored value so the column never renders blank.
+    const speedUnit: SpeedUnit = storedSpeedUnit === 'spc' ? 'spc' : 'cpm';
+    const speedUnitCtx = useMemo(
+        () => ({
+            unit: speedUnit,
+            toggle: () => setSpeedUnit(speedUnit === 'cpm' ? 'spc' : 'cpm'),
+        }),
+        [speedUnit, setSpeedUnit]
+    );
     const [scope, setScope] = useState<ScopeMode>('comprehensive');
     const [period, setPeriod] = useState<Period>('thisYear');
     const [customStart, setCustomStart] = useState('');
@@ -1930,6 +2078,10 @@ function StudyDashboardPopup() {
                 customStart?: string;
                 customEnd?: string;
                 ignorePreReset?: boolean;
+                tab?: DashboardTab;
+                granularity?: TimelineGranularity;
+                stackedTime?: boolean;
+                showTrends?: boolean;
             } | null>(studyDashboardLastPeriodKey)
             .then((saved) => {
                 if (cancelled) return;
@@ -1939,6 +2091,15 @@ function StudyDashboardPopup() {
                 if (typeof saved?.ignorePreReset === 'boolean') {
                     setIgnorePreReset(saved.ignorePreReset);
                 }
+                if (saved?.tab === 'overview' || saved?.tab === 'graphs') setTab(saved.tab);
+                if (
+                    saved?.granularity &&
+                    TIMELINE_GRANULARITIES.some((g) => g.value === saved.granularity)
+                ) {
+                    setGranularity(saved.granularity);
+                }
+                if (typeof saved?.stackedTime === 'boolean') setStackedTime(saved.stackedTime);
+                if (typeof saved?.showTrends === 'boolean') setShowTrends(saved.showTrends);
             })
             .catch(() => {})
             .finally(() => {
@@ -1957,9 +2118,23 @@ function StudyDashboardPopup() {
                 customStart,
                 customEnd,
                 ignorePreReset,
+                tab,
+                granularity,
+                stackedTime,
+                showTrends,
             })
             .catch(() => {});
-    }, [plugin, period, customStart, customEnd, ignorePreReset]);
+    }, [
+        plugin,
+        period,
+        customStart,
+        customEnd,
+        ignorePreReset,
+        tab,
+        granularity,
+        stackedTime,
+        showTrends,
+    ]);
 
     const cardCapMs = useRunAsync(async () => {
         return (await getIESetting(plugin, flashcardResponseTimeLimitId)) * 1000;
@@ -1976,6 +2151,7 @@ function StudyDashboardPopup() {
         new Map()
     );
     const [summary, setSummary] = useState<SummaryStats | null>(null);
+    const [timelineDays, setTimelineDays] = useState<TimelineDay[] | null>(null);
     const runIdRef = useRef(0);
     // Cached global-mode raw data — survives across period changes.
     // Invalidated only when the context switches into Global from scratch (per session).
@@ -1984,13 +2160,29 @@ function StudyDashboardPopup() {
     // (rootRemId, scope). Different rem or scope invalidates and reloads.
     const docDataRef = useRef<LoadedDocumentData | null>(null);
 
+    // In-flight loads, so a filter change *during* a load joins the one already
+    // running instead of starting a second one.
+    const globalLoadRef = useRef<SharedLoadSlot<LoadedGlobalData>>(emptySlot());
+    const docLoadRef = useRef<SharedLoadSlot<LoadedDocumentData>>(emptySlot());
+    // A shared load reports progress through these, so the run currently on
+    // screen can take over the bar from the run that started the load.
+    const globalProgressRef = useRef<(p: number, label: string) => void>(() => {});
+    const docProgressRef = useRef<(p: number, label: string) => void>(() => {});
+
     const run = useCallback(async () => {
         if (cardCapMs == null) return;
         const runId = ++runIdRef.current;
+        // Loading occupies the first 80% of the bar. Guarded so a superseded run
+        // stops painting, which is what lets a joined load hand the bar over.
+        const reportLoad = (p: number, label: string) => {
+            if (runId !== runIdRef.current) return;
+            setProgress({ running: true, percent: 0.8 * p, label });
+        };
         setProgress({ running: true, percent: 0, label: 'Starting…' });
         setDocTree(null);
         setGlobalTops(undefined);
         setSummary(null);
+        setTimelineDays(null);
 
         try {
             if (contextMode === 'document' && ctxRemId) {
@@ -2004,13 +2196,20 @@ function StudyDashboardPopup() {
                 // changes hit only the aggregate path.
                 const cached = docDataRef.current;
                 if (!cached || cached.rootRemId !== rootRem._id || cached.scope !== scope) {
-                    const loaded = await loadDocumentData(plugin, rootRem, scope, (p, label) => {
-                        if (runId !== runIdRef.current) return;
-                        setProgress({ running: true, percent: 0.8 * p, label });
-                    });
-                    if (runId !== runIdRef.current) return;
+                    docProgressRef.current = reportLoad;
+                    const loaded = await sharedLoad(
+                        docLoadRef.current,
+                        `${rootRem._id}::${scope}`,
+                        () =>
+                            loadDocumentData(plugin, rootRem, scope, (p, label) =>
+                                docProgressRef.current(p, label)
+                            )
+                    );
+                    // Cache before the staleness check: the data belongs to the
+                    // rem and scope, not to the run that happened to ask for it.
                     docDataRef.current = loaded;
                 }
+                if (runId !== runIdRef.current) return;
                 const { tree, summary: s } = aggregateDocumentData(
                     docDataRef.current!,
                     startMs,
@@ -2025,17 +2224,27 @@ function StudyDashboardPopup() {
                 if (runId !== runIdRef.current) return;
                 setDocTree(tree);
                 setSummary(s);
+                setTimelineDays(
+                    buildTimelineDays(
+                        docDataRef.current!.remDataList,
+                        startMs,
+                        endMs,
+                        cardCapMs,
+                        ignorePreReset
+                    )
+                );
             } else {
                 // Load raw data once and cache. Period changes only re-aggregate (in-memory).
                 if (!globalDataRef.current) {
-                    const loaded = await loadGlobalData(plugin, (p, label) => {
-                        if (runId !== runIdRef.current) return;
-                        // Loading occupies the first 80% of the progress bar.
-                        setProgress({ running: true, percent: 0.8 * p, label });
-                    });
-                    if (runId !== runIdRef.current) return;
+                    globalProgressRef.current = reportLoad;
+                    const loaded = await sharedLoad(globalLoadRef.current, 'global', () =>
+                        loadGlobalData(plugin, (p, label) => globalProgressRef.current(p, label))
+                    );
+                    // Cache before the staleness check: this data is the whole
+                    // knowledge base, not this run's answer.
                     globalDataRef.current = loaded;
                 }
+                if (runId !== runIdRef.current) return;
                 const r = aggregateGlobalData(
                     globalDataRef.current,
                     startMs,
@@ -2051,6 +2260,15 @@ function StudyDashboardPopup() {
                 setGlobalTops(r.topLevels);
                 setGlobalSubtreesByTop(r.subtreesByTop);
                 setSummary(r.summary);
+                setTimelineDays(
+                    buildTimelineDays(
+                        globalDataRef.current.remDataById.values(),
+                        startMs,
+                        endMs,
+                        cardCapMs,
+                        ignorePreReset
+                    )
+                );
             }
         } catch (err) {
             console.error('[study_dashboard] compute failed', err);
@@ -2068,7 +2286,8 @@ function StudyDashboardPopup() {
 
     const containerStyle: React.CSSProperties = {
         width: '900px',
-        height: '850px',
+        // Keep in sync with the popup dimensions in register/widgets.ts.
+        height: '950px',
         backgroundColor: 'var(--rn-clr-background-primary)',
         borderRadius: 12,
         overflow: 'hidden',
@@ -2077,6 +2296,7 @@ function StudyDashboardPopup() {
     };
 
     return (
+        <SpeedUnitContext.Provider value={speedUnitCtx}>
         <div style={containerStyle} className="statisticsBody">
             {/* Header */}
             <div
@@ -2308,7 +2528,32 @@ function StudyDashboardPopup() {
                     </div>
                 </div>
 
-                {/* Progress / Summary / Hierarchy */}
+                {/* Tab bar — sits below the Context/Period box because that
+                    selection is shared by every tab. */}
+                <div className="mb-4 flex items-center gap-1.5" role="tablist">
+                    {([
+                        { value: 'overview', label: 'Summary & Hierarchy' },
+                        { value: 'graphs', label: 'Graphs' },
+                    ] as { value: DashboardTab; label: string }[]).map((t) => (
+                        <button
+                            key={t.value}
+                            role="tab"
+                            aria-selected={tab === t.value}
+                            onClick={() => setTab(t.value)}
+                            className="rounded-lg"
+                            style={{
+                                ...getButtonStyle(tab === t.value),
+                                padding: '5px 14px',
+                                fontSize: 13,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Progress / Summary / Hierarchy / Graphs */}
                 {progress.running && (
                     <div style={{ padding: '12px 16px' }}>
                         <div
@@ -2340,7 +2585,7 @@ function StudyDashboardPopup() {
                     </div>
                 )}
 
-                {summary && (
+                {tab === 'overview' && summary && (
                     <div style={{ padding: '12px 16px' }}>
                         <div
                             style={{
@@ -2358,6 +2603,7 @@ function StudyDashboardPopup() {
                 )}
 
                 {/* Hierarchy */}
+                {tab === 'overview' && (
                 <div style={{ padding: '0 16px 16px' }}>
                     <div
                         style={{
@@ -2399,8 +2645,40 @@ function StudyDashboardPopup() {
                         </div>
                     )}
                 </div>
+                )}
+
+                {/* Graphs — an alternative reading of the same period the
+                    Summary counts: reviews and time over the timeline. */}
+                {tab === 'graphs' && (
+                    <div style={{ padding: '0 16px 16px' }}>
+                        {progress.running || !timelineDays ? (
+                            <div
+                                style={{
+                                    padding: 24,
+                                    textAlign: 'center',
+                                    color: 'var(--rn-clr-content-tertiary)',
+                                    fontSize: 12,
+                                }}
+                            >
+                                {progress.running ? 'Loading…' : 'No data yet.'}
+                            </div>
+                        ) : (
+                            <StudyTimelineCharts
+                                days={timelineDays}
+                                granularity={granularity}
+                                onGranularityChange={setGranularity}
+                                stacked={stackedTime}
+                                onStackedChange={setStackedTime}
+                                showTrends={showTrends}
+                                onShowTrendsChange={setShowTrends}
+                                accentColor={ACCENT_COLOR}
+                            />
+                        )}
+                    </div>
+                )}
             </div>
         </div>
+        </SpeedUnitContext.Provider>
     );
 }
 

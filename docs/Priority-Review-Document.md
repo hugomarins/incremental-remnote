@@ -171,12 +171,47 @@ Even though you are reviewing a generated list, the plugin is smart enough to kn
     * *Example:* If you generate a review doc for "Biology 101", the shield will show you how well you are protecting priorities within the "Biology 101" folder, not just the temporary review document.
 * **Stats Tracking:** The history graph will record your progress against the original document or Full KB, keeping your long-term stats accurate.
 
+## Cleaning a Review Document
+
+A Priority Review Document is a **snapshot**. Its entries are Rem references chosen from what was due at the moment you built it, and nothing updates them afterwards. Once you have reviewed an item, its entry stays behind — and keeps feeding the document's queue. A document you have been working through for a few days ends up mostly made of things you have already done, crowding out the priorities it was built to reach.
+
+The **Clean Priority Review Documents** command (quick code `cprd`) removes those entries.
+
+It reads *every* review document in your knowledge base, works out which entries still have something due, and shows you the result **before** anything is deleted:
+
+- **`FC` entries** are kept when the referenced Rem still has a card of its own due. Descendants are not consulted — the document never selected that Rem for its children's cards, so cleaning does not keep it for them either.
+- **`INC` entries** are kept when the referenced Rem is still an Incremental Rem whose next repetition has arrived.
+- **Entries whose Rem has been deleted** are removed.
+
+"Due" here means **due at any point up to the end of today**, not due at this exact second. A card you answered *Forgot* an hour ago is sitting in a learning step ten minutes out: it is not due right now, but it is coming back in this very session, and deleting its entry would take it out of the document that is meant to bring it back.
+
+### What it never deletes
+
+- **Entries you have written under.** If you added notes as children of an entry, it is kept — deleting a Rem takes its descendants with it, and those notes are not recoverable by re-running the command.
+- **Entries you have typed next to.** Anything beyond the bare reference counts as yours.
+- **The document itself**, its metadata block, its distribution graph, and any bullet of your own that holds no reference.
+
+Both kinds are listed separately in the review screen as *Reviewed, but kept*, so you can deal with them by hand.
+
+### Using it
+
+Run the command from the Command Palette. The scan is read-only and takes a few seconds — it answers every entry in every document from two knowledge-base-wide reads rather than one lookup per entry.
+
+The review screen lists each document with **how many entries are still due, how many have been reviewed, and how many it holds in total**, most recently built first. Expand any row to see the entries by name, with their `INC` / `FC` tag. Tick the documents you want cleaned — every document with work to do starts ticked — and press **Remove**. Deleting cannot be undone, and `Enter` is inert on that screen: the red button has to be clicked.
+
+Afterwards, each cleaned document's metadata block gains a line recording what was removed, and any document left holding **nothing due at all** is named in the report — those are finished, and can be deleted.
+
+!!! note "Incremental Rems need the queue to have been opened once"
+    `INC` entries are judged against the plugin's Incremental Rem cache. If that cache has not been built yet in this session, an unbuilt cache is indistinguishable from *every incremental Rem has been reviewed* — so the command says so and leaves all `INC` entries alone. Open the queue once and run it again.
+
+---
+
 ## Best Practices
 
 * **The "Overwhelmed" Workflow:** If you wake up to 1000+ due cards, don't panic. Create a Priority Review Document for 100 items (Full KB). Review them. If you have energy left, create another. If not, you can stop knowing you tackled the most important 100 items.
 * **The "Deep Dive" Workflow:** If you want to focus specifically on one project, navigate to that folder, create a Priority Review Document (Current Document scope), and finish that queue completely before moving on.
 * **Maintain Priority Hygiene:** To ensure your Priority Review Documents accurately catch your most critical content, regularly set priorities on your key documents and flashcards. Crucially, run the "**[Priorities-for-Flashcards#maintenance-the-update-all-inherited-card-priorities-command](Priorities-for-Flashcards.md#manual-full-kb-sweep-update-all-inherited-card-priorities)**" command periodically (e.g., weekly). This updates the priority inheritance across your entire knowledge base, ensuring that every single flashcard — even those you haven't manually touched — inherits the correct priority from its parent document.
-* **Cleanup:** Get in the habit of deleting these documents after you finish the queue. They are meant to be temporary snapshots of your priorities at that specific moment. Leaving them in your collection will create unnecessary rem references to your items, cluttering the UI and making your KB heavier and slower.
+* **Cleanup:** Get in the habit of deleting these documents after you finish the queue. They are meant to be temporary snapshots of your priorities at that specific moment. Leaving them in your collection will create unnecessary rem references to your items, cluttering the UI and making your KB heavier and slower. If you would rather keep a document in play across several sessions, run [Clean Priority Review Documents](#cleaning-a-review-document) so it stops serving what you have already reviewed.
 
 ---
 
