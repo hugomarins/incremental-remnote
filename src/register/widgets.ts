@@ -181,6 +181,16 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
     },
   });
 
+  // Scan → review → delete for entries left behind in Priority Review Documents.
+  // Tall and scrollable because the review stage is also the diagnostic: it lists
+  // every document with what it still carries, and you tick which ones to clean.
+  plugin.app.registerWidget('prd_cleanup_popup', WidgetLocation.Popup, {
+    dimensions: {
+      width: 620,
+      height: 'auto',
+    },
+  });
+
   plugin.app.registerWidget('card_info_bar', WidgetLocation.FlashcardUnder, {
     powerupFilter: 'cardPriority',
     dimensions: {

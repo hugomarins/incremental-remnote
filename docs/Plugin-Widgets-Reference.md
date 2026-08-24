@@ -533,6 +533,20 @@ Scan, review and delete in one popup — but deliberately in **two stages**, bec
 
 📖 **Full documentation:** [Delete Empty Extra Card Detail Rems](Utilities.md#delete-empty-extra-card-detail-rems)
 
+### 6.12. Clean Priority Review Documents Popup
+**Trigger:** `Clean Priority Review Documents` command (quick code `cprd`)
+
+Two stages, like the Empty Extra Card Detail popup and for the same reason: the scan writes nothing, and you confirm against real counts before any Rem is deleted.
+
+- **Stage one — the scan** runs as soon as the popup opens and is read-only. It reads every document tagged *Priority Review Queue* and works out which of its entries still have something due.
+- **Stage two — review.** One row per document, most recently built first: **still due / reviewed / total entries**, the date it was built, and a note of anything being kept back. **Show** expands the row into the entries themselves, by name and with their `INC` / `FC` tag, split into *To remove*, *Reviewed, but kept*, and *Still due, staying*.
+- **Tick the documents to clean.** Every document with work to do starts ticked; untick to leave one alone. The button counts what you have selected and estimates how long it will take.
+- **`Enter` is inert here** — the red **Remove N entries** button has to be clicked. `Esc` is ignored while the scan or the deletion runs.
+- **The report stays on screen**: how many entries were removed, and which documents are left holding nothing due at all — those are finished and can be deleted.
+- **The console holds the full readout**: a table per document with every entry's status, kind, name and Rem ID, which is the quickest way to see what a review document is still carrying.
+
+📖 **Full documentation:** [Cleaning a Review Document](Priority-Review-Document.md#cleaning-a-review-document)
+
 ---
 
 ## 7. Mastery Drill

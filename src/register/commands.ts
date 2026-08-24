@@ -1453,6 +1453,25 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     },
   });
 
+  // Clean-up pass over the documents the command above creates.
+  //
+  // A Priority Review Document is a snapshot: its entries are Rem references
+  // chosen from what was due when it was built, and nothing updates them
+  // afterwards. Once an item has been reviewed its entry keeps feeding the
+  // document's queue, so an older document goes on serving what you have
+  // already done — which under RemNote's current gathering rules is what
+  // crowds out the priorities the document existed to reach.
+  plugin.app.registerCommand({
+    id: 'clean-priority-review',
+    name: 'Clean Priority Review Documents',
+    description:
+      'Finds the entries in your Priority Review Documents whose Rem no longer has anything due — reviewed flashcards and incremental Rems — and removes them after you confirm, per document.',
+    quickCode: 'cprd',
+    action: async () => {
+      await plugin.widget.openPopup('prd_cleanup_popup');
+    },
+  });
+
   // Command to manually refresh the card priority cache ---
   //
   // forceCold is not optional in spirit. Startup reads the saved copy and only

@@ -2,6 +2,26 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.57 - August 24th, 2026
+
+### ✨ New - clean the reviewed entries out of a Priority Review Document
+
+A Priority Review Document is a snapshot: its entries are chosen from what was due when you built it, and nothing updates them afterwards. Work through it over a few days and it ends up mostly made of items you have already reviewed — still feeding the document's queue, crowding out the priorities it was built to reach.
+
+**Clean Priority Review Documents** (quick code `cprd`) reads every review document in the knowledge base and removes the entries whose Rem no longer has anything due. `FC` entries are judged on the referenced Rem's own cards, `INC` entries on its next repetition date; entries whose Rem has been deleted go too. "Due" means due at any point up to the end of today, so a card sitting in a learning step is not thrown away.
+
+Nothing is deleted until you confirm. The review screen lists each document with how many entries are still due, how many have been reviewed and how many it holds, expandable to the entries by name — useful on its own as a readout of what a document is still carrying. Tick which documents to clean. Entries you have written notes under, or typed next to, are never deleted and are listed separately.
+
+📖 [Cleaning a Review Document](Priority-Review-Document.md#cleaning-a-review-document)
+
+#### Technical explanation
+
+Two knowledge-base-wide reads — one `card.getAll()` and the IncRem session cache — answer every entry in every document, so the per-entry cost is a map lookup rather than a round trip; children and targets are fetched per document with `findMany`. Entry kind comes from the `INC`/`FC` tag the builder wrote, resolved with two `taggedRem()` calls, falling back to inspecting the target when a tag has been removed.
+
+The due cutoff is the end of today rather than the builder's `now`. The builder is choosing what to serve at this instant; this is deciding what to throw away, and a card answered *Forgot* an hour ago is ten minutes out — not due by `now`, but returning in the same session. For `INC` entries the two coincide, since `nextRepDate` is a Daily Document date at midnight.
+
+An empty IncRem cache is treated as "cannot judge", not as "nothing is due": `INC` entries are reported as unjudgeable and left alone, since an unbuilt cache and a fully reviewed knowledge base look identical. Cards in paused documents still read as due and are kept. `remove()` deletes descendants, so an entry with children is never a candidate whatever its state.
+
 ## v1.0.53 - August 21st, 2026
 
 ### ✨ New - an Incremental Rem no longer spoils its own flashcard
