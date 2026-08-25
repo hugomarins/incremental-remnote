@@ -513,6 +513,9 @@ export interface CardAnalyticsRow {
   cardId: string;
   remId: string;
   cardType: string;
+  /** For cloze cards, the cloze id the card is bound to; null otherwise. It is
+   *  what lets us ask whether the Rem's text still contains this card's markup. */
+  clozeId: string | null;
   /** Inherited priority of the owning Rem (1-100). */
   priority: number;
   /** 1-based rank percentile within the sorted card population (0-100). */
@@ -654,6 +657,10 @@ export async function computeCardAnalyticsBreakdown(
         cardId: card._id,
         remId: card.remId,
         cardType: cardTypeLabel(card.type),
+        clozeId:
+          card.type && typeof card.type === 'object' && 'clozeId' in card.type
+            ? String((card.type as any).clozeId)
+            : null,
         priority,
         percentile,
         bucket: `${bIdx * 10}-${(bIdx + 1) * 10}%`,

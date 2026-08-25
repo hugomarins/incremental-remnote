@@ -20,6 +20,65 @@ import { RNPlugin, BuiltInPowerupCodes } from '@remnote/plugin-sdk';
 import { CardAnalyticsRow } from './card_analytics';
 import { safeRemTextToString } from './pdfUtils';
 
+/**
+ * Collect every cloze id present in a Rem's rich text. Cloze markup is carried
+ * on rich-text elements as `cId` (plus `blocks` for image clozes, `clozeOrder`
+ * and `latexClozes`), so the ids here are exactly the clozes the Rem currently
+ * defines. Comparing them against a card's `type.clozeId` answers the one
+ * question `rem.getCards()` cannot: is this card's markup still in the text?
+ */
+export function collectClozeIds(richText: any): Set<string> {
+  const ids = new Set<string>();
+  const add = (v: unknown) => {
+    if (typeof v === 'string' && v) ids.add(v);
+  };
+  const visit = (node: any, depth: number) => {
+    if (!node || depth > 12) return;
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child, depth + 1);
+      return;
+    }
+    if (typeof node !== 'object') return;
+    if (Array.isArray(node.cId)) node.cId.forEach(add);
+    else add(node.cId);
+    if (Array.isArray(node.clozeOrder)) {
+      for (const c of node.clozeOrder) {
+        if (typeof c === 'string') add(c);
+        else visit(c, depth + 1);
+      }
+    }
+    if (Array.isArray(node.latexClozes)) node.latexClozes.forEach(add);
+    if (Array.isArray(node.blocks)) visit(node.blocks, depth + 1);
+    if (Array.isArray(node.text)) visit(node.text, depth + 1);
+  };
+  visit(richText, 0);
+  return ids;
+}
+
+/**
+ * Does the Rem still define the markup this card was generated from?
+ *
+ * - cloze card: its cloze id must still appear in the Rem's text.
+ * - forward / backward card: the Rem must still have a back side.
+ *
+ * `null` means we cannot tell (unknown card type, or context not resolved).
+ * This is the signal that separates a card the user switched off ONE AT A TIME
+ * in the queue — markup intact, card simply not surfaced — from a card whose
+ * cloze or descriptor was edited away.
+ */
+export function markupStillPresent(
+  ctx: Pick<RemContext, 'clozeIds' | 'hasBackText'>,
+  cardType: string,
+  clozeId: string | null,
+): boolean | null {
+  if (cardType === 'cloze') {
+    if (!clozeId) return null;
+    return ctx.clozeIds.includes(clozeId);
+  }
+  if (cardType === 'forward' || cardType === 'backward') return ctx.hasBackText;
+  return null;
+}
+
 /** Extra per-Rem context, resolved only for the capped anomaly set. */
 export interface RemContext {
   text: string;
@@ -38,6 +97,10 @@ export interface RemContext {
   disableCardsAncestor: boolean;
   /** Nearest such ancestor — the Rem to untag to re-enable the subtree. */
   disablingAncestorId: string | null;
+  /** Cloze ids the Rem's text currently defines. */
+  clozeIds: string[];
+  /** Whether the Rem still has a back side (what a forward/backward card needs). */
+  hasBackText: boolean;
   /** Cards this Rem reports through `rem.getCards()`. A value BELOW the number
    *  of cards `card.getAll()` returned for the same Rem means at least one
    *  practice direction is disabled — RemNote drops disabled directions from
@@ -64,18 +127,36 @@ export type UnscheduledCause =
   | 'cards-disabled-ancestor'
   | 'cards-disabled-rem'
   | 'practice-direction-none'
-  | 'direction-not-generated'
-  | 'no-cards-generated'
+  | 'card-disabled-individually'
+  | 'markup-removed'
+  | 'not-surfaced-unknown'
   | 'rem-missing'
   | 'unresolved';
+
+/**
+ * Column headers for the bucket × cause matrix. Distinct within 13 characters —
+ * truncating the slugs collided `cards-disabled-rem` with `cards-disabled-ancestor`.
+ */
+export const UNSCHEDULED_CAUSE_SHORT: Record<UnscheduledCause, string> = {
+  'paused-document': 'paused-deck',
+  'cards-disabled-ancestor': 'off-ancestor',
+  'cards-disabled-rem': 'off-rem',
+  'practice-direction-none': 'dir-none',
+  'card-disabled-individually': 'off-card',
+  'markup-removed': 'markup-gone',
+  'not-surfaced-unknown': 'unknown',
+  'rem-missing': 'rem-missing',
+  unresolved: 'unresolved',
+};
 
 export const UNSCHEDULED_CAUSE_LABELS: Record<UnscheduledCause, string> = {
   'paused-document': 'Inside a paused deck',
   'cards-disabled-ancestor': 'Disabled by an ancestor’s “Disable Descendant Cards”',
   'cards-disabled-rem': 'Cards switched off on the Rem itself',
   'practice-direction-none': 'Practice direction = none',
-  'direction-not-generated': 'This direction is not currently generated',
-  'no-cards-generated': 'Enabled, but the Rem currently generates no card',
+  'card-disabled-individually': 'This single card switched off (markup still present)',
+  'markup-removed': 'The cloze / back side this card came from is gone',
+  'not-surfaced-unknown': 'Not surfaced — cause undetermined',
   'rem-missing': 'Owning Rem not found',
   unresolved: 'Not resolved (outside the Rem-context cap)',
 };
@@ -87,19 +168,24 @@ export const UNSCHEDULED_CAUSE_LABELS: Record<UnscheduledCause, string> = {
  */
 export function classifyUnscheduled(
   ctx: RemContext | undefined,
-  remCardsInPopulation: number,
+  card: Pick<CardAnalyticsRow, 'cardType' | 'clozeId'>,
 ): UnscheduledCause {
   if (!ctx) return 'unresolved';
   if (ctx.missing) return 'rem-missing';
+  // Rem-wide suppressions first: they explain every card on the Rem at once.
   if (ctx.inPausedDocument) return 'paused-document';
   if (ctx.disableCardsAncestor) return 'cards-disabled-ancestor';
   if (ctx.disableCardsOwn || ctx.enablePractice === false) return 'cards-disabled-rem';
   if (ctx.practiceDirection === 'none') return 'practice-direction-none';
-  if (ctx.cardsViaGetCards === 0) return 'no-cards-generated';
-  if (ctx.cardsViaGetCards !== null && ctx.cardsViaGetCards < remCardsInPopulation) {
-    return 'direction-not-generated';
-  }
-  return 'unresolved';
+  // Rem is enabled, so this is about THIS card. Its markup decides: still in the
+  // text ⇒ the user switched this one card off in the queue; gone ⇒ the Rem no
+  // longer produces it. Card counts cannot separate these — a Rem whose cards
+  // were all individually disabled reports zero from getCards(), exactly like a
+  // Rem whose markup was deleted.
+  const present = markupStillPresent(ctx, card.cardType, card.clozeId);
+  if (present === true) return 'card-disabled-individually';
+  if (present === false) return 'markup-removed';
+  return 'not-surfaced-unknown';
 }
 
 export interface ExportSummary {
@@ -220,7 +306,7 @@ export function summarizeRows(
 
     if (r.scheduleState === 'unscheduled') {
       summary.unscheduledTotal++;
-      const cause = classifyUnscheduled(context?.get(r.remId), rollups.get(r.remId)!.cards);
+      const cause = classifyUnscheduled(context?.get(r.remId), r);
       const entry = causeCounts.get(cause) ?? { cards: 0, newCards: 0 };
       entry.cards++;
       if (r.isNew) entry.newCards++;
@@ -335,6 +421,8 @@ export async function resolveAnomalyRemContext(
     disableCardsOwn: false,
     disableCardsAncestor: false,
     disablingAncestorId: null,
+    clozeIds: [],
+    hasBackText: false,
     cardsViaGetCards: null,
     inPausedDocument: false,
     missing: true,
@@ -366,6 +454,8 @@ export async function resolveAnomalyRemContext(
           disableCardsOwn: !!disableOwn,
           disableCardsAncestor: ancestors.disableCards,
           disablingAncestorId: ancestors.disablingAncestorId,
+          clozeIds: Array.from(collectClozeIds(rem.text)),
+          hasBackText: Array.isArray(rem.backText) && rem.backText.length > 0,
           cardsViaGetCards: cards ? cards.length : null,
           inPausedDocument: ancestors.paused,
           missing: false,
@@ -430,6 +520,8 @@ const CSV_COLUMNS = [
   'remDisableCardsAncestor',
   'remDisablingAncestorId',
   'remInPausedDocument',
+  'clozeId',
+  'markupStillPresent',
   'unscheduledCause',
   'remText',
 ] as const;
@@ -445,8 +537,8 @@ export function rowsToCsv(rows: CardAnalyticsRow[], context: Map<string, RemCont
   for (const r of rows) {
     const roll = rollups.get(r.remId)!;
     const ctx = context.get(r.remId);
-    const cause =
-      r.scheduleState === 'unscheduled' ? classifyUnscheduled(ctx, roll.cards) : '';
+    const cause = r.scheduleState === 'unscheduled' ? classifyUnscheduled(ctx, r) : '';
+    const markup = ctx ? markupStillPresent(ctx, r.cardType, r.clozeId) : null;
     lines.push(
       [
         r.cardId,
@@ -480,6 +572,8 @@ export function rowsToCsv(rows: CardAnalyticsRow[], context: Map<string, RemCont
         ctx && !ctx.missing ? ctx.disableCardsAncestor : '',
         ctx?.disablingAncestorId ?? '',
         ctx ? ctx.inPausedDocument : '',
+        r.clozeId ?? '',
+        markup === null ? '' : markup,
         cause,
         ctx?.text ?? '',
       ]
@@ -518,14 +612,18 @@ export function summaryToText(summary: ExportSummary, meta: string): string {
           `Unscheduled by bucket × cause:`,
           [
             'bucket'.padEnd(12),
-            ...summary.causes.map((c) => c.cause.slice(0, 13).padStart(14)),
+            ...summary.causes.map((c) => UNSCHEDULED_CAUSE_SHORT[c.cause].padStart(13)),
           ].join(' '),
           ...summary.perBucket.map((b) =>
             [
               b.bucket.padEnd(12),
-              ...summary.causes.map((c) => String(b.causeCounts[c.cause] ?? 0).padStart(14)),
+              ...summary.causes.map((c) => String(b.causeCounts[c.cause] ?? 0).padStart(13)),
             ].join(' '),
           ),
+          [
+            'TOTAL'.padEnd(12),
+            ...summary.causes.map((c) => String(c.cards).padStart(13)),
+          ].join(' '),
           ``,
         ]
       : []),
@@ -576,6 +674,12 @@ export interface RemEnablementProbe {
   /** Card records that exist for this Rem in the card table. */
   cardsViaGetAll: number;
   disableCardsOwn: boolean;
+  /** Cloze ids the Rem's text currently defines. */
+  clozeIds: string[];
+  hasBackText: boolean;
+  /** Raw keys on the card object — used to look for undocumented state (e.g. a
+   *  surviving `nextTime` next to a nulled `activeNextTime`). */
+  rawCardKeys: string[];
   /** Ancestor chain, nearest first, with the flags that silence a subtree. */
   ancestors: Array<{
     remId: string;
@@ -589,6 +693,12 @@ export interface RemEnablementProbe {
     inGetCards: boolean;
     nextRepetitionTime: string;
     reps: number;
+    /** For clozes, the card's cloze id. */
+    clozeId: string;
+    /** Is this card's markup still in the Rem? The individually-disabled test. */
+    markupStillPresent: boolean | null;
+    /** What the export would call this card if it were unscheduled. */
+    wouldClassifyAs: string;
   }>;
 }
 
@@ -611,6 +721,8 @@ export async function probeRemCardEnablement(
 
   const surfacedIds = new Set(viaGetCards.map((c: any) => c._id));
   const owned = (allCards || []).filter((c: any) => c.remId === remId);
+  const clozeIds = Array.from(collectClozeIds(rem.text));
+  const hasBackText = Array.isArray(rem.backText) && rem.backText.length > 0;
 
   const ancestors: RemEnablementProbe['ancestors'] = [];
   let cursor = await rem.getParentRem();
@@ -631,6 +743,20 @@ export async function probeRemCardEnablement(
     hops++;
   }
 
+  const probeCtx: RemContext = {
+    text,
+    enablePractice: enablePractice as boolean | null,
+    practiceDirection: practiceDirection as RemContext['practiceDirection'],
+    disableCardsOwn: !!disableCardsOwn,
+    disableCardsAncestor: ancestors.some((a) => a.disableCards),
+    disablingAncestorId: ancestors.find((a) => a.disableCards)?.remId ?? null,
+    clozeIds,
+    hasBackText,
+    cardsViaGetCards: viaGetCards.length,
+    inPausedDocument: ancestors.some((a) => a.deckStatus === 'Paused'),
+    missing: false,
+  };
+
   return {
     remId,
     text,
@@ -639,15 +765,32 @@ export async function probeRemCardEnablement(
     cardsViaGetCards: viaGetCards.length,
     cardsViaGetAll: owned.length,
     disableCardsOwn: !!disableCardsOwn,
+    clozeIds,
+    hasBackText,
+    rawCardKeys: owned.length > 0 ? Object.keys(owned[0]) : [],
     ancestors,
-    cards: owned.map((c: any) => ({
-      cardId: c._id,
-      type: typeof c.type === 'string' ? c.type : `cloze:${c.type?.clozeId}`,
-      inGetCards: surfacedIds.has(c._id),
-      nextRepetitionTime: c.nextRepetitionTime
-        ? new Date(c.nextRepetitionTime).toISOString()
-        : '(null)',
-      reps: c.repetitionHistory?.length ?? 0,
-    })),
+    cards: owned.map((c: any) => {
+      const cardType =
+        c.type && typeof c.type === 'object' && 'clozeId' in c.type ? 'cloze' : String(c.type);
+      const clozeId =
+        c.type && typeof c.type === 'object' && 'clozeId' in c.type ? String(c.type.clozeId) : null;
+      return {
+        cardId: c._id,
+        type: clozeId ? `cloze:${clozeId}` : cardType,
+        inGetCards: surfacedIds.has(c._id),
+        nextRepetitionTime: c.nextRepetitionTime
+          ? new Date(c.nextRepetitionTime).toISOString()
+          : '(null)',
+        reps: c.repetitionHistory?.length ?? 0,
+        clozeId: clozeId ?? '',
+        markupStillPresent: markupStillPresent(probeCtx, cardType, clozeId),
+        // A cause only means something for an UNSCHEDULED card. A card with a
+        // real nextRepetitionTime is simply scheduled; running the classifier
+        // on it would report the cause it WOULD have, which reads as a verdict.
+        wouldClassifyAs: c.nextRepetitionTime
+          ? '(scheduled — n/a)'
+          : classifyUnscheduled(probeCtx, { cardType, clozeId }),
+      };
+    }),
   };
 }
