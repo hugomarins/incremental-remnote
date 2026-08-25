@@ -223,7 +223,12 @@ export interface ExportSummary {
   totalCards: number;
   /** Cards counted as New by the table (no gradeable rep in the effective history). */
   newCards: number;
+  /** Cards whose nextRepetitionTime has passed, INCLUDING suppressed ones. */
   dueCards: number;
+  /** Due cards RemNote would actually serve — paused decks excluded. */
+  dueServable: number;
+  /** Due-by-date cards inside a paused deck: real due dates, never served. */
+  duePaused: number;
   /** The interesting cell: New but NOT due — invisible to the queue and to the PRD. */
   newNotDue: number;
   /** Of `newNotDue`, how many have no `nextRepetitionTime` at all. */
@@ -253,6 +258,12 @@ export interface ExportSummary {
     newNotDue: number;
     newUnscheduled: number;
     newScheduledAhead: number;
+    /** Due cards this bucket would actually serve. */
+    dueServable: number;
+    /** Due-by-date cards suppressed by a paused deck. */
+    duePaused: number;
+    /** Cards in this bucket inside a paused deck, due or not. */
+    paused: number;
     /** Unscheduled cards in this bucket by cause — which lever applies where. */
     causeCounts: Partial<Record<UnscheduledCause, number>>;
   }>;
@@ -294,6 +305,8 @@ export function summarizeRows(
     totalCards: rows.length,
     newCards: 0,
     dueCards: 0,
+    dueServable: 0,
+    duePaused: 0,
     newNotDue: 0,
     newUnscheduled: 0,
     newScheduledAhead: 0,
@@ -317,6 +330,9 @@ export function summarizeRows(
         newNotDue: 0,
         newUnscheduled: 0,
         newScheduledAhead: 0,
+        dueServable: 0,
+        duePaused: 0,
+        paused: 0,
         causeCounts: {},
       };
       perBucketMap.set(r.bucket, b);
@@ -329,6 +345,13 @@ export function summarizeRows(
     if (r.isDue) {
       summary.dueCards++;
       b.dueCards++;
+      if (r.inPausedDeck) {
+        summary.duePaused++;
+        b.duePaused++;
+      } else {
+        summary.dueServable++;
+        b.dueServable++;
+      }
     }
     if (r.isNew && !r.isDue) {
       summary.newNotDue++;
@@ -344,7 +367,10 @@ export function summarizeRows(
     }
     if (!r.isNew && r.scheduleState === 'unscheduled') summary.reviewedUnscheduled++;
 
-    if (r.inPausedDeck) summary.pausedTotal++;
+    if (r.inPausedDeck) {
+      summary.pausedTotal++;
+      b.paused++;
+    }
 
     // A paused card is suppressed whether or not it also lacks a next time, so
     // it belongs in the cause breakdown either way.
@@ -642,7 +668,9 @@ export function summaryToText(summary: ExportSummary, meta: string): string {
     ``,
     `Cards analysed:              ${summary.totalCards.toLocaleString()}`,
     `New (no gradeable rep):      ${summary.newCards.toLocaleString()} (${pct(summary.newCards, summary.totalCards)})`,
-    `Due (nextRepetitionTime≤now):${summary.dueCards.toLocaleString()}`,
+    `Due — servable:              ${summary.dueServable.toLocaleString()}  ← what the queue can actually show you`,
+    `Due — by date, but paused:   ${summary.duePaused.toLocaleString()}  (real due dates inside a paused deck)`,
+    `Due — raw total:             ${summary.dueCards.toLocaleString()}`,
     ``,
     `New AND NOT due:             ${summary.newNotDue.toLocaleString()}`,
     `  · no nextRepetitionTime:   ${summary.newUnscheduled.toLocaleString()}  ← unreachable by the queue and the Priority Review Document`,
@@ -663,7 +691,7 @@ export function summaryToText(summary: ExportSummary, meta: string): string {
     ``,
     ...(summary.causes.length > 0
       ? [
-          `Unscheduled by bucket × cause:`,
+          `Suppressed by bucket × cause:`,
           [
             'bucket'.padEnd(12),
             ...summary.causes.map((c) => UNSCHEDULED_CAUSE_SHORT[c.cause].padStart(13)),
@@ -681,16 +709,18 @@ export function summaryToText(summary: ExportSummary, meta: string): string {
           ``,
         ]
       : []),
-    `Per bucket:`,
-    `bucket        cards     new     due  new&notDue  newUnscheduled  newAhead`,
+    `Per bucket ("due" = servable; paused cards are counted under paused, not due):`,
+    `bucket        cards     new  paused     due  duePaused  new&notDue  newUnsched  newAhead`,
     ...summary.perBucket.map((b) =>
       [
         b.bucket.padEnd(12),
         String(b.cards).padStart(6),
         String(b.newCards).padStart(7),
-        String(b.dueCards).padStart(7),
+        String(b.paused).padStart(7),
+        String(b.dueServable).padStart(7),
+        String(b.duePaused).padStart(10),
         String(b.newNotDue).padStart(11),
-        String(b.newUnscheduled).padStart(15),
+        String(b.newUnscheduled).padStart(11),
         String(b.newScheduledAhead).padStart(9),
       ].join(' '),
     ),

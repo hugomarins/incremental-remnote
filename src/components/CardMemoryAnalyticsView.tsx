@@ -1137,6 +1137,10 @@ function ExportDiagnosisPanel({
         </button>
       </div>
       <div style={{ margin: '6px 0 8px', color: 'var(--rn-clr-content-secondary)', lineHeight: 1.5 }}>
+        Of {summary.dueCards.toLocaleString()} cards due by date,{' '}
+        <strong>{summary.dueServable.toLocaleString()}</strong> can actually be served —{' '}
+        {summary.duePaused.toLocaleString()} sit inside a paused deck with real due dates the
+        queue ignores.{' '}
         <strong>{summary.newNotDue.toLocaleString()}</strong> of{' '}
         {summary.newCards.toLocaleString()} New cards are not Due —{' '}
         <strong>{summary.newUnscheduled.toLocaleString()}</strong> have no{' '}
@@ -1150,7 +1154,9 @@ function ExportDiagnosisPanel({
       {summary.causes.length > 0 && (
         <div style={{ margin: '0 0 10px', lineHeight: 1.6 }}>
           <div style={{ fontWeight: 700, marginBottom: '2px' }}>
-            All {summary.unscheduledTotal.toLocaleString()} unscheduled cards, by cause:
+            All {(summary.unscheduledTotal + summary.pausedTotal).toLocaleString()} suppressed
+            cards ({summary.unscheduledTotal.toLocaleString()} unscheduled +{' '}
+            {summary.pausedTotal.toLocaleString()} paused), by cause:
           </div>
           {summary.causes.map((c) => (
             <div key={c.cause} style={{ color: 'var(--rn-clr-content-secondary)' }}>
@@ -1169,7 +1175,8 @@ function ExportDiagnosisPanel({
               <th style={{ ...head, textAlign: 'left' }}>BUCKET</th>
               <th style={head}>CARDS</th>
               <th style={head}>NEW</th>
-              <th style={head}>DUE</th>
+              <th style={head}>PAUSED</th>
+              <th style={head}>DUE (SERVABLE)</th>
               <th style={head}>NEW &amp; NOT DUE</th>
               <th style={head}>UNSCHEDULED</th>
               <th style={head}>SCHEDULED AHEAD</th>
@@ -1181,7 +1188,18 @@ function ExportDiagnosisPanel({
                 <td style={{ ...cell, textAlign: 'left' }}>{b.bucket}</td>
                 <td style={cell}>{b.cards.toLocaleString()}</td>
                 <td style={cell}>{b.newCards.toLocaleString()}</td>
-                <td style={cell}>{b.dueCards.toLocaleString()}</td>
+                <td style={{ ...cell, color: b.paused > 0 ? '#0ea5e9' : undefined }}>
+                  {b.paused.toLocaleString()}
+                </td>
+                <td style={cell}>
+                  {b.dueServable.toLocaleString()}
+                  {b.duePaused > 0 && (
+                    <span style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                      {' '}
+                      (+{b.duePaused.toLocaleString()} paused)
+                    </span>
+                  )}
+                </td>
                 <td style={{ ...cell, fontWeight: 700 }}>{b.newNotDue.toLocaleString()}</td>
                 <td style={{ ...cell, color: b.newUnscheduled > 0 ? '#ef4444' : undefined }}>
                   {b.newUnscheduled.toLocaleString()}
