@@ -503,6 +503,91 @@ export interface PeriodSpec {
   customEnd: string;
 }
 
+/**
+ * One exported row per card — the raw material behind every aggregate above.
+ * Emitted through the optional `onRow` callback so an export can reuse the
+ * exact same population, priority inheritance, bucketing and New/Due/Stale
+ * predicates the table renders (no second, drifting implementation).
+ */
+export interface CardAnalyticsRow {
+  cardId: string;
+  remId: string;
+  cardType: string;
+  /** Inherited priority of the owning Rem (1-100). */
+  priority: number;
+  /** 1-based rank percentile within the sorted card population (0-100). */
+  percentile: number;
+  /** Bucket label the card was counted in, e.g. "0-10%". */
+  bucket: string;
+  isNew: boolean;
+  isDue: boolean;
+  isStale: boolean;
+  /**
+   * Why the card is / isn't due, from `nextRepetitionTime` alone:
+   * - `unscheduled` — null/undefined next time. RemNote leaves this empty for
+   *   cards it will never surface: disabled practice direction, and some
+   *   never-scheduled states. These can never be Due, so no queue and no
+   *   Priority Review Document will ever pick them up.
+   * - `due` — next time ≤ now.
+   * - `scheduled` — next time in the future.
+   */
+  scheduleState: 'unscheduled' | 'due' | 'scheduled';
+  /** Raw next repetition time (ms epoch) or null. */
+  nextRepetitionTime: number | null;
+  createdAt: number | null;
+  /** Total history entries (every interaction, gradeable or not). */
+  historyEntries: number;
+  /** Gradeable reps over the FULL lifetime (ignores period AND ignorePreReset). */
+  gradeableRepsLifetime: number;
+  /** Gradeable reps in the effective slice — what `isNew` actually looks at. */
+  gradeableRepsEffective: number;
+  /** True when the history contains at least one RESET entry. */
+  hasReset: boolean;
+  /** Non-gradeable interactions (SKIP / TOO_SOON / RESET / VIEWED…) lifetime. */
+  nonGradeableInteractions: number;
+  /** Score of the last history entry, or null when there is no history. */
+  lastScore: number | null;
+  lastInteractionDate: number | null;
+}
+
+/**
+ * Lifetime + effective history facts for one card. Kept next to
+ * `computeCardStats` so the RESET slicing rule stays defined in one place.
+ */
+function describeCardHistory(card: any, ignorePreReset: boolean) {
+  const history: any[] = card.repetitionHistory ?? [];
+  const sorted = [...history].sort((a: any, b: any) => a.date - b.date);
+  let effective = sorted;
+  if (ignorePreReset) {
+    const lastResetIdx = sorted.map((h: any) => h.score).lastIndexOf(QueueInteractionScore.RESET);
+    if (lastResetIdx !== -1) effective = sorted.slice(lastResetIdx + 1);
+  }
+  let gradeableRepsLifetime = 0;
+  let hasReset = false;
+  for (const h of sorted) {
+    if (isGradeable(h.score)) gradeableRepsLifetime++;
+    if (h.score === QueueInteractionScore.RESET) hasReset = true;
+  }
+  let gradeableRepsEffective = 0;
+  for (const h of effective) if (isGradeable(h.score)) gradeableRepsEffective++;
+  const last = sorted.length > 0 ? sorted[sorted.length - 1] : null;
+  return {
+    historyEntries: sorted.length,
+    gradeableRepsLifetime,
+    gradeableRepsEffective,
+    hasReset,
+    nonGradeableInteractions: sorted.length - gradeableRepsLifetime,
+    lastScore: last ? (last.score as number) : null,
+    lastInteractionDate: last ? (last.date as number) : null,
+  };
+}
+
+function cardTypeLabel(type: any): string {
+  if (typeof type === 'string') return type;
+  if (type && typeof type === 'object' && 'clozeId' in type) return 'cloze';
+  return 'unknown';
+}
+
 export async function computeCardAnalyticsBreakdown(
   plugin: RNPlugin,
   cardPriorityInfos: CardPriorityInfo[],
@@ -511,6 +596,8 @@ export async function computeCardAnalyticsBreakdown(
   ignorePreReset: boolean,
   period: PeriodSpec,
   onProgress?: (done: number, total: number) => void,
+  /** Optional per-card sink — lets an export capture the raw rows behind the aggregates. */
+  onRow?: (row: CardAnalyticsRow) => void,
 ): Promise<CardAnalyticsBreakdown> {
   const { startMs, endMs } = period;
   // Map remId → inherited rem priority. Filter out rems with explicit zero cards.
@@ -560,6 +647,25 @@ export async function computeCardAnalyticsBreakdown(
     accumulate(bucketAccs[bIdx], stats, priority);
     accumulate(overallAcc, stats, priority);
     accumulate(byPriorityAccs[pIdx], stats, priority);
+
+    if (onRow) {
+      const nextRep = (card.nextRepetitionTime ?? null) as number | null;
+      onRow({
+        cardId: card._id,
+        remId: card.remId,
+        cardType: cardTypeLabel(card.type),
+        priority,
+        percentile,
+        bucket: `${bIdx * 10}-${(bIdx + 1) * 10}%`,
+        isNew: stats.isNew,
+        isDue: stats.isDue,
+        isStale: stats.isStale,
+        scheduleState: nextRep === null ? 'unscheduled' : nextRep <= now ? 'due' : 'scheduled',
+        nextRepetitionTime: nextRep,
+        createdAt: (card.createdAt ?? null) as number | null,
+        ...describeCardHistory(card, ignorePreReset),
+      });
+    }
 
     if ((i + 1) % YIELD_EVERY === 0) {
       if (onProgress) onProgress(i + 1, N);

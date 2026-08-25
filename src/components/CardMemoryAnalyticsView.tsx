@@ -11,9 +11,18 @@ import { usePlugin } from '@remnote/plugin-sdk';
 import React from 'react';
 import {
   CardAnalyticsBreakdown,
+  CardAnalyticsRow,
   CardBucketStats,
   computeCardAnalyticsBreakdown,
 } from '../lib/card_analytics';
+import {
+  ExportSummary,
+  downloadText,
+  resolveAnomalyRemContext,
+  rowsToCsv,
+  summarizeRows,
+  summaryToText,
+} from '../lib/card_analytics_export';
 import { CardPriorityInfo } from '../lib/card_priority/types';
 import {
   allCardPriorityInfoKey,
@@ -94,6 +103,15 @@ function gradeColor(g: number): string {
 // --- View states ----------------------------------------------------------
 
 type ComputeState = 'idle' | 'computing' | 'ready';
+
+/**
+ * How many distinct Rems get their text / practice direction / paused state /
+ * `rem.getCards()` count resolved during an export. Each one costs a handful of
+ * IPC round-trips, so the lookup is limited to the highest-priority Rems owning
+ * unscheduled cards — the ones worth actually going and fixing. Ancestor walks
+ * are memoized inside the resolver, which is what keeps this affordable.
+ */
+const ANOMALY_REM_CAP = 5000;
 
 interface ProgressInfo {
   done: number;
@@ -835,12 +853,14 @@ function StatusBar({
   ignorePreReset,
   onToggleIgnorePreReset,
   onRecompute,
+  onExport,
   disabled,
 }: {
   breakdown: CardAnalyticsBreakdown;
   ignorePreReset: boolean;
   onToggleIgnorePreReset: (next: boolean) => void;
   onRecompute: () => void;
+  onExport: () => void;
   disabled: boolean;
 }) {
   // Live-updating "X minutes ago" — re-render every 30s.
@@ -899,6 +919,30 @@ function StatusBar({
         </label>
         <button
           type="button"
+          onClick={onExport}
+          disabled={disabled}
+          title={
+            'Re-runs the analysis collecting one row per card, then downloads a CSV plus a ' +
+            'summary. Use it to see exactly which cards sit in each category — in particular ' +
+            'cards counted as New that are not Due (they have no nextRepetitionTime, so no ' +
+            'queue and no Priority Review Document can ever pick them up).'
+          }
+          style={{
+            padding: '4px 10px',
+            fontSize: '11px',
+            fontWeight: 600,
+            borderRadius: '4px',
+            border: '1px solid var(--rn-clr-background-tertiary)',
+            background: 'var(--rn-clr-background-primary)',
+            color: 'var(--rn-clr-content-primary)',
+            cursor: disabled ? 'wait' : 'pointer',
+            opacity: disabled ? 0.6 : 1,
+          }}
+        >
+          ⤓ Export cards
+        </button>
+        <button
+          type="button"
           onClick={onRecompute}
           disabled={disabled}
           style={{
@@ -920,12 +964,12 @@ function StatusBar({
   );
 }
 
-function ProgressDisplay({ progress }: { progress: ProgressInfo }) {
+function ProgressDisplay({ progress, label }: { progress: ProgressInfo; label?: string }) {
   const pct = progress.total > 0 ? (progress.done / progress.total) * 100 : 0;
   return (
     <div style={{ padding: '24px', textAlign: 'center' }}>
       <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>
-        Replaying FSRS over every card…
+        {label ?? 'Replaying FSRS over every card…'}
       </div>
       <div
         style={{
@@ -948,7 +992,119 @@ function ProgressDisplay({ progress }: { progress: ProgressInfo }) {
         />
       </div>
       <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--rn-clr-content-tertiary)' }}>
-        {progress.done.toLocaleString()} / {progress.total.toLocaleString()} cards ({pct.toFixed(0)}%)
+        {progress.done.toLocaleString()} / {progress.total.toLocaleString()} ({pct.toFixed(0)}%)
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * Post-export diagnosis. Answers the question the table can't: a bucket can
+ * show a healthy %New next to zero Due because those "new" cards have no
+ * `nextRepetitionTime` at all — RemNote never schedules them, so neither the
+ * queue nor the Priority Review Document can surface them.
+ */
+function ExportDiagnosisPanel({
+  summary,
+  onDismiss,
+}: {
+  summary: ExportSummary;
+  onDismiss: () => void;
+}) {
+  const cell: React.CSSProperties = { padding: '3px 8px', textAlign: 'right' };
+  const head: React.CSSProperties = { ...cell, fontWeight: 700, color: 'var(--rn-clr-content-secondary)' };
+  return (
+    <div
+      style={{
+        margin: '10px 0',
+        padding: '10px 12px',
+        borderRadius: '6px',
+        border: '1px solid var(--rn-clr-background-tertiary)',
+        background: 'var(--rn-clr-background-secondary)',
+        fontSize: '11px',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <strong>Export diagnosis — where the “New but not Due” cards are</strong>
+        <button
+          type="button"
+          onClick={onDismiss}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: 'var(--rn-clr-content-tertiary)',
+            fontSize: '13px',
+          }}
+        >
+          ✕
+        </button>
+      </div>
+      <div style={{ margin: '6px 0 8px', color: 'var(--rn-clr-content-secondary)', lineHeight: 1.5 }}>
+        <strong>{summary.newNotDue.toLocaleString()}</strong> of{' '}
+        {summary.newCards.toLocaleString()} New cards are not Due —{' '}
+        <strong>{summary.newUnscheduled.toLocaleString()}</strong> have no{' '}
+        <code>nextRepetitionTime</code> (unscheduled — invisible to the queue and to the
+        Priority Review Document), <strong>{summary.newScheduledAhead.toLocaleString()}</strong>{' '}
+        are scheduled into the future. {summary.newWithSomeHistory.toLocaleString()} of them
+        have history entries that were never graded (skipped / reset).{' '}
+        {summary.reviewedUnscheduled.toLocaleString()} already-reviewed cards are
+        unscheduled too.
+      </div>
+      {summary.causes.length > 0 && (
+        <div style={{ margin: '0 0 10px', lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 700, marginBottom: '2px' }}>
+            All {summary.unscheduledTotal.toLocaleString()} unscheduled cards, by cause:
+          </div>
+          {summary.causes.map((c) => (
+            <div key={c.cause} style={{ color: 'var(--rn-clr-content-secondary)' }}>
+              · {c.label}: <strong>{c.cards.toLocaleString()}</strong>{' '}
+              <span style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                ({c.newCards.toLocaleString()} counted as New)
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ ...head, textAlign: 'left' }}>BUCKET</th>
+              <th style={head}>CARDS</th>
+              <th style={head}>NEW</th>
+              <th style={head}>DUE</th>
+              <th style={head}>NEW &amp; NOT DUE</th>
+              <th style={head}>UNSCHEDULED</th>
+              <th style={head}>SCHEDULED AHEAD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.perBucket.map((b) => (
+              <tr key={b.bucket} style={{ borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
+                <td style={{ ...cell, textAlign: 'left' }}>{b.bucket}</td>
+                <td style={cell}>{b.cards.toLocaleString()}</td>
+                <td style={cell}>{b.newCards.toLocaleString()}</td>
+                <td style={cell}>{b.dueCards.toLocaleString()}</td>
+                <td style={{ ...cell, fontWeight: 700 }}>{b.newNotDue.toLocaleString()}</td>
+                <td style={{ ...cell, color: b.newUnscheduled > 0 ? '#ef4444' : undefined }}>
+                  {b.newUnscheduled.toLocaleString()}
+                </td>
+                <td style={cell}>{b.newScheduledAhead.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: '8px', color: 'var(--rn-clr-content-tertiary)', lineHeight: 1.5 }}>
+        The CSV has one row per card. Filter <code>scheduleState=unscheduled</code> and read{' '}
+        <code>unscheduledCause</code>, <code>remPracticeDirection</code>,{' '}
+        <code>remCardsViaGetCards</code> (below <code>remCardsInPopulation</code> ⇒ the Rem
+        no longer generates this card), <code>remCardsDisabled</code>,{' '}
+        <code>remInPausedDocument</code> and <code>remText</code>. Rem context is resolved
+        for the {ANOMALY_REM_CAP.toLocaleString()} highest-priority affected Rems; rows
+        beyond that cap read <code>unresolved</code>.
       </div>
     </div>
   );
@@ -971,6 +1127,10 @@ export function CardMemoryAnalyticsView() {
   const [period, setPeriod] = React.useState<Period>('thisYear');
   const [customStart, setCustomStart] = React.useState<string>('');
   const [customEnd, setCustomEnd] = React.useState<string>('');
+  // Export: the diagnosis of the last run (null until the user exports once),
+  // and a label so the shared progress bar can say which phase is running.
+  const [exportSummary, setExportSummary] = React.useState<ExportSummary | null>(null);
+  const [phaseLabel, setPhaseLabel] = React.useState<string | null>(null);
 
   const compute = React.useCallback(
     async (flag: boolean, p: Period, cs: string, ce: string) => {
@@ -1019,6 +1179,71 @@ export function CardMemoryAnalyticsView() {
     },
     [plugin],
   );
+
+  /**
+   * Export every analysed card as CSV. Re-runs the same computation with a row
+   * sink attached (the aggregates in the table keep no per-card detail), then
+   * resolves Rem context for the New-but-not-due set and downloads two files:
+   * the per-card CSV and a plain-text summary. The refreshed breakdown is
+   * written back to the cache, so an export doubles as a Recompute.
+   */
+  const runExport = React.useCallback(async () => {
+    setError(null);
+    setState('computing');
+    setProgress({ done: 0, total: 0 });
+    setPhaseLabel('Replaying FSRS and collecting one row per card…');
+    try {
+      const [infos, weightsRaw, capSec] = await Promise.all([
+        plugin.storage.getSession<CardPriorityInfo[]>(allCardPriorityInfoKey),
+        getIESetting(plugin, fsrsWeightsId),
+        getIESetting(plugin, flashcardResponseTimeLimitId),
+      ]);
+      const weights = parseWeightsString(weightsRaw);
+      const cardCapMs = ((capSec ?? 180) as number) * 1000;
+      const { startMs, endMs } = resolvePeriod(period, customStart, customEnd);
+
+      const rows: CardAnalyticsRow[] = [];
+      const breakdown = await computeCardAnalyticsBreakdown(
+        plugin as any,
+        infos ?? [],
+        weights,
+        cardCapMs,
+        ignorePreReset,
+        { id: period, startMs, endMs, customStart, customEnd },
+        (done, total) => setProgress({ done, total }),
+        (row) => rows.push(row),
+      );
+
+      setPhaseLabel('Resolving Rem context for unscheduled cards…');
+      setProgress({ done: 0, total: 0 });
+      const context = await resolveAnomalyRemContext(
+        plugin as any,
+        rows,
+        ANOMALY_REM_CAP,
+        (done, total) => setProgress({ done, total }),
+      );
+
+      // Summarize after enrichment so the cause breakdown can use the context.
+      const summary = summarizeRows(rows, context);
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const meta = `period=${period}, ignorePreReset=${ignorePreReset}, ${rows.length} cards`;
+      const summaryText = summaryToText(summary, meta);
+      console.log(`[CardMemoryAnalytics] export\n${summaryText}`);
+      downloadText(rowsToCsv(rows, context), `card-analytics-cards-${stamp}.csv`);
+      downloadText(summaryText, `card-analytics-summary-${stamp}.txt`, 'text/plain');
+
+      await plugin.storage.setSession(cardAnalyticsCacheKey, breakdown);
+      setCache(breakdown);
+      setExportSummary(summary);
+      setState('ready');
+    } catch (e: any) {
+      console.error('[CardMemoryAnalytics] export failed', e);
+      setError(e?.message || String(e));
+      setState(cache ? 'ready' : 'idle');
+    } finally {
+      setPhaseLabel(null);
+    }
+  }, [plugin, period, customStart, customEnd, ignorePreReset, cache]);
 
   // Mount: prefer the in-memory session cache (instant). If absent, fall back
   // to the last-selected period saved in device-local storage so that re-opens
@@ -1122,7 +1347,9 @@ export function CardMemoryAnalyticsView() {
         onChange={handlePeriodChange}
         onCustomChange={handleCustomChange}
       />
-      {state === 'computing' && <ProgressDisplay progress={progress} />}
+      {state === 'computing' && (
+        <ProgressDisplay progress={progress} label={phaseLabel ?? undefined} />
+      )}
       {state === 'ready' && cache && (
         <>
           <StatusBar
@@ -1130,8 +1357,15 @@ export function CardMemoryAnalyticsView() {
             ignorePreReset={ignorePreReset}
             onToggleIgnorePreReset={handleToggleIgnorePreReset}
             onRecompute={() => compute(ignorePreReset, period, customStart, customEnd)}
+            onExport={runExport}
             disabled={state !== 'ready'}
           />
+          {exportSummary && (
+            <ExportDiagnosisPanel
+              summary={exportSummary}
+              onDismiss={() => setExportSummary(null)}
+            />
+          )}
           <AnalyticsTable breakdown={cache} />
           <div
             style={{
