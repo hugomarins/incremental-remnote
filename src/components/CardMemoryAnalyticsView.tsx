@@ -1099,10 +1099,13 @@ function ExportDiagnosisPanel({
       </div>
       <div style={{ marginTop: '8px', color: 'var(--rn-clr-content-tertiary)', lineHeight: 1.5 }}>
         The CSV has one row per card. Filter <code>scheduleState=unscheduled</code> and read{' '}
-        <code>unscheduledCause</code>, <code>remPracticeDirection</code>,{' '}
-        <code>remCardsViaGetCards</code> (below <code>remCardsInPopulation</code> ⇒ the Rem
-        no longer generates this card), <code>remCardsDisabled</code>,{' '}
-        <code>remInPausedDocument</code> and <code>remText</code>. Rem context is resolved
+        <code>unscheduledCause</code>, <code>remEnablePractice</code>,{' '}
+        <code>remPracticeDirection</code>, <code>remDisableCardsOwn</code> /{' '}
+        <code>remDisableCardsAncestor</code> (plus <code>remDisablingAncestorId</code> — the
+        Rem to untag), <code>remInPausedDocument</code> and <code>remText</code>. Note{' '}
+        <code>remCardsViaGetCards</code> counts only cards the Rem <em>surfaces</em>:
+        RemNote hides disabled cards from <code>rem.getCards()</code>, so a low count means
+        “not currently surfaced”, never “this card record is junk”. Rem context is resolved
         for the {ANOMALY_REM_CAP.toLocaleString()} highest-priority affected Rems; rows
         beyond that cap read <code>unresolved</code>.
       </div>

@@ -23,12 +23,21 @@ import { safeRemTextToString } from './pdfUtils';
 /** Extra per-Rem context, resolved only for the capped anomaly set. */
 export interface RemContext {
   text: string;
-  /** `rem.getPracticeDirection()` — 'none' means the Rem generates no cards at all. */
+  /**
+   * `rem.getEnablePractice()` — RemNote's own answer to "does this Rem generate
+   * flashcards for the queue?". This is the per-Rem "Enable Cards" toggle in the
+   * flashcard menu, and the signal that distinguishes a card the user switched
+   * off from one the Rem genuinely no longer produces.
+   */
+  enablePractice: boolean | null;
+  /** `rem.getPracticeDirection()` — the Rem's enabled practice directions. */
   practiceDirection: 'forward' | 'backward' | 'none' | 'both' | null;
   /** The Rem itself carries the built-in Disable Cards powerup. */
   disableCardsOwn: boolean;
   /** An ancestor carries Disable Cards, which suppresses the whole subtree. */
   disableCardsAncestor: boolean;
+  /** Nearest such ancestor — the Rem to untag to re-enable the subtree. */
+  disablingAncestorId: string | null;
   /** Cards this Rem reports through `rem.getCards()`. A value BELOW the number
    *  of cards `card.getAll()` returned for the same Rem means at least one
    *  practice direction is disabled — RemNote drops disabled directions from
@@ -41,12 +50,19 @@ export interface RemContext {
 }
 
 /**
- * Why an unscheduled card is unscheduled. Ordered from "a setting you can flip"
- * to "the Rem simply doesn't make this card any more".
+ * Why an unscheduled card is unscheduled.
+ *
+ * Important: `rem.getCards()` returning 0 does NOT mean the card record is
+ * junk. RemNote drops DISABLED cards from `rem.getCards()` while `card.getAll()`
+ * still returns them, so a card the user deliberately switched off looks
+ * identical to one whose Rem no longer produces it. Only `getEnablePractice()`,
+ * the practice direction and the ancestor tag can tell those apart, which is
+ * why `no-cards-generated` is the last resort here, not the first guess.
  */
 export type UnscheduledCause =
   | 'paused-document'
-  | 'cards-disabled'
+  | 'cards-disabled-ancestor'
+  | 'cards-disabled-rem'
   | 'practice-direction-none'
   | 'direction-not-generated'
   | 'no-cards-generated'
@@ -55,19 +71,19 @@ export type UnscheduledCause =
 
 export const UNSCHEDULED_CAUSE_LABELS: Record<UnscheduledCause, string> = {
   'paused-document': 'Inside a paused deck',
-  'cards-disabled': 'Cards disabled (own or inherited tag)',
+  'cards-disabled-ancestor': 'Disabled by an ancestor’s “Disable Descendant Cards”',
+  'cards-disabled-rem': 'Cards switched off on the Rem itself',
   'practice-direction-none': 'Practice direction = none',
-  'direction-not-generated': 'This direction is no longer generated',
-  'no-cards-generated': 'Rem generates no cards at all (orphaned card record)',
+  'direction-not-generated': 'This direction is not currently generated',
+  'no-cards-generated': 'Enabled, but the Rem currently generates no card',
   'rem-missing': 'Owning Rem not found',
   unresolved: 'Not resolved (outside the Rem-context cap)',
 };
 
 /**
- * Classify one unscheduled card. `remCardsInPopulation` is how many cards
- * `card.getAll()` returned for the Rem; `cardsViaGetCards` is how many the Rem
- * itself still generates. Fewer generated than stored means the stored card no
- * longer corresponds to anything RemNote will schedule.
+ * Classify one unscheduled card, most actionable cause first. `remCardsInPopulation`
+ * is how many cards `card.getAll()` returned for the Rem; `cardsViaGetCards` is how
+ * many the Rem still surfaces.
  */
 export function classifyUnscheduled(
   ctx: RemContext | undefined,
@@ -76,7 +92,8 @@ export function classifyUnscheduled(
   if (!ctx) return 'unresolved';
   if (ctx.missing) return 'rem-missing';
   if (ctx.inPausedDocument) return 'paused-document';
-  if (ctx.disableCardsOwn || ctx.disableCardsAncestor) return 'cards-disabled';
+  if (ctx.disableCardsAncestor) return 'cards-disabled-ancestor';
+  if (ctx.disableCardsOwn || ctx.enablePractice === false) return 'cards-disabled-rem';
   if (ctx.practiceDirection === 'none') return 'practice-direction-none';
   if (ctx.cardsViaGetCards === 0) return 'no-cards-generated';
   if (ctx.cardsViaGetCards !== null && ctx.cardsViaGetCards < remCardsInPopulation) {
@@ -220,47 +237,67 @@ export function summarizeRows(
 }
 
 interface AncestorFacts {
-  /** First Deck ancestor has Status = "Paused". */
+  /** Nearest Deck ancestor has Status = "Paused". */
   paused: boolean;
-  /** Some ancestor carries the Disable Cards powerup. */
+  /** Some ancestor carries the Disable Cards powerup ("Disable Descendant Cards"). */
   disableCards: boolean;
+  /** Id of the nearest ancestor carrying it — what the user has to go and untag. */
+  disablingAncestorId: string | null;
 }
 
 /**
  * Walks the ancestor chain once, collecting both facts that can silence a
- * Rem's cards from above: a paused Deck, and an inherited Disable Cards tag.
- * `card.getAll()` returns cards for both states, so the ancestor walk is the
- * only reliable signal — the same check the Priority Review Document makes.
+ * Rem's cards from above: a paused Deck, and an inherited "Disable Descendant
+ * Cards" tag. `card.getAll()` returns cards in both states, so the walk is the
+ * only way to see them.
  *
- * Results are memoized per ancestor Rem: siblings share chains, and without
- * the cache a few thousand walks saturate the plugin IPC bridge.
+ * Results are memoized per ancestor, since siblings share chains and a few
+ * thousand un-memoized walks saturate the plugin IPC bridge. The memo stores,
+ * for each node, the facts of the chain *from that node upward* — so the walk
+ * collects each node's own flags first and then folds top-down. Folding matters:
+ * a tag found near the leaf must not be attributed to the ancestors above it,
+ * and a cache hit higher up must not erase a tag already found below it.
  */
 async function ancestorFacts(rem: any, cache: Map<string, AncestorFacts>): Promise<AncestorFacts> {
-  const chain: string[] = [];
+  const chain: Array<{ id: string; ownDisable: boolean; ownDeckPaused: boolean | null }> = [];
   let cursor = await rem.getParentRem();
   let hops = 0;
-  let result: AncestorFacts = { paused: false, disableCards: false };
+  let base: AncestorFacts = { paused: false, disableCards: false, disablingAncestorId: null };
 
   while (cursor && hops < 64) {
     const cached = cache.get(cursor._id);
     if (cached) {
-      result = cached;
+      base = cached;
       break;
     }
-    chain.push(cursor._id);
-    if (await cursor.hasPowerup(BuiltInPowerupCodes.DisableCards)) {
-      result.disableCards = true;
-    }
-    if (!result.paused && (await cursor.hasPowerup(BuiltInPowerupCodes.Deck))) {
+    const [ownDisable, isDeck] = await Promise.all([
+      cursor.hasPowerup(BuiltInPowerupCodes.DisableCards),
+      cursor.hasPowerup(BuiltInPowerupCodes.Deck),
+    ]);
+    let ownDeckPaused: boolean | null = null;
+    if (isDeck) {
       const status = await cursor.getPowerupProperty(BuiltInPowerupCodes.Deck, 'Status');
-      if (status === 'Paused') result.paused = true;
+      ownDeckPaused = status === 'Paused';
     }
+    chain.push({ id: cursor._id, ownDisable: !!ownDisable, ownDeckPaused });
     cursor = await cursor.getParentRem();
     hops++;
   }
-  // Every Rem on the walked chain shares the outcome of the chain above it.
-  for (const id of chain) cache.set(id, result);
-  return result;
+
+  // Fold from the top of the walked chain back down, memoizing each node.
+  let acc = base;
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const node = chain[i];
+    acc = {
+      disableCards: acc.disableCards || node.ownDisable,
+      // Nearest Deck wins — a paused sub-deck under an active one is paused,
+      // and an active sub-deck under a paused one is not.
+      paused: node.ownDeckPaused !== null ? node.ownDeckPaused : acc.paused,
+      disablingAncestorId: node.ownDisable ? node.id : acc.disablingAncestorId,
+    };
+    cache.set(node.id, acc);
+  }
+  return acc;
 }
 
 /**
@@ -289,9 +326,11 @@ export async function resolveAnomalyRemContext(
 
   const missingContext = (): RemContext => ({
     text: '',
+    enablePractice: null,
     practiceDirection: null,
     disableCardsOwn: false,
     disableCardsAncestor: false,
+    disablingAncestorId: null,
     cardsViaGetCards: null,
     inPausedDocument: false,
     missing: true,
@@ -306,18 +345,23 @@ export async function resolveAnomalyRemContext(
       if (!rem) {
         out.set(remId, missingContext());
       } else {
-        const [text, cards, direction, disableOwn, ancestors] = await Promise.all([
+        const [text, cards, enablePractice, direction, disableOwn, ancestors] = await Promise.all([
           safeRemTextToString(plugin, rem.text),
           rem.getCards().catch(() => null),
+          rem.getEnablePractice().catch(() => null),
           rem.getPracticeDirection().catch(() => null),
           rem.hasPowerup(BuiltInPowerupCodes.DisableCards).catch(() => false),
-          ancestorFacts(rem, ancestorCache).catch(() => ({ paused: false, disableCards: false })),
+          ancestorFacts(rem, ancestorCache).catch(
+            (): AncestorFacts => ({ paused: false, disableCards: false, disablingAncestorId: null }),
+          ),
         ]);
         out.set(remId, {
           text,
+          enablePractice: enablePractice as boolean | null,
           practiceDirection: direction as RemContext['practiceDirection'],
           disableCardsOwn: !!disableOwn,
           disableCardsAncestor: ancestors.disableCards,
+          disablingAncestorId: ancestors.disablingAncestorId,
           cardsViaGetCards: cards ? cards.length : null,
           inPausedDocument: ancestors.paused,
           missing: false,
@@ -376,8 +420,11 @@ const CSV_COLUMNS = [
   'remCardsDue',
   'remCardsNew',
   'remCardsViaGetCards',
+  'remEnablePractice',
   'remPracticeDirection',
-  'remCardsDisabled',
+  'remDisableCardsOwn',
+  'remDisableCardsAncestor',
+  'remDisablingAncestorId',
   'remInPausedDocument',
   'unscheduledCause',
   'remText',
@@ -394,7 +441,6 @@ export function rowsToCsv(rows: CardAnalyticsRow[], context: Map<string, RemCont
   for (const r of rows) {
     const roll = rollups.get(r.remId)!;
     const ctx = context.get(r.remId);
-    const cardsDisabled = ctx && !ctx.missing ? ctx.disableCardsOwn || ctx.disableCardsAncestor : '';
     const cause =
       r.scheduleState === 'unscheduled' ? classifyUnscheduled(ctx, roll.cards) : '';
     lines.push(
@@ -424,8 +470,11 @@ export function rowsToCsv(rows: CardAnalyticsRow[], context: Map<string, RemCont
         roll.due,
         roll.newCards,
         ctx?.cardsViaGetCards ?? '',
+        ctx && ctx.enablePractice !== null ? ctx.enablePractice : '',
         ctx?.practiceDirection ?? '',
-        cardsDisabled,
+        ctx && !ctx.missing ? ctx.disableCardsOwn : '',
+        ctx && !ctx.missing ? ctx.disableCardsAncestor : '',
+        ctx?.disablingAncestorId ?? '',
         ctx ? ctx.inPausedDocument : '',
         cause,
         ctx?.text ?? '',
@@ -488,4 +537,97 @@ export function downloadText(content: string, filename: string, mime = 'text/csv
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// --- Single-Rem enablement probe ------------------------------------------
+//
+// The export classifies thousands of cards from a handful of signals; this
+// prints every one of those signals for ONE Rem so the classification can be
+// checked against what RemNote's own UI says about it. Read-only.
+
+export interface RemEnablementProbe {
+  remId: string;
+  text: string;
+  /** RemNote's own "does this Rem generate flashcards" answer. */
+  enablePractice: boolean | null;
+  practiceDirection: string | null;
+  /** Cards the Rem surfaces — disabled cards are NOT included here. */
+  cardsViaGetCards: number;
+  /** Card records that exist for this Rem in the card table. */
+  cardsViaGetAll: number;
+  disableCardsOwn: boolean;
+  /** Ancestor chain, nearest first, with the flags that silence a subtree. */
+  ancestors: Array<{
+    remId: string;
+    text: string;
+    disableCards: boolean;
+    deckStatus: string | null;
+  }>;
+  cards: Array<{
+    cardId: string;
+    type: string;
+    inGetCards: boolean;
+    nextRepetitionTime: string;
+    reps: number;
+  }>;
+}
+
+export async function probeRemCardEnablement(
+  plugin: RNPlugin,
+  remId: string,
+): Promise<RemEnablementProbe | null> {
+  const rem = await plugin.rem.findOne(remId);
+  if (!rem) return null;
+
+  const [text, viaGetCards, enablePractice, practiceDirection, disableCardsOwn, allCards] =
+    await Promise.all([
+      safeRemTextToString(plugin, rem.text),
+      rem.getCards().catch(() => [] as any[]),
+      rem.getEnablePractice().catch(() => null),
+      rem.getPracticeDirection().catch(() => null),
+      rem.hasPowerup(BuiltInPowerupCodes.DisableCards).catch(() => false),
+      plugin.card.getAll(),
+    ]);
+
+  const surfacedIds = new Set(viaGetCards.map((c: any) => c._id));
+  const owned = (allCards || []).filter((c: any) => c.remId === remId);
+
+  const ancestors: RemEnablementProbe['ancestors'] = [];
+  let cursor = await rem.getParentRem();
+  let hops = 0;
+  while (cursor && hops < 64) {
+    const [disableCards, isDeck, aText] = await Promise.all([
+      cursor.hasPowerup(BuiltInPowerupCodes.DisableCards).catch(() => false),
+      cursor.hasPowerup(BuiltInPowerupCodes.Deck).catch(() => false),
+      safeRemTextToString(plugin, cursor.text),
+    ]);
+    let deckStatus: string | null = null;
+    if (isDeck) {
+      deckStatus =
+        ((await cursor.getPowerupProperty(BuiltInPowerupCodes.Deck, 'Status')) as string) ?? null;
+    }
+    ancestors.push({ remId: cursor._id, text: aText, disableCards: !!disableCards, deckStatus });
+    cursor = await cursor.getParentRem();
+    hops++;
+  }
+
+  return {
+    remId,
+    text,
+    enablePractice: enablePractice as boolean | null,
+    practiceDirection: practiceDirection as string | null,
+    cardsViaGetCards: viaGetCards.length,
+    cardsViaGetAll: owned.length,
+    disableCardsOwn: !!disableCardsOwn,
+    ancestors,
+    cards: owned.map((c: any) => ({
+      cardId: c._id,
+      type: typeof c.type === 'string' ? c.type : `cloze:${c.type?.clozeId}`,
+      inGetCards: surfacedIds.has(c._id),
+      nextRepetitionTime: c.nextRepetitionTime
+        ? new Date(c.nextRepetitionTime).toISOString()
+        : '(null)',
+      reps: c.repetitionHistory?.length ?? 0,
+    })),
+  };
 }

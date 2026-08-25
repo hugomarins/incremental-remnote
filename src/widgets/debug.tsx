@@ -44,6 +44,7 @@ import {
   RestoreReport,
 } from '../lib/card_priority_snapshot';
 import { probeLocalPerKeyLimit, LocalLimitReport } from '../lib/local_storage_probe';
+import { probeRemCardEnablement } from '../lib/card_analytics_export';
 import {
   readCardPriorityStoreMeta,
   clearPersistedCardPriorities,
@@ -2233,6 +2234,43 @@ function Debug() {
     );
   };
 
+  /**
+   * Card enablement probe. `rem.getCards()` hides DISABLED cards, so a Rem that
+   * still owns card records can report zero cards — which makes a deliberately
+   * switched-off card indistinguishable from one the Rem no longer produces.
+   * This prints every signal that CAN tell them apart, for this rem: the
+   * per-Rem Enable Cards flag, the practice direction, the own / inherited
+   * "Disable Descendant Cards" tag along the whole ancestor chain, and each
+   * card record with whether getCards() surfaces it.
+   */
+  const handleProbeCardEnablement = async () => {
+    if (!remId) return;
+    await plugin.app.toast('Probing card enablement (reads the card table)…');
+    const report = await probeRemCardEnablement(plugin, remId);
+    if (!report) {
+      await plugin.app.toast('Rem not found.');
+      return;
+    }
+    const disablingAncestor = report.ancestors.find((a) => a.disableCards);
+    const pausedAncestor = report.ancestors.find((a) => a.deckStatus === 'Paused');
+    console.log(
+      `🃏 Card enablement probe for ${report.remId} — ${report.text}\n` +
+        `   enablePractice=${report.enablePractice}, practiceDirection=${report.practiceDirection}\n` +
+        `   cards: ${report.cardsViaGetAll} in the card table, ${report.cardsViaGetCards} surfaced by rem.getCards()\n` +
+        `   DisableCards on this rem: ${report.disableCardsOwn}\n` +
+        `   disabling ancestor: ${disablingAncestor ? `${disablingAncestor.remId} — ${disablingAncestor.text}` : 'none'}\n` +
+        `   paused deck ancestor: ${pausedAncestor ? `${pausedAncestor.remId} — ${pausedAncestor.text}` : 'none'}`
+    );
+    console.table(report.cards);
+    console.table(report.ancestors);
+    await plugin.app.toast(
+      `${report.cardsViaGetAll} card record(s), ${report.cardsViaGetCards} surfaced. ` +
+        `enablePractice=${report.enablePractice}, direction=${report.practiceDirection}` +
+        (disablingAncestor ? ', disabled by ancestor' : '') +
+        '. See console.'
+    );
+  };
+
   const handleDumpStructure = async () => {
     if (!rem) return;
     await plugin.app.toast('Dumping slot/card structure to console...');
@@ -4009,6 +4047,21 @@ function Debug() {
                  title="Print every card on this rem with its raw nextRepetitionTime and whether the queue's spoiler gate counts it as due"
                >
                  Probe Spoiler State
+               </button>
+               <button
+                 onClick={handleProbeCardEnablement}
+                 style={{
+                   fontSize: '11px',
+                   padding: '2px 8px',
+                   backgroundColor: 'var(--rn-clr-background-secondary)',
+                   color: 'var(--rn-clr-content-primary)',
+                   border: '1px solid var(--rn-clr-border)',
+                   borderRadius: '4px',
+                   cursor: 'pointer'
+                 }}
+                 title="Print every signal that decides whether this rem's cards are enabled: enablePractice, practice direction, own and inherited Disable Descendant Cards, and each card record with whether rem.getCards() surfaces it"
+               >
+                 Probe Card Enablement
                </button>
                <button
                  onClick={handleDumpStructure}
