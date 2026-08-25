@@ -127,13 +127,13 @@ const GROUP_TOOLTIPS = {
   identity:
     'Which priority-percentile bucket this row represents, plus the raw priority range of its cards.',
   population:
-    'Always-current snapshot of the cards in this bucket. NOT affected by the period filter — these describe the KB right now.',
+    'Always-current snapshot of the cards in this bucket. NOT affected by the period filter — these describe the KB right now.\nItems counts every card record; Unsched counts the ones RemNote will never surface; Active = Items − Unsched is the denominator for Done, %New and %Stale.',
   throughput:
     'Period-filtered — what happened during the selected time range. responseTime per rep is capped at the flashcard_response_time_limit setting (same convention as the Study Dashboard / Practiced Queues).',
   outcome:
     'Period-filtered — quality of recall during the selected time range.',
   fsrsToday:
-    'Current FSRS model state averaged across cards that have been reviewed at least once. Always reflects today, regardless of period filter.',
+    'Current FSRS model state averaged across ACTIVE cards reviewed at least once. Unscheduled cards are excluded — their retrievability decays toward zero without anyone being able to practise them. Always reflects today, regardless of period filter.',
 } as const;
 
 const COL_TOOLTIPS = {
@@ -142,15 +142,19 @@ const COL_TOOLTIPS = {
   absPrio:
     'Min–max RAW priority values (0–100) found in this bucket. The bucket label is the percentile range; this column shows the underlying priority numbers.',
   items:
-    'Number of CARDS in this bucket. Each Rem contributes one entry per card it owns; paused/disabled cards are included.',
+    'Every CARD RECORD in this bucket, practicable or not. Each Rem contributes one entry per card it owns; disabled and no-longer-generated cards are included here (and only here).',
+  unsched:
+    'Cards with NO nextRepetitionTime: disabled on the card, on the Rem, or by an ancestor / paused deck — plus cards whose cloze or back side no longer exists.\nRemNote never surfaces these, so they cannot be due and are excluded from every column to the right.\nUse “Export cards” to see them one by one with the cause of each.',
+  active:
+    'Items − Unsched: the cards that can actually be practised. This is the denominator for Done, %New and %Stale.',
   due:
-    'Cards whose nextRepetitionTime is in the past — RemNote would schedule them now. Disabled cards (no nextRepetitionTime) are not counted as due.',
+    'Cards whose nextRepetitionTime is in the past — RemNote would schedule them now. Unscheduled cards can never be due.',
   done:
-    '% of cards already processed (not due) = (cards − due) / cards.',
+    '% of the ACTIVE cards already processed (not due) = (active − due) / active. Unscheduled cards are not counted as done — they were never practicable.',
   pctNew:
-    '% of cards that have never been graded (no Again/Hard/Good/Easy in their effective history). Always-current.',
+    '% of the ACTIVE cards never graded (no Again/Hard/Good/Easy in their effective history) — i.e. what you could still learn. New cards that are unscheduled are excluded; they are counted under Unsched. Always-current.',
   pctStale:
-    '% of cards overdue by more than 2× their last scheduled interval — i.e., now > lastRepDate + 2 × (nextRepDate − lastRepDate). High values suggest the schedule has drifted past usefulness. Always-current.',
+    '% of the ACTIVE cards overdue by more than 2× their last scheduled interval — i.e., now > lastRepDate + 2 × (nextRepDate − lastRepDate). High values suggest the schedule has drifted past usefulness. Always-current.',
   reps:
     'Total gradeable reps (Again / Hard / Good / Easy) in the period. Avg per card in parentheses. Period-filtered.',
   time:
@@ -287,6 +291,23 @@ function BucketRow({
       <td
         style={{
           ...cellStyle,
+          color: b.unscheduled > 0 ? '#a855f7' : 'var(--rn-clr-content-tertiary)',
+          fontWeight: b.unscheduled > 0 ? 700 : 'inherit',
+        }}
+        title={
+          b.unscheduled > 0
+            ? `${b.unscheduled.toLocaleString()} card(s) RemNote will never surface, ` +
+              `${b.newUnscheduled.toLocaleString()} of them never practised. ` +
+              'Export cards for the cause of each.'
+            : 'Every card in this bucket is schedulable.'
+        }
+      >
+        {fmtInt(b.unscheduled)}
+      </td>
+      <td style={cellStyle}>{fmtInt(b.active)}</td>
+      <td
+        style={{
+          ...cellStyle,
           color: b.due > 0 ? '#ef4444' : 'var(--rn-clr-content-tertiary)',
           fontWeight: b.due > 0 ? 700 : 'inherit',
         }}
@@ -382,7 +403,7 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
             <th style={groupHeaderStyle} colSpan={2} title={GROUP_TOOLTIPS.identity}>
               Identity
             </th>
-            <th style={groupHeaderStyle} colSpan={5} title={GROUP_TOOLTIPS.population}>
+            <th style={groupHeaderStyle} colSpan={7} title={GROUP_TOOLTIPS.population}>
               Population
             </th>
             <th style={groupHeaderStyle} colSpan={5} title={GROUP_TOOLTIPS.throughput}>
@@ -403,6 +424,12 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.items}>
               Items
+            </th>
+            <th style={headerCellStyle} title={COL_TOOLTIPS.unsched}>
+              Unsched
+            </th>
+            <th style={headerCellStyle} title={COL_TOOLTIPS.active}>
+              Active
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.due}>
               Due
@@ -465,7 +492,7 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
           {hasPrefix && subsetRow && (
             <>
               <tr style={{ background: 'var(--rn-clr-background-secondary)' }}>
-                <td colSpan={20} style={{ padding: '8px 10px' }}>
+                <td colSpan={22} style={{ padding: '8px 10px' }}>
                   <div
                     style={{
                       display: 'flex',
@@ -1386,7 +1413,14 @@ export function CardMemoryAnalyticsView() {
             <code>flashcard_response_time_limit</code> setting — matches the Study Dashboard
             and Practiced Queues conventions.{' '}
             <strong>Always-current</strong> (KB state, unaffected by period):{' '}
-            <em>Items, Due, Done, %New, %Stale, D, R, S</em>. <strong>Cost</strong> is
+            <em>Items, Unsched, Active, Due, Done, %New, %Stale, D, R, S</em>.{' '}
+            <strong>Items</strong> counts every card record; <strong>Unsched</strong> counts
+            those with no <code>nextRepetitionTime</code> — disabled on the card, on the Rem,
+            by an ancestor or a paused deck, or whose cloze / back side no longer exists.
+            RemNote never surfaces them, so <strong>Active = Items − Unsched</strong> is the
+            denominator for <em>Done, %New, %Stale</em> and for the FSRS state — a card that
+            cannot be practised is not “done”, and is not a new card you could learn. Use{' '}
+            <strong>Export cards</strong> for the cause behind each one. <strong>Cost</strong> is
             expressed in <em>minutes per year (min/y)</em>: lifetime per-card coverage when
             period = All; otherwise annualized as <em>time-in-period / period-length</em>{' '}
             averaged across cards with reps in the period. <strong>Avg pR</strong> averages the FSRS-predicted retrievability at the moment
