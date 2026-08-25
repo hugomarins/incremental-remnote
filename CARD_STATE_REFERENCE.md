@@ -35,7 +35,7 @@ reps and loses only its next time.
 
 | State | Set by the user via | Detect with |
 | --- | --- | --- |
-| **Paused deck** | Deck powerup → Status = "Paused" on an ancestor | walk ancestors: `hasPowerup(BuiltInPowerupCodes.Deck)` → `getPowerupProperty(Deck, 'Status') === 'Paused'` |
+| **Paused deck** | Deck powerup → Status = "Paused" on an ancestor | see **Paused decks** below — this one does NOT null `nextRepetitionTime` |
 | **Disabled by ancestor** | "Disable Descendant Cards" on an ancestor | walk ancestors: `hasPowerup(BuiltInPowerupCodes.DisableCards)` (code `"u"`) |
 | **Disabled on the Rem** | flashcard menu → "Enable Cards" off | `rem.getEnablePractice() === false` (or the Rem's own `DisableCards` powerup) |
 | **Direction disabled** | flashcard menu → Flashcard Direction, **or** disabling a forward/backward card in the queue | `rem.getPracticeDirection()` no longer includes the card's direction |
@@ -110,6 +110,39 @@ Verified in both directions on the same card: with the cloze present the probe r
 
 `collectClozeIds()` and `markupStillPresent()` in
 [`src/lib/card_analytics_export.ts`](src/lib/card_analytics_export.ts) implement this.
+
+## Paused decks are a SECOND axis, orthogonal to `nextRepetitionTime`
+
+Every other state on this page ends with `nextRepetitionTime === null`. Pausing does not.
+Measured on a live KB — cards under a paused deck keep real due dates:
+
+```
+HxHyRkjx7tVHvkKqw  backward  due        next=2025-05-28
+m3597IcQIcp0ziq5B  cloze     due        next=2026-01-30
+m3597IcQIcp0ziq5B  cloze     scheduled  next=2026-10-16
+```
+
+RemNote applies the pause in the **queue** (the document badge reads "0 Due"), not in the card
+records. So anything that decides due-ness by arithmetic over `card.getAll()` counts a paused
+deck's whole subtree as due. This is why the Priority Review Document carries its own paused
+filter, and it is a live divergence between the two card-priority build paths:
+
+| Path | Card source | Paused cards |
+| --- | --- | --- |
+| cold (`getCardPriority`) | `rem.getCards()` | excluded — returns `[]` for a paused rem |
+| warm (`buildInfoFromStore`) | `card.getAll()` | counted as due until the paused scan is applied |
+
+**Detection is top-down.** Walking up from every card-owning Rem is not viable (a 72k-card KB
+has ~45k distinct card-owning Rems). `lib/paused_decks.ts` finds the paused decks once, then
+takes `getDescendants()` on each — one call per deck — and caches the suppressed id set in
+session *and* local storage, so startup paths can apply it without paying for a scan.
+
+Finding the decks needs a scan because built-in powerup membership is not enumerable: it walks
+`plugin.rem.getAll()`, prefilters on the synchronous `children` field (a deck has children), and
+probes the survivors with `hasPowerup`.
+
+**"No scan has run" must never be reported as "nothing is paused."** `getPausedRemIds` returns
+`null` in that case, and the analytics tab says so in words rather than showing a confident 0.
 
 ## Signals that do NOT work
 

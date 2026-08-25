@@ -193,6 +193,11 @@ export const cardAnalyticsCacheKey = 'card-analytics-cache-key';
 // Local-storage keys for "last selected period" — survives across sessions /
 // app restarts (device-specific). Stored shape: { period, customStart, customEnd }.
 export const cardAnalyticsLastPeriodKey = 'card-analytics-last-period';
+
+/** Session cache for the paused-deck scan (see lib/paused_decks.ts). Paused decks
+ *  suppress their whole subtree without touching any card's nextRepetitionTime,
+ *  so they have to be discovered once and reused. */
+export const pausedDeckScanKey = 'paused-deck-scan';
 export const fsrsCalibrationLastPeriodKey = 'fsrs-calibration-last-period';
 export const studyDashboardLastPeriodKey = 'study-dashboard-last-period';
 /**

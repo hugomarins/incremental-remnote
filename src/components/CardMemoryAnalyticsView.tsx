@@ -32,6 +32,12 @@ import {
   flashcardResponseTimeLimitId,
 } from '../lib/consts';
 import { parseWeightsString } from '../lib/fsrs';
+import {
+  PausedDeckScan,
+  getCachedPausedDeckScan,
+  getPausedRemIds,
+  scanPausedDecks,
+} from '../lib/paused_decks';
 import { Period, resolvePeriod, parseDateInput, formatDateForDisplay } from '../lib/period';
 import { formatTimeAgo } from '../lib/utils';
 import { getIESetting } from '../lib/settings';
@@ -127,7 +133,7 @@ const GROUP_TOOLTIPS = {
   identity:
     'Which priority-percentile bucket this row represents, plus the raw priority range of its cards.',
   population:
-    'Always-current snapshot of the cards in this bucket. NOT affected by the period filter — these describe the KB right now.\nItems counts every card record; Unsched counts the ones RemNote will never surface; Active = Items − Unsched is the denominator for Done, %New and %Stale.',
+    'Always-current snapshot of the cards in this bucket. NOT affected by the period filter — these describe the KB right now.\nItems counts every card record; Unsched counts the ones with no nextRepetitionTime; Paused counts the ones under a paused deck; Active = Items − Unsched − Paused is the denominator for Done, %New and %Stale.',
   throughput:
     'Period-filtered — what happened during the selected time range. responseTime per rep is capped at the flashcard_response_time_limit setting (same convention as the Study Dashboard / Practiced Queues).',
   outcome:
@@ -145,8 +151,10 @@ const COL_TOOLTIPS = {
     'Every CARD RECORD in this bucket, practicable or not. Each Rem contributes one entry per card it owns; disabled and no-longer-generated cards are included here (and only here).',
   unsched:
     'Cards with NO nextRepetitionTime: disabled on the card, on the Rem, or by an ancestor / paused deck — plus cards whose cloze or back side no longer exists.\nRemNote never surfaces these, so they cannot be due and are excluded from every column to the right.\nUse “Export cards” to see them one by one with the cause of each.',
+  paused:
+    'Cards inside a paused deck. Pausing does NOT clear nextRepetitionTime — these keep a real due date and would otherwise be counted as due — but RemNote refuses to serve them.\nRequires the paused-deck scan; without it this reads 0 because nothing was looked at, and those cards inflate Due instead.',
   active:
-    'Items − Unsched: the cards that can actually be practised. This is the denominator for Done, %New and %Stale.',
+    'Items − Unsched − Paused: the cards that can actually be practised. This is the denominator for Done, %New and %Stale.',
   due:
     'Cards whose nextRepetitionTime is in the past — RemNote would schedule them now. Unscheduled cards can never be due.',
   done:
@@ -304,6 +312,21 @@ function BucketRow({
       >
         {fmtInt(b.unscheduled)}
       </td>
+      <td
+        style={{
+          ...cellStyle,
+          color: b.paused > 0 ? '#0ea5e9' : 'var(--rn-clr-content-tertiary)',
+          fontWeight: b.paused > 0 ? 700 : 'inherit',
+        }}
+        title={
+          b.paused > 0
+            ? `${b.paused.toLocaleString()} card(s) under a paused deck. They keep a real due ` +
+              'date but the queue will not serve them, so they are excluded from Due and Active.'
+            : 'No cards under a paused deck in this bucket (or no paused-deck scan has run).'
+        }
+      >
+        {fmtInt(b.paused)}
+      </td>
       <td style={cellStyle}>{fmtInt(b.active)}</td>
       <td
         style={{
@@ -403,7 +426,7 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
             <th style={groupHeaderStyle} colSpan={2} title={GROUP_TOOLTIPS.identity}>
               Identity
             </th>
-            <th style={groupHeaderStyle} colSpan={7} title={GROUP_TOOLTIPS.population}>
+            <th style={groupHeaderStyle} colSpan={8} title={GROUP_TOOLTIPS.population}>
               Population
             </th>
             <th style={groupHeaderStyle} colSpan={5} title={GROUP_TOOLTIPS.throughput}>
@@ -427,6 +450,9 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.unsched}>
               Unsched
+            </th>
+            <th style={headerCellStyle} title={COL_TOOLTIPS.paused}>
+              Paused
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.active}>
               Active
@@ -492,7 +518,7 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
           {hasPrefix && subsetRow && (
             <>
               <tr style={{ background: 'var(--rn-clr-background-secondary)' }}>
-                <td colSpan={22} style={{ padding: '8px 10px' }}>
+                <td colSpan={23} style={{ padding: '8px 10px' }}>
                   <div
                     style={{
                       display: 'flex',
@@ -881,6 +907,8 @@ function StatusBar({
   onToggleIgnorePreReset,
   onRecompute,
   onExport,
+  onScanPaused,
+  pausedScan,
   disabled,
 }: {
   breakdown: CardAnalyticsBreakdown;
@@ -888,6 +916,8 @@ function StatusBar({
   onToggleIgnorePreReset: (next: boolean) => void;
   onRecompute: () => void;
   onExport: () => void;
+  onScanPaused: () => void;
+  pausedScan: PausedDeckScan | null;
   disabled: boolean;
 }) {
   // Live-updating "X minutes ago" — re-render every 30s.
@@ -922,6 +952,18 @@ function StatusBar({
             (skipped {breakdown.cardsSkippedNoPriority.toLocaleString()} without a known priority)
           </span>
         )}
+        {breakdown.pausedScanApplied ? (
+          pausedScan && (
+            <span style={{ color: 'var(--rn-clr-content-tertiary)', marginLeft: '6px' }}>
+              · {pausedScan.pausedDecks.length} paused deck(s),{' '}
+              {pausedScan.suppressedRemIds.length.toLocaleString()} rem(s) suppressed
+            </span>
+          )
+        ) : (
+          <span style={{ color: '#f59e0b', marginLeft: '6px', fontWeight: 600 }}>
+            · Paused decks not scanned — their cards are counted as due.
+          </span>
+        )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <label
@@ -944,6 +986,32 @@ function StatusBar({
           />
           Ignore reps before last RESET
         </label>
+        <button
+          type="button"
+          onClick={onScanPaused}
+          disabled={disabled}
+          title={
+            'Finds every deck whose Status is Paused and marks its whole subtree. Pausing a deck ' +
+            'does not clear nextRepetitionTime, so without this scan those cards are counted as ' +
+            'due even though RemNote will not serve them. One pass over the KB; cached for the ' +
+            'session.'
+          }
+          style={{
+            padding: '4px 10px',
+            fontSize: '11px',
+            fontWeight: 600,
+            borderRadius: '4px',
+            border: '1px solid var(--rn-clr-background-tertiary)',
+            background: breakdown.pausedScanApplied
+              ? 'var(--rn-clr-background-primary)'
+              : 'rgba(245, 158, 11, 0.14)',
+            color: 'var(--rn-clr-content-primary)',
+            cursor: disabled ? 'wait' : 'pointer',
+            opacity: disabled ? 0.6 : 1,
+          }}
+        >
+          ⏸ {breakdown.pausedScanApplied ? 'Rescan paused decks' : 'Scan paused decks'}
+        </button>
         <button
           type="button"
           onClick={onExport}
@@ -1161,6 +1229,10 @@ export function CardMemoryAnalyticsView() {
   // and a label so the shared progress bar can say which phase is running.
   const [exportSummary, setExportSummary] = React.useState<ExportSummary | null>(null);
   const [phaseLabel, setPhaseLabel] = React.useState<string | null>(null);
+  // Paused-deck scan: a per-session fact, not a per-export one. Null means it
+  // has never run, which is NOT the same as "no decks are paused" — the table
+  // says so explicitly rather than reporting a confident zero.
+  const [pausedScan, setPausedScan] = React.useState<PausedDeckScan | null>(null);
 
   const compute = React.useCallback(
     async (flag: boolean, p: Period, cs: string, ce: string) => {
@@ -1178,6 +1250,7 @@ export function CardMemoryAnalyticsView() {
         const weights = parseWeightsString(weightsRaw);
         const cardCapMs = ((capSec ?? 180) as number) * 1000;
         const { startMs, endMs } = resolvePeriod(p, cs, ce);
+        const pausedRemIds = await getPausedRemIds(plugin);
         const breakdown = await computeCardAnalyticsBreakdown(
           plugin as any,
           infos ?? [],
@@ -1186,6 +1259,8 @@ export function CardMemoryAnalyticsView() {
           flag,
           { id: p, startMs, endMs, customStart: cs, customEnd: ce },
           (done, total) => setProgress({ done, total }),
+          undefined,
+          pausedRemIds,
         );
         await plugin.storage.setSession(cardAnalyticsCacheKey, breakdown);
         // Persist user prefs (period + ignorePreReset) across app restarts
@@ -1233,6 +1308,7 @@ export function CardMemoryAnalyticsView() {
       const { startMs, endMs } = resolvePeriod(period, customStart, customEnd);
 
       const rows: CardAnalyticsRow[] = [];
+      const pausedRemIds = await getPausedRemIds(plugin);
       const breakdown = await computeCardAnalyticsBreakdown(
         plugin as any,
         infos ?? [],
@@ -1242,6 +1318,7 @@ export function CardMemoryAnalyticsView() {
         { id: period, startMs, endMs, customStart, customEnd },
         (done, total) => setProgress({ done, total }),
         (row) => rows.push(row),
+        pausedRemIds,
       );
 
       setPhaseLabel('Resolving Rem context for unscheduled cards…');
@@ -1254,7 +1331,7 @@ export function CardMemoryAnalyticsView() {
       );
 
       // Summarize after enrichment so the cause breakdown can use the context.
-      const summary = summarizeRows(rows, context);
+      const summary = summarizeRows(rows, context, !!pausedRemIds);
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       const meta = `period=${period}, ignorePreReset=${ignorePreReset}, ${rows.length} cards`;
       const summaryText = summaryToText(summary, meta);
@@ -1274,6 +1351,47 @@ export function CardMemoryAnalyticsView() {
       setPhaseLabel(null);
     }
   }, [plugin, period, customStart, customEnd, ignorePreReset, cache]);
+
+  /**
+   * Run the paused-deck scan, then recompute so the Paused column is populated.
+   * One pass over every Rem plus a bounded number of powerup probes, so it is
+   * explicitly user-triggered and cached for the session.
+   */
+  const runPausedScan = React.useCallback(async () => {
+    setError(null);
+    setState('computing');
+    setProgress({ done: 0, total: 0 });
+    setPhaseLabel('Scanning for paused decks…');
+    try {
+      const scan = await scanPausedDecks(plugin as any, {
+        onProgress: (done, total, phase) => {
+          setPhaseLabel(phase);
+          setProgress({ done, total });
+        },
+      });
+      setPausedScan(scan);
+      console.log(
+        `[CardMemoryAnalytics] paused-deck scan: ${scan.pausedDecks.length} paused deck(s), ` +
+          `${scan.suppressedRemIds.length} suppressed rem(s), from ${scan.deckRems} deck(s) ` +
+          `among ${scan.candidates} candidates / ${scan.scannedRems} rems in ${scan.durationMs}ms`,
+      );
+      console.table(scan.pausedDecks);
+      setPhaseLabel(null);
+      await compute(ignorePreReset, period, customStart, customEnd);
+    } catch (e: any) {
+      console.error('[CardMemoryAnalytics] paused-deck scan failed', e);
+      setError(e?.message || String(e));
+      setState(cache ? 'ready' : 'idle');
+      setPhaseLabel(null);
+    }
+  }, [plugin, compute, ignorePreReset, period, customStart, customEnd, cache]);
+
+  // Mount: pick up a paused-deck scan from earlier in the session.
+  React.useEffect(() => {
+    getCachedPausedDeckScan(plugin)
+      .then((scan) => setPausedScan(scan))
+      .catch(() => {});
+  }, [plugin]);
 
   // Mount: prefer the in-memory session cache (instant). If absent, fall back
   // to the last-selected period saved in device-local storage so that re-opens
@@ -1388,6 +1506,8 @@ export function CardMemoryAnalyticsView() {
             onToggleIgnorePreReset={handleToggleIgnorePreReset}
             onRecompute={() => compute(ignorePreReset, period, customStart, customEnd)}
             onExport={runExport}
+            onScanPaused={runPausedScan}
+            pausedScan={pausedScan}
             disabled={state !== 'ready'}
           />
           {exportSummary && (
@@ -1413,13 +1533,15 @@ export function CardMemoryAnalyticsView() {
             <code>flashcard_response_time_limit</code> setting — matches the Study Dashboard
             and Practiced Queues conventions.{' '}
             <strong>Always-current</strong> (KB state, unaffected by period):{' '}
-            <em>Items, Unsched, Active, Due, Done, %New, %Stale, D, R, S</em>.{' '}
+            <em>Items, Unsched, Paused, Active, Due, Done, %New, %Stale, D, R, S</em>.{' '}
             <strong>Items</strong> counts every card record; <strong>Unsched</strong> counts
-            those with no <code>nextRepetitionTime</code> — disabled on the card, on the Rem,
-            by an ancestor or a paused deck, or whose cloze / back side no longer exists.
-            RemNote never surfaces them, so <strong>Active = Items − Unsched</strong> is the
-            denominator for <em>Done, %New, %Stale</em> and for the FSRS state — a card that
-            cannot be practised is not “done”, and is not a new card you could learn. Use{' '}
+            those with no <code>nextRepetitionTime</code> — disabled on the card, on the Rem or
+            by an ancestor, or whose cloze / back side no longer exists;{' '}
+            <strong>Paused</strong> counts those under a paused deck, which keep a real due date
+            but are never served. Neither can be practised, so{' '}
+            <strong>Active = Items − Unsched − Paused</strong> is the denominator for{' '}
+            <em>Done, %New, %Stale</em> and for the FSRS state — a card that cannot be practised
+            is not “done”, and is not a new card you could learn. Use{' '}
             <strong>Export cards</strong> for the cause behind each one. <strong>Cost</strong> is
             expressed in <em>minutes per year (min/y)</em>: lifetime per-card coverage when
             period = All; otherwise annualized as <em>time-in-period / period-length</em>{' '}

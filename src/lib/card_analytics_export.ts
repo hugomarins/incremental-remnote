@@ -190,11 +190,15 @@ export const UNSCHEDULED_CAUSE_LABELS: Record<UnscheduledCause, string> = {
  */
 export function classifyUnscheduled(
   ctx: RemContext | undefined,
-  card: Pick<CardAnalyticsRow, 'cardType' | 'clozeId'>,
+  card: Pick<CardAnalyticsRow, 'cardType' | 'clozeId'> & { inPausedDeck?: boolean },
 ): UnscheduledCause {
+  // The paused-deck scan is authoritative and covers cards the per-Rem ancestor
+  // walk never reaches, so it is checked before anything else — including before
+  // the `ctx` guard, since a paused card needs no Rem context to be explained.
+  if (card.inPausedDeck) return 'paused-document';
   if (!ctx) return 'unresolved';
   if (ctx.missing) return 'rem-missing';
-  // Rem-wide suppressions first: they explain every card on the Rem at once.
+  // Rem-wide suppressions next: they explain every card on the Rem at once.
   if (ctx.inPausedDocument) return 'paused-document';
   if (ctx.disableCardsAncestor) return 'cards-disabled-ancestor';
   if (ctx.disableCardsOwn || ctx.enablePractice === false) return 'cards-disabled-rem';
@@ -232,6 +236,12 @@ export interface ExportSummary {
   newWithSomeHistory: number;
   /** Every unscheduled card (New or reviewed) — the queue can reach none of them. */
   unscheduledTotal: number;
+  /** Cards suppressed by a paused deck. They keep a real nextRepetitionTime, so
+   *  they are NOT part of `unscheduledTotal` unless they are also unscheduled. */
+  pausedTotal: number;
+  /** False when no paused-deck scan was applied — paused counts then mean
+   *  "not looked at", not "none". */
+  pausedScanApplied: boolean;
   /** Unscheduled cards by cause, most common first. Requires resolved Rem context. */
   causes: Array<{ cause: UnscheduledCause; label: string; cards: number; newCards: number }>;
   /** Per-bucket version of the same matrix, in table order. */
@@ -275,6 +285,7 @@ function rollupByRem(rows: CardAnalyticsRow[]): Map<string, RemRollup> {
 export function summarizeRows(
   rows: CardAnalyticsRow[],
   context?: Map<string, RemContext>,
+  pausedScanApplied = false,
 ): ExportSummary {
   const rollups = rollupByRem(rows);
   const causeCounts = new Map<UnscheduledCause, { cards: number; newCards: number }>();
@@ -289,6 +300,8 @@ export function summarizeRows(
     reviewedUnscheduled: 0,
     newWithSomeHistory: 0,
     unscheduledTotal: 0,
+    pausedTotal: 0,
+    pausedScanApplied,
     causes: [],
     perBucket: [],
   };
@@ -331,8 +344,12 @@ export function summarizeRows(
     }
     if (!r.isNew && r.scheduleState === 'unscheduled') summary.reviewedUnscheduled++;
 
-    if (r.scheduleState === 'unscheduled') {
-      summary.unscheduledTotal++;
+    if (r.inPausedDeck) summary.pausedTotal++;
+
+    // A paused card is suppressed whether or not it also lacks a next time, so
+    // it belongs in the cause breakdown either way.
+    if (r.scheduleState === 'unscheduled' || r.inPausedDeck) {
+      if (r.scheduleState === 'unscheduled') summary.unscheduledTotal++;
       const cause = classifyUnscheduled(context?.get(r.remId), r);
       const entry = causeCounts.get(cause) ?? { cards: 0, newCards: 0 };
       entry.cards++;
@@ -547,6 +564,7 @@ const CSV_COLUMNS = [
   'remDisableCardsAncestor',
   'remDisablingAncestorId',
   'remInPausedDocument',
+  'inPausedDeck',
   'clozeId',
   'markupStillPresent',
   'directionEnabled',
@@ -565,7 +583,8 @@ export function rowsToCsv(rows: CardAnalyticsRow[], context: Map<string, RemCont
   for (const r of rows) {
     const roll = rollups.get(r.remId)!;
     const ctx = context.get(r.remId);
-    const cause = r.scheduleState === 'unscheduled' ? classifyUnscheduled(ctx, r) : '';
+    const cause =
+      r.scheduleState === 'unscheduled' || r.inPausedDeck ? classifyUnscheduled(ctx, r) : '';
     const markup = ctx ? markupStillPresent(ctx, r.cardType, r.clozeId) : null;
     const dirEnabled = ctx ? directionEnabled(ctx.practiceDirection, r.cardType) : null;
     lines.push(
@@ -601,6 +620,7 @@ export function rowsToCsv(rows: CardAnalyticsRow[], context: Map<string, RemCont
         ctx && !ctx.missing ? ctx.disableCardsAncestor : '',
         ctx?.disablingAncestorId ?? '',
         ctx ? ctx.inPausedDocument : '',
+        r.inPausedDeck,
         r.clozeId ?? '',
         markup === null ? '' : markup,
         dirEnabled === null ? '' : dirEnabled,
@@ -631,7 +651,11 @@ export function summaryToText(summary: ExportSummary, meta: string): string {
     ``,
     `Reviewed but unscheduled:    ${summary.reviewedUnscheduled.toLocaleString()}`,
     ``,
-    `All unscheduled cards:       ${summary.unscheduledTotal.toLocaleString()} (${pct(summary.unscheduledTotal, summary.totalCards)} of the population) — by cause:`,
+    summary.pausedScanApplied
+      ? `In a paused deck:            ${summary.pausedTotal.toLocaleString()} (${pct(summary.pausedTotal, summary.totalCards)}) — schedulable, but the queue will not serve them`
+      : `In a paused deck:            not scanned this session (run the paused-deck scan; without it these count as due)`,
+    ``,
+    `All suppressed cards:        ${(summary.unscheduledTotal + summary.pausedTotal).toLocaleString()} — by cause:`,
     ...summary.causes.map(
       (c) =>
         `  · ${c.label.padEnd(52)} ${String(c.cards).padStart(6)}  (${c.newCards.toLocaleString()} of them New)`,

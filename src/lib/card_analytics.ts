@@ -32,8 +32,16 @@ export interface CardBucketStats {
    * that describes practice. See lib/card_analytics_export.ts for the causes.
    */
   unscheduled: number;
-  /** cards − unscheduled: the practicable population, and the denominator for
-   *  donePct / newPct / stalePct below. */
+  /**
+   * Cards inside a paused deck. Pausing does NOT clear `nextRepetitionTime`, so
+   * these keep a real due date and would otherwise be counted as due — RemNote
+   * simply refuses to serve them. Counted separately from `unscheduled`; a card
+   * that is both is counted here only (see lib/paused_decks.ts).
+   * Always 0 when no paused-deck scan has run this session.
+   */
+  paused: number;
+  /** cards − unscheduled − paused: the practicable population, and the
+   *  denominator for donePct / newPct / stalePct below. */
   active: number;
   due: number;
   donePct: number;        // 0-100, (active - due) / active
@@ -97,6 +105,9 @@ export interface CardAnalyticsBreakdown {
    * `byPriorityPrefix[100]` equals `overall` (modulo label / priorityRange).
    */
   byPriorityPrefix: CardBucketStats[];
+  /** False when no paused-deck scan was available, so `paused` counts read 0
+   *  because nothing was looked at — not because nothing is paused. */
+  pausedScanApplied: boolean;
 }
 
 interface AccData {
@@ -105,6 +116,7 @@ interface AccData {
   maxPriority: number;
   due: number;
   unscheduled: number;
+  paused: number;
   newCount: number;
   newUnscheduled: number;
   staleCount: number;
@@ -134,6 +146,8 @@ interface PerCardStats {
   isStale: boolean;
   /** No `nextRepetitionTime` — RemNote will never surface this card. */
   isUnscheduled: boolean;
+  /** Inside a paused deck — schedulable, but the queue will not serve it. */
+  isPaused: boolean;
   /** Gradeable repetitions over the FULL history (matches study_dashboard.cardReps). */
   gradeableReps: number;
   /** Sum of response time across gradeable reps, each capped at cardCapMs. */
@@ -162,6 +176,7 @@ function mergeAcc(a: AccData, b: AccData): AccData {
     maxPriority: Math.max(a.maxPriority, b.maxPriority),
     due: a.due + b.due,
     unscheduled: a.unscheduled + b.unscheduled,
+    paused: a.paused + b.paused,
     newCount: a.newCount + b.newCount,
     newUnscheduled: a.newUnscheduled + b.newUnscheduled,
     staleCount: a.staleCount + b.staleCount,
@@ -190,6 +205,7 @@ function makeAcc(): AccData {
     maxPriority: -Infinity,
     due: 0,
     unscheduled: 0,
+    paused: 0,
     newCount: 0,
     newUnscheduled: 0,
     staleCount: 0,
@@ -238,6 +254,7 @@ function computeCardStats(
   ignorePreReset: boolean,
   startMs: number,
   endMs: number,
+  isPaused: boolean,
 ): PerCardStats {
   const history = card.repetitionHistory ?? [];
   const sorted = [...history].sort((a: any, b: any) => a.date - b.date);
@@ -406,6 +423,7 @@ function computeCardStats(
     isNew,
     isStale,
     isUnscheduled: nextRep === null || nextRep === undefined,
+    isPaused,
     gradeableReps,
     totalTimeMs,
     agains,
@@ -425,13 +443,19 @@ function accumulate(acc: AccData, stats: PerCardStats, priority: number) {
   acc.count++;
   if (priority < acc.minPriority) acc.minPriority = priority;
   if (priority > acc.maxPriority) acc.maxPriority = priority;
-  if (stats.isDue) acc.due++;
-  if (stats.isUnscheduled) acc.unscheduled++;
+  // A card in a paused deck may also be unscheduled. Count it once, under
+  // `paused`: the pause explains the whole subtree and is the thing to undo.
+  if (stats.isPaused) acc.paused++;
+  else if (stats.isUnscheduled) acc.unscheduled++;
+
+  // Due-ness is reported for what RemNote would actually serve, so suppressed
+  // cards are excluded even though they carry a real nextRepetitionTime.
+  if (stats.isDue && !stats.isPaused) acc.due++;
   if (stats.isNew) {
-    if (stats.isUnscheduled) acc.newUnscheduled++;
+    if (stats.isUnscheduled || stats.isPaused) acc.newUnscheduled++;
     else acc.newCount++;
   }
-  if (stats.isStale) acc.staleCount++;
+  if (stats.isStale && !stats.isPaused) acc.staleCount++;
 
   acc.totGradeableReps += stats.gradeableReps;
   acc.totTimeMs += stats.totalTimeMs;
@@ -454,7 +478,13 @@ function accumulate(acc: AccData, stats: PerCardStats, priority: number) {
   // FSRS state describes what you are currently practising, so unscheduled
   // cards are left out — an unpractisable card's retrievability decays toward
   // zero and would drag the bucket's R down for no actionable reason.
-  if (!stats.isUnscheduled && stats.d !== null && stats.s !== null && stats.rToday !== null) {
+  if (
+    !stats.isUnscheduled &&
+    !stats.isPaused &&
+    stats.d !== null &&
+    stats.s !== null &&
+    stats.rToday !== null
+  ) {
     acc.sumD += stats.d;
     acc.sumS += stats.s;
     acc.sumRtoday += stats.rToday;
@@ -471,7 +501,7 @@ function finalize(acc: AccData, label: string): CardBucketStats {
   // Every practice-shaped percentage is measured against the cards that can
   // actually be practised. Counting unscheduled cards as "done" was reporting
   // 100% for buckets holding hundreds of cards no queue will ever show.
-  const active = cards - acc.unscheduled;
+  const active = cards - acc.unscheduled - acc.paused;
   const donePct = active > 0 ? ((active - acc.due) / active) * 100 : 100;
   const newPct = active > 0 ? (acc.newCount / active) * 100 : 0;
   const stalePct = active > 0 ? (acc.staleCount / active) * 100 : 0;
@@ -498,6 +528,7 @@ function finalize(acc: AccData, label: string): CardBucketStats {
     priorityRange,
     cards,
     unscheduled: acc.unscheduled,
+    paused: acc.paused,
     active,
     due: acc.due,
     donePct,
@@ -572,6 +603,12 @@ export interface CardAnalyticsRow {
    * - `scheduled` — next time in the future.
    */
   scheduleState: 'unscheduled' | 'due' | 'scheduled';
+  /**
+   * Inside a paused deck. Schedulable — pausing does not clear
+   * `nextRepetitionTime` — but the queue will not serve it. Always false when no
+   * paused-deck scan was supplied.
+   */
+  inPausedDeck: boolean;
   /** Raw next repetition time (ms epoch) or null. */
   nextRepetitionTime: number | null;
   createdAt: number | null;
@@ -638,6 +675,12 @@ export async function computeCardAnalyticsBreakdown(
   onProgress?: (done: number, total: number) => void,
   /** Optional per-card sink — lets an export capture the raw rows behind the aggregates. */
   onRow?: (row: CardAnalyticsRow) => void,
+  /**
+   * Rem ids suppressed by a paused deck, from lib/paused_decks.ts. Pass null
+   * when no scan has run — the paused column then reports 0 and the caller is
+   * expected to say so, rather than let "we never looked" read as "none".
+   */
+  pausedRemIds?: Set<string> | null,
 ): Promise<CardAnalyticsBreakdown> {
   const { startMs, endMs } = period;
   // Map remId → inherited rem priority. Filter out rems with explicit zero cards.
@@ -683,7 +726,10 @@ export async function computeCardAnalyticsBreakdown(
     // Clamp priority into [0, 100] for the by-priority bucket index.
     const pIdx = Math.max(0, Math.min(100, Math.round(priority)));
 
-    const stats = computeCardStats(card, weights, now, cardCapMs, ignorePreReset, startMs, endMs);
+    const isPaused = pausedRemIds ? pausedRemIds.has(card.remId) : false;
+    const stats = computeCardStats(
+      card, weights, now, cardCapMs, ignorePreReset, startMs, endMs, isPaused,
+    );
     accumulate(bucketAccs[bIdx], stats, priority);
     accumulate(overallAcc, stats, priority);
     accumulate(byPriorityAccs[pIdx], stats, priority);
@@ -705,6 +751,7 @@ export async function computeCardAnalyticsBreakdown(
         isDue: stats.isDue,
         isStale: stats.isStale,
         scheduleState: nextRep === null ? 'unscheduled' : nextRep <= now ? 'due' : 'scheduled',
+        inPausedDeck: isPaused,
         nextRepetitionTime: nextRep,
         createdAt: (card.createdAt ?? null) as number | null,
         ...describeCardHistory(card, ignorePreReset),
@@ -740,6 +787,7 @@ export async function computeCardAnalyticsBreakdown(
     overall: finalize(overallAcc, 'All KB'),
     totalCards: N,
     computedAt: Date.now(),
+    pausedScanApplied: !!pausedRemIds,
     cardsSkippedNoPriority,
     ignorePreReset,
     period: period.id,
