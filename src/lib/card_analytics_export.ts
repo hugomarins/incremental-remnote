@@ -130,6 +130,8 @@ export interface ExportSummary {
     newNotDue: number;
     newUnscheduled: number;
     newScheduledAhead: number;
+    /** Unscheduled cards in this bucket by cause — which lever applies where. */
+    causeCounts: Partial<Record<UnscheduledCause, number>>;
   }>;
 }
 
@@ -189,6 +191,7 @@ export function summarizeRows(
         newNotDue: 0,
         newUnscheduled: 0,
         newScheduledAhead: 0,
+        causeCounts: {},
       };
       perBucketMap.set(r.bucket, b);
     }
@@ -222,6 +225,7 @@ export function summarizeRows(
       entry.cards++;
       if (r.isNew) entry.newCards++;
       causeCounts.set(cause, entry);
+      b.causeCounts[cause] = (b.causeCounts[cause] ?? 0) + 1;
     }
   }
 
@@ -509,6 +513,22 @@ export function summaryToText(summary: ExportSummary, meta: string): string {
         `  · ${c.label.padEnd(52)} ${String(c.cards).padStart(6)}  (${c.newCards.toLocaleString()} of them New)`,
     ),
     ``,
+    ...(summary.causes.length > 0
+      ? [
+          `Unscheduled by bucket × cause:`,
+          [
+            'bucket'.padEnd(12),
+            ...summary.causes.map((c) => c.cause.slice(0, 13).padStart(14)),
+          ].join(' '),
+          ...summary.perBucket.map((b) =>
+            [
+              b.bucket.padEnd(12),
+              ...summary.causes.map((c) => String(b.causeCounts[c.cause] ?? 0).padStart(14)),
+            ].join(' '),
+          ),
+          ``,
+        ]
+      : []),
     `Per bucket:`,
     `bucket        cards     new     due  new&notDue  newUnscheduled  newAhead`,
     ...summary.perBucket.map((b) =>
