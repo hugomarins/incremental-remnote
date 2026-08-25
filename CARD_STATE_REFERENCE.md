@@ -38,8 +38,8 @@ reps and loses only its next time.
 | **Paused deck** | Deck powerup → Status = "Paused" on an ancestor | walk ancestors: `hasPowerup(BuiltInPowerupCodes.Deck)` → `getPowerupProperty(Deck, 'Status') === 'Paused'` |
 | **Disabled by ancestor** | "Disable Descendant Cards" on an ancestor | walk ancestors: `hasPowerup(BuiltInPowerupCodes.DisableCards)` (code `"u"`) |
 | **Disabled on the Rem** | flashcard menu → "Enable Cards" off | `rem.getEnablePractice() === false` (or the Rem's own `DisableCards` powerup) |
-| **Practice direction none** | flashcard menu → Flashcard Direction | `rem.getPracticeDirection() === 'none'` |
-| **Single card disabled** | queue → disable this card / this cloze | *no Rem-level trace* — see below |
+| **Direction disabled** | flashcard menu → Flashcard Direction, **or** disabling a forward/backward card in the queue | `rem.getPracticeDirection()` no longer includes the card's direction |
+| **Single cloze disabled** | queue → disable this card (cloze) | *no Rem-level trace* — see below |
 | **Markup removed** | editing the cloze or back side away | *no Rem-level trace* — see below |
 
 ### Rem-level states are cheap to detect
@@ -48,9 +48,41 @@ reps and loses only its next time.
 that silences a whole Rem or subtree. Check them first: they explain every card on the Rem at
 once.
 
-### The two per-card states are the hard part
+### Direction cards and cloze cards behave differently
 
-Disabling **one** cloze or **one** direction in the queue leaves the Rem untouched:
+Disabling a **forward/backward** card in the queue does **not** stay on the card — it rewrites
+the Rem's practice direction. A bidirectional Rem whose backward card is switched off reports:
+
+```
+enablePractice=true, practiceDirection=forward   ← was 'both'
+  unQmbZtxdCwPelFtX  forward   inGetCards=true   nextRep=2030-02-28  reps=8
+  qqmpC7wbuIuGqWKS6  backward  inGetCards=false  nextRep=(null)      reps=1
+```
+
+Measured before/after on a single forward-only Rem, which pins the mechanism exactly:
+
+```
+before:  practiceDirection=forward   1 card surfaced   nextRep=2028-10-24  reps=7
+after:   practiceDirection=none      0 cards surfaced  nextRep=(null)      reps=7
+```
+
+`enablePractice` stayed `true` through both — the Rem's Enable-Cards flag is a *different*
+action, which is why it is tested separately and first.
+
+So direction cards ARE detectable at Rem level: compare the card's direction against
+`getPracticeDirection()` (`'both'` covers both; `'none'` covers neither). The way back is
+`setPracticeDirection`, not a per-card action.
+
+**Corollary:** `getPracticeDirection() === 'none'` on a Rem that still has a back side is the
+fingerprint of a direction card disabled from the queue, not of a setting anyone chose. Treat a
+KB's `'none'` Rems as disabled cards to review, not as configuration.
+
+Cloze cards are **not** governed by the practice direction — a Rem with direction `'none'` still
+generates its clozes — so the direction test must be scoped to forward/backward cards only.
+
+### The two per-card cloze states are the hard part
+
+Disabling **one cloze** in the queue leaves the Rem untouched:
 
 ```
 enablePractice=true, practiceDirection=forward, DisableCards on this rem: false
@@ -60,7 +92,8 @@ cards: 2 in the card table, 1 surfaced by rem.getCards()
 ```
 
 Nothing at Rem level distinguishes that from a Rem whose cloze was deleted — in both cases the
-card sits in `card.getAll()`, is absent from `rem.getCards()`, and has a null next time.
+card sits in `card.getAll()`, is absent from `rem.getCards()`, and has a null next time. (This
+is the one state with no Rem-level trace at all; directions, per above, do leave one.)
 
 **The discriminator is the markup itself.** Cloze markup lives in the Rem's rich text as `cId`
 on the text elements (also `blocks[].cId` for image clozes, `clozeOrder`, `latexClozes`), and a
@@ -82,10 +115,11 @@ Verified in both directions on the same card: with the cloze present the probe r
 
 - **`rem.getCards().length`** as an existence test — it is a "currently surfaced" filter. Both
   directions of the comparison against `card.getAll()` are meaningless on their own.
-- **`getPracticeDirection()`** as a disabled signal. A Rem with `enablePractice=false` still
-  reports `'forward'`. RemNote's UI shows "Flashcard Direction: None" for such a Rem as a
-  display collapse, not because the stored direction changed. Only 10 Rems in a 72k-card KB
-  genuinely carry `'none'`.
+- **`getPracticeDirection()`** as a *Rem-level* disabled signal. A Rem with
+  `enablePractice=false` still reports `'forward'`. RemNote's UI shows "Flashcard Direction:
+  None" for such a Rem as a display collapse, not because the stored direction changed. Check
+  `getEnablePractice()` for that. The direction IS authoritative for whether a given
+  forward/backward card is generated — just not for whether the Rem is enabled at all.
 - **Card `createdAt` vs Rem `createdAt`** as evidence of anything. A card record can predate its
   own Rem; that does not make it an orphan.
 - **`taggedRem()` on built-in powerups** — membership is not enumerable for RemNote built-ins;
@@ -100,7 +134,8 @@ Rem-wide causes first, because they explain every card on the Rem at once:
 2. `paused-document` — nearest Deck ancestor is Paused
 3. `cards-disabled-ancestor` — an ancestor carries Disable Descendant Cards
 4. `cards-disabled-rem` — `getEnablePractice() === false`, or the Rem's own tag
-5. `practice-direction-none` — `getPracticeDirection() === 'none'`
+5. `direction-disabled` — forward/backward card whose direction is not in
+   `getPracticeDirection()` (covers `'none'`). Never applied to cloze cards.
 6. `card-disabled-individually` — markup still present ⇒ this one card was switched off
 7. `markup-removed` — the cloze id / back side is gone
 8. `not-surfaced-unknown` — none of the above could decide it
@@ -139,9 +174,14 @@ card does not un-practise it.
 
 ## Re-enabling
 
-- Rem-level: `rem.setEnablePractice(true)`, `rem.setPracticeDirection(...)`.
+- Rem-level: `rem.setEnablePractice(true)`.
+- Direction card: `rem.setPracticeDirection(...)` — this is what brings back a forward/backward
+  card disabled from the queue. The pre-disable direction is not stored anywhere, but it can be
+  reconstructed from the card records that exist: a backward card record proves backward was
+  once enabled, so a Rem holding both records wants `'both'`, one holding only a forward record
+  wants `'forward'`. Re-enabling makes the card due immediately.
 - Ancestor-level: remove the Disable Descendant Cards powerup from the ancestor — **this flips
   the entire subtree at once**, so it needs an explicit confirmation and a count of what it will
   affect.
-- Single card: no SDK write is known for re-enabling one card; it is done in the queue UI.
+- Single cloze card: no SDK write is known for re-enabling one card; it is done in the queue UI.
 - Note that re-enabling in bulk makes every affected card due immediately.

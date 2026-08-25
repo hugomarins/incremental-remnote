@@ -79,6 +79,28 @@ export function markupStillPresent(
   return null;
 }
 
+/**
+ * Is this card's practice direction currently enabled on the Rem?
+ *
+ * Only meaningful for forward / backward cards — cloze cards are independent of
+ * the practice direction and are governed per card.
+ *
+ * Measured: disabling a DIRECTION card in the queue does not just hide that
+ * card, it rewrites the Rem's practice direction ('both' → 'forward' when the
+ * backward card is switched off). So unlike a disabled cloze, a disabled
+ * direction DOES leave a Rem-level trace — and the way back is
+ * `setPracticeDirection`, not a per-card action.
+ */
+export function directionEnabled(
+  practiceDirection: RemContext['practiceDirection'],
+  cardType: string,
+): boolean | null {
+  if (cardType !== 'forward' && cardType !== 'backward') return null;
+  if (practiceDirection === null) return null;
+  if (practiceDirection === 'both') return true;
+  return practiceDirection === cardType;
+}
+
 /** Extra per-Rem context, resolved only for the capped anomaly set. */
 export interface RemContext {
   text: string;
@@ -126,7 +148,7 @@ export type UnscheduledCause =
   | 'paused-document'
   | 'cards-disabled-ancestor'
   | 'cards-disabled-rem'
-  | 'practice-direction-none'
+  | 'direction-disabled'
   | 'card-disabled-individually'
   | 'markup-removed'
   | 'not-surfaced-unknown'
@@ -141,7 +163,7 @@ export const UNSCHEDULED_CAUSE_SHORT: Record<UnscheduledCause, string> = {
   'paused-document': 'paused-deck',
   'cards-disabled-ancestor': 'off-ancestor',
   'cards-disabled-rem': 'off-rem',
-  'practice-direction-none': 'dir-none',
+  'direction-disabled': 'dir-off',
   'card-disabled-individually': 'off-card',
   'markup-removed': 'markup-gone',
   'not-surfaced-unknown': 'unknown',
@@ -153,7 +175,7 @@ export const UNSCHEDULED_CAUSE_LABELS: Record<UnscheduledCause, string> = {
   'paused-document': 'Inside a paused deck',
   'cards-disabled-ancestor': 'Disabled by an ancestor’s “Disable Descendant Cards”',
   'cards-disabled-rem': 'Cards switched off on the Rem itself',
-  'practice-direction-none': 'Practice direction = none',
+  'direction-disabled': 'This direction is switched off on the Rem',
   'card-disabled-individually': 'This single card switched off (markup still present)',
   'markup-removed': 'The cloze / back side this card came from is gone',
   'not-surfaced-unknown': 'Not surfaced — cause undetermined',
@@ -176,12 +198,17 @@ export function classifyUnscheduled(
   if (ctx.inPausedDocument) return 'paused-document';
   if (ctx.disableCardsAncestor) return 'cards-disabled-ancestor';
   if (ctx.disableCardsOwn || ctx.enablePractice === false) return 'cards-disabled-rem';
-  if (ctx.practiceDirection === 'none') return 'practice-direction-none';
-  // Rem is enabled, so this is about THIS card. Its markup decides: still in the
-  // text ⇒ the user switched this one card off in the queue; gone ⇒ the Rem no
-  // longer produces it. Card counts cannot separate these — a Rem whose cards
-  // were all individually disabled reports zero from getCards(), exactly like a
-  // Rem whose markup was deleted.
+  // Forward / backward cards are governed by the Rem's practice direction, and
+  // switching one off in the queue rewrites that direction. Cloze cards are NOT
+  // affected by it, so this test is scoped to direction cards only.
+  if (directionEnabled(ctx.practiceDirection, card.cardType) === false) {
+    return 'direction-disabled';
+  }
+  // Rem is enabled and this card's direction (if any) is on, so this is about
+  // THIS card. Its markup decides: still in the text ⇒ the user switched this
+  // one card off in the queue; gone ⇒ the Rem no longer produces it. Card counts
+  // cannot separate these — a Rem whose cards were all individually disabled
+  // reports zero from getCards(), exactly like a Rem whose markup was deleted.
   const present = markupStillPresent(ctx, card.cardType, card.clozeId);
   if (present === true) return 'card-disabled-individually';
   if (present === false) return 'markup-removed';
@@ -522,6 +549,7 @@ const CSV_COLUMNS = [
   'remInPausedDocument',
   'clozeId',
   'markupStillPresent',
+  'directionEnabled',
   'unscheduledCause',
   'remText',
 ] as const;
@@ -539,6 +567,7 @@ export function rowsToCsv(rows: CardAnalyticsRow[], context: Map<string, RemCont
     const ctx = context.get(r.remId);
     const cause = r.scheduleState === 'unscheduled' ? classifyUnscheduled(ctx, r) : '';
     const markup = ctx ? markupStillPresent(ctx, r.cardType, r.clozeId) : null;
+    const dirEnabled = ctx ? directionEnabled(ctx.practiceDirection, r.cardType) : null;
     lines.push(
       [
         r.cardId,
@@ -574,6 +603,7 @@ export function rowsToCsv(rows: CardAnalyticsRow[], context: Map<string, RemCont
         ctx ? ctx.inPausedDocument : '',
         r.clozeId ?? '',
         markup === null ? '' : markup,
+        dirEnabled === null ? '' : dirEnabled,
         cause,
         ctx?.text ?? '',
       ]
@@ -697,6 +727,8 @@ export interface RemEnablementProbe {
     clozeId: string;
     /** Is this card's markup still in the Rem? The individually-disabled test. */
     markupStillPresent: boolean | null;
+    /** For forward/backward cards: is that direction still on? null for clozes. */
+    directionEnabled: boolean | null;
     /** What the export would call this card if it were unscheduled. */
     wouldClassifyAs: string;
   }>;
@@ -784,6 +816,7 @@ export async function probeRemCardEnablement(
         reps: c.repetitionHistory?.length ?? 0,
         clozeId: clozeId ?? '',
         markupStillPresent: markupStillPresent(probeCtx, cardType, clozeId),
+        directionEnabled: directionEnabled(probeCtx.practiceDirection, cardType),
         // A cause only means something for an UNSCHEDULED card. A card with a
         // real nextRepetitionTime is simply scheduled; running the classifier
         // on it would report the cause it WOULD have, which reads as a verdict.
