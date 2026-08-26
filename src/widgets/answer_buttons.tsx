@@ -30,6 +30,7 @@ import {
 } from '../lib/consts';
 import { getIncrementalRemFromRem, handleNextRepetitionClick, handleNextRepetitionManualOffset, updateReviewRemData, requestQueueDashboardRefocus } from '../lib/incremental_rem';
 import { removeIncrementalRemCache } from '../lib/incremental_rem/cache';
+import { openRemInBrowserTab } from '../lib/remHelpers';
 import { IncrementalRem } from '../lib/incremental_rem';
 import { percentileToHslColor, calculateRelativePercentile, calculateVolumeBasedPercentile, calculateWeightedShield, PERFORMANCE_MODE_LIGHT } from '../lib/utils';
 import { safeRemTextToString, getActivePdfForIncRem, findHTMLinRem, addPageToHistory, getPageHistory, getIncrementalReadingPosition, getDescendantsToDepth, resolveSessionBookmarkCarry } from '../lib/pdfUtils';
@@ -560,27 +561,7 @@ export function AnswerButtons() {
         </Button>
 
         <Button
-          onClick={async () => {
-            try {
-              const environment = await getIESetting(plugin, remnoteEnvironmentId);
-              const remnoteDomain = environment === 'beta' ? 'https://beta.remnote.com' : 'https://www.remnote.com';
-              const newUrl = `${remnoteDomain}/document/${rem._id}`;
-              const newWindow = window.open(newUrl, '_blank');
-
-              if (!newWindow || newWindow.closed) {
-                const link = document.createElement('a');
-                link.href = newUrl;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                document.body.appendChild(link);
-                link.click();
-                setTimeout(() => document.body.removeChild(link), 100);
-              }
-            } catch (error) {
-              console.error('Error opening document:', error);
-              plugin.app.toast('Error opening document');
-            }
-          }}
+          onClick={() => openRemInBrowserTab(plugin, rem._id)}
           style={{ minWidth: '100px' }}
           title="Open Editor in New Tab: Instantly open the full source document in a new browser tab"
         >

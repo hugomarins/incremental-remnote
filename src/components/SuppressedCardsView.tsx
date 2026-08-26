@@ -46,6 +46,7 @@ import { parseWeightsString } from '../lib/fsrs';
 import { getPausedRemIds } from '../lib/paused_decks';
 import { buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { RemText } from './RemText';
+import { openRemInBrowserTab } from '../lib/remHelpers';
 import { resolvePeriod } from '../lib/period';
 import { getIESetting } from '../lib/settings';
 import { formatTimeAgo } from '../lib/utils';
@@ -85,6 +86,8 @@ function RemPicker({
   title,
   busy,
   plugin,
+  verified,
+  onVerifiedChange,
   onClose,
   onReEnable,
 }: {
@@ -92,6 +95,8 @@ function RemPicker({
   title: string;
   busy: string | null;
   plugin: any;
+  verified: Set<string>;
+  onVerifiedChange: (next: Set<string>) => void;
   onClose: () => void;
   onReEnable: (remIds: string[]) => void;
 }) {
@@ -133,18 +138,12 @@ function RemPicker({
     };
   }, [entries, plugin]);
 
-  const [verified, setVerified] = React.useState<Set<string>>(new Set());
   const [hideVerified, setHideVerified] = React.useState(false);
-
-  React.useEffect(() => {
-    getVerifiedRems(plugin).then(setVerified).catch(() => {});
-  }, [plugin]);
 
   const visible = hideVerified ? entries.filter((e) => !verified.has(e.remId)) : entries;
 
   const toggleVerified = async (remId: string) => {
-    const next = await setRemVerified(plugin, remId, !verified.has(remId));
-    setVerified(next);
+    onVerifiedChange(await setRemVerified(plugin, remId, !verified.has(remId)));
   };
 
   const allSelected = visible.length > 0 && visible.every((e) => selected.has(e.remId));
@@ -250,8 +249,7 @@ function RemPicker({
               type="button"
               onClick={async (ev) => {
                 ev.preventDefault();
-                const next = await setManyRemsVerified(plugin, Array.from(selected), true);
-                setVerified(next);
+                onVerifiedChange(await setManyRemsVerified(plugin, Array.from(selected), true));
               }}
               style={{
                 padding: '2px 8px',
@@ -462,6 +460,13 @@ export function SuppressedCardsView() {
   const [error, setError] = React.useState<string | null>(null);
   const [drill, setDrill] = React.useState<{ bucket: string; cause: UnscheduledCause } | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
+  // Held here rather than in the picker so the breakdown can report how much of
+  // each bucket has already been reviewed without opening it.
+  const [verified, setVerified] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    getVerifiedRems(plugin).then(setVerified).catch(() => {});
+  }, [plugin]);
 
   const compute = React.useCallback(async () => {
     setError(null);
@@ -609,6 +614,16 @@ export function SuppressedCardsView() {
     ? report.entries.filter((e) => e.bucket === drill.bucket && e.cause === drill.cause)
     : [];
 
+  // Cards belonging to Rems already marked checked, per bucket, for the one
+  // actionable cause — so a bucket you have worked through reads as such
+  // instead of looking untouched.
+  const verifiedCardsByBucket = new Map<string, number>();
+  for (const e of report.entries) {
+    if (e.cause !== ACTIONABLE_CAUSE || !verified.has(e.remId)) continue;
+    verifiedCardsByBucket.set(e.bucket, (verifiedCardsByBucket.get(e.bucket) ?? 0) + e.cards);
+  }
+  const verifiedCardsTotal = Array.from(verifiedCardsByBucket.values()).reduce((a, b) => a + b, 0);
+
   return (
     <div style={{ paddingTop: '4px' }}>
       <div
@@ -713,9 +728,20 @@ export function SuppressedCardsView() {
                   {summary.causes.map((c) => {
                     const n = b.causeCounts[c.cause] ?? 0;
                     const actionable = c.cause === ACTIONABLE_CAUSE && n > 0;
+                    const checked =
+                      c.cause === ACTIONABLE_CAUSE ? verifiedCardsByBucket.get(b.bucket) ?? 0 : 0;
                     return (
                       <td key={c.cause} style={{ ...cell, color: causeColor(c.cause, n === 0) }}>
                         {n === 0 ? '·' : n.toLocaleString()}
+                        {checked > 0 && (
+                          <span
+                            title={`${checked.toLocaleString()} of these cards belong to Rems you have marked checked`}
+                            style={{ color: '#0ea5e9', fontWeight: 400 }}
+                          >
+                            {' '}
+                            ({checked.toLocaleString()} ✓)
+                          </span>
+                        )}
                         {actionable && (
                           <button
                             type="button"
@@ -751,6 +777,12 @@ export function SuppressedCardsView() {
               {summary.causes.map((c) => (
                 <td key={c.cause} style={{ ...cell, color: causeColor(c.cause, false) }}>
                   {c.cards.toLocaleString()}
+                  {c.cause === ACTIONABLE_CAUSE && verifiedCardsTotal > 0 && (
+                    <span style={{ color: '#0ea5e9', fontWeight: 400 }}>
+                      {' '}
+                      ({verifiedCardsTotal.toLocaleString()} ✓)
+                    </span>
+                  )}
                 </td>
               ))}
             </tr>
@@ -780,6 +812,8 @@ export function SuppressedCardsView() {
           title={`${UNSCHEDULED_CAUSE_LABELS[drill.cause]} · bucket ${drill.bucket}`}
           busy={busy}
           plugin={plugin}
+          verified={verified}
+          onVerifiedChange={setVerified}
           onClose={() => setDrill(null)}
           onReEnable={handleReEnable}
         />

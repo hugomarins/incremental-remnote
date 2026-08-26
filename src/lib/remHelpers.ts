@@ -1,6 +1,7 @@
 import { RNPlugin } from '@remnote/plugin-sdk';
 import type { PaneRemWindowTree, RemIdWindowTree } from '@remnote/plugin-sdk/dist/interfaces';
-import { pendingScrollRequestKey } from './consts';
+import { pendingScrollRequestKey, remnoteEnvironmentId } from './consts';
+import { getIESetting } from './settings';
 
 export interface PendingScrollRequest {
   hostRemId: string;
@@ -130,6 +131,42 @@ export const openAndFocusRem = async (
     return;
   }
   await plugin.window.openRem(rem);
+};
+
+/**
+ * Open a rem in a NEW BROWSER TAB, as a fresh RemNote instance.
+ *
+ * `plugin.window.openRem` navigates the host pane, which tears down whatever
+ * popup or floating widget the user was working in — fine when jumping is the
+ * point, wrong when they are working through a list and want to glance at one
+ * entry. This leaves the current view untouched.
+ *
+ * Honours the beta/production environment setting, and falls back to a
+ * synthesized anchor click when `window.open` is blocked by a popup blocker.
+ */
+export const openRemInBrowserTab = async (
+  plugin: RNPlugin,
+  remId: string
+): Promise<void> => {
+  try {
+    const environment = await getIESetting(plugin, remnoteEnvironmentId);
+    const remnoteDomain =
+      environment === 'beta' ? 'https://beta.remnote.com' : 'https://www.remnote.com';
+    const url = `${remnoteDomain}/document/${remId}`;
+    const opened = window.open(url, '_blank');
+    if (!opened || opened.closed) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => document.body.removeChild(link), 100);
+    }
+  } catch (error) {
+    console.error('[openRemInBrowserTab] failed', error);
+    await plugin.app.toast('Could not open the rem in a new tab.');
+  }
 };
 
 export const openAndScrollToHighlight = async (
