@@ -570,7 +570,7 @@ Results are session-cached so reopening the popup in the same session is instant
 
 Some cards exist in your knowledge base but can never come up in the queue. The **🚫 Suppressed Cards** tab of the wide popup counts them, splits them by *why*, and lets you act on the one cause that is a simple mistake.
 
-![The Suppressed Cards tab: 15,966 of 70,484 card records suppressed, broken down by cause and by priority bucket](assets/supressed-cards.png){ width="1000" }
+![The Suppressed Cards tab: 15,966 of 70,484 card records suppressed, broken down by cause and by priority bucket](assets/suppressed-cards.png){ width="1000" }
 
 Press **Compute** and the tab reports a bucket × cause matrix — the same deciles as the analytics table, with one column per reason:
 
