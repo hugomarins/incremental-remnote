@@ -214,6 +214,19 @@ const headerCellStyle: React.CSSProperties = {
   cursor: 'help',
 };
 
+/**
+ * Where one column group ends and the next begins. The group header row alone
+ * could not carry this: its cells are centred over their span, so a wide group
+ * reads as a label floating somewhere above the numbers. The edge is drawn on
+ * the group header, the column header AND the body cells so a column can be
+ * traced to its group down the whole table.
+ */
+const GROUP_EDGE = '2px solid var(--rn-clr-background-tertiary)';
+
+/** Alternating tints, one per group, so adjacent groups never share a shade. */
+const groupTint = (idx: number): string =>
+  idx % 2 === 0 ? 'var(--rn-clr-background-secondary)' : 'var(--rn-clr-background-tertiary)';
+
 const groupHeaderStyle: React.CSSProperties = {
   padding: '3px 5px',
   fontSize: '9px',
@@ -312,7 +325,7 @@ function BucketRow({
         {b.priorityRange}
       </td>
       {/* Population */}
-      <td style={cellStyle}>{fmtInt(b.cards)}</td>
+      <td style={{ ...cellStyle, borderLeft: GROUP_EDGE }}>{fmtInt(b.cards)}</td>
       <td
         style={{
           ...cellStyle,
@@ -365,7 +378,7 @@ function BucketRow({
         {fmtPct(b.stalePct, 0)}
       </td>
       {/* Throughput */}
-      <td style={cellStyle}>
+      <td style={{ ...cellStyle, borderLeft: GROUP_EDGE }}>
         {fmtInt(b.totReps)}{' '}
         <span style={{ color: 'var(--rn-clr-content-tertiary)' }}>({fmtNum(b.avgReps, 1)})</span>
       </td>
@@ -380,7 +393,7 @@ function BucketRow({
         <span style={{ color: 'var(--rn-clr-content-tertiary)', marginLeft: '2px' }}>min/y</span>
       </td>
       {/* Outcome */}
-      <td style={cellStyle}>{fmtNum(b.avgLapses, 2)}</td>
+      <td style={{ ...cellStyle, borderLeft: GROUP_EDGE }}>{fmtNum(b.avgLapses, 2)}</td>
       <td style={{ ...cellStyle, color: retentionColor(b.retention), fontWeight: 600 }}>
         {fmtPct(b.retention, 1)}
       </td>
@@ -392,7 +405,7 @@ function BucketRow({
         {fmtNum(b.avgGrade, 1)}
       </td>
       {/* FSRS */}
-      <td style={cellStyle}>{fmtNum(b.avgD, 1)}</td>
+      <td style={{ ...cellStyle, borderLeft: GROUP_EDGE }}>{fmtNum(b.avgD, 1)}</td>
       <td style={{ ...cellStyle, color: retentionColor(b.avgRtoday), fontWeight: 600 }}>
         {fmtPct(b.avgRtoday, 1)}
       </td>
@@ -440,19 +453,59 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
         <thead>
           {/* Group header row — spans grouped sub-columns. */}
           <tr>
-            <th style={groupHeaderStyle} colSpan={2} title={GROUP_TOOLTIPS.identity}>
+            <th
+              style={{
+                ...groupHeaderStyle,
+                background: groupTint(0),
+                
+              }}
+              colSpan={2}
+              title={GROUP_TOOLTIPS.identity}
+            >
               Identity
             </th>
-            <th style={groupHeaderStyle} colSpan={8} title={GROUP_TOOLTIPS.population}>
+            <th
+              style={{
+                ...groupHeaderStyle,
+                background: groupTint(1),
+                borderLeft: GROUP_EDGE,
+              }}
+              colSpan={8}
+              title={GROUP_TOOLTIPS.population}
+            >
               Population
             </th>
-            <th style={groupHeaderStyle} colSpan={5} title={GROUP_TOOLTIPS.throughput}>
+            <th
+              style={{
+                ...groupHeaderStyle,
+                background: groupTint(2),
+                borderLeft: GROUP_EDGE,
+              }}
+              colSpan={5}
+              title={GROUP_TOOLTIPS.throughput}
+            >
               Throughput
             </th>
-            <th style={groupHeaderStyle} colSpan={6} title={GROUP_TOOLTIPS.outcome}>
+            <th
+              style={{
+                ...groupHeaderStyle,
+                background: groupTint(3),
+                borderLeft: GROUP_EDGE,
+              }}
+              colSpan={5}
+              title={GROUP_TOOLTIPS.outcome}
+            >
               Outcome
             </th>
-            <th style={groupHeaderStyle} colSpan={3} title={GROUP_TOOLTIPS.fsrsToday}>
+            <th
+              style={{
+                ...groupHeaderStyle,
+                background: groupTint(4),
+                borderLeft: GROUP_EDGE,
+              }}
+              colSpan={3}
+              title={GROUP_TOOLTIPS.fsrsToday}
+            >
               FSRS today
             </th>
           </tr>
@@ -470,7 +523,7 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
             >
               Abs.Prio
             </th>
-            <th style={headerCellStyle} title={COL_TOOLTIPS.items}>
+            <th style={{ ...headerCellStyle, borderLeft: GROUP_EDGE }} title={COL_TOOLTIPS.items}>
               Items
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.unsched}>
@@ -494,7 +547,7 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
             <th style={headerCellStyle} title={COL_TOOLTIPS.pctStale}>
               %Stale
             </th>
-            <th style={headerCellStyle} title={COL_TOOLTIPS.reps}>
+            <th style={{ ...headerCellStyle, borderLeft: GROUP_EDGE }} title={COL_TOOLTIPS.reps}>
               Reps
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.time}>
@@ -509,7 +562,7 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
             <th style={headerCellStyle} title={COL_TOOLTIPS.cost}>
               Cost
             </th>
-            <th style={headerCellStyle} title={COL_TOOLTIPS.lapses}>
+            <th style={{ ...headerCellStyle, borderLeft: GROUP_EDGE }} title={COL_TOOLTIPS.lapses}>
               Lapses
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.retention}>
@@ -524,7 +577,7 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
             <th style={headerCellStyle} title={COL_TOOLTIPS.grade}>
               Grade
             </th>
-            <th style={headerCellStyle} title={COL_TOOLTIPS.d}>
+            <th style={{ ...headerCellStyle, borderLeft: GROUP_EDGE }} title={COL_TOOLTIPS.d}>
               D
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.r}>
