@@ -182,7 +182,8 @@ async function calculateShieldStatus<T extends PriorityItem>(
   if (computeWeighted) {
     status.weightedShield = calculateWeightedShield(
       allItems as any,
-      (item: any) => isDue(item) && !seenIds.includes(item.remId)
+      (item: any) => isDue(item) && !seenIds.includes(item.remId),
+      { isRankOnly: (i) => !!(i as { paused?: boolean }).paused }
     );
   }
 

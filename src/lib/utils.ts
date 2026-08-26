@@ -162,9 +162,28 @@ export function calculateVolumeBasedPercentile<T extends { priority: number }>(
  * @param isDuePredicate Returns true if the item is due and unreviewed.
  * @returns Weighted completion percentage (0–100), or 100 if no items / no due items.
  */
+/**
+ * Items that take part in the RANKING but not in the workload.
+ *
+ * A paused deck's cards are the case this exists for. They must keep their
+ * place in the sorted population — pausing defers a card, it does not demote
+ * it, and dropping them would shift every other item's percentile the moment a
+ * deck is paused — but they must not add weight to the shield's total, or
+ * pausing a deck would raise your shield for free, and a big paused deck would
+ * park a permanent block of "already processed" weight in the denominator.
+ *
+ * With them excluded from the totals, the shield answers the question it is
+ * meant to: *of the work I can actually do, how much have I done?* — and
+ * finishing every practicable card reaches 100%.
+ */
+export interface ShieldPopulationOptions<T> {
+  isRankOnly?: (item: T) => boolean;
+}
+
 export function calculateWeightedShield<T extends { priority: number; remId: string }>(
   allItems: T[],
-  isDuePredicate: (item: T) => boolean
+  isDuePredicate: (item: T) => boolean,
+  opts?: ShieldPopulationOptions<T>
 ): number {
   if (!allItems || allItems.length === 0) return 100;
 
@@ -172,12 +191,14 @@ export function calculateWeightedShield<T extends { priority: number; remId: str
   const validItems = allItems.filter((item: any) => item.cardCount === undefined || item.cardCount > 0);
   if (validItems.length === 0) return 100;
 
-  // 1. Sort by priority to compute each item's percentile rank
+  // 1. Sort by priority to compute each item's percentile rank.
+  //    Percentile is per ITEM, by its position in the sorted list. It used to be
+  //    stored in a Map keyed by remId, which meant every card of a multi-card
+  //    Rem was overwritten by the last one's rank — so they all shared a
+  //    percentile, a weight, and a bucket. That is what made this table's
+  //    buckets disagree with the Card Priority × Memory Analytics deciles.
   const sorted = [...validItems].sort((a, b) => a.priority - b.priority);
-  const percentileMap = new Map<string, number>();
-  sorted.forEach((item, idx) => {
-    percentileMap.set(item.remId, ((idx + 1) / sorted.length) * 100);
-  });
+  const n = sorted.length;
 
   // 2. Compute total weight and due (unprocessed) weight
   // k = ln(10) ≈ 2.3026 → a 0% item weighs 10× more than a 100% item
@@ -185,8 +206,12 @@ export function calculateWeightedShield<T extends { priority: number; remId: str
   let totalWeight = 0;
   let dueWeight = 0;
 
-  for (const item of validItems) {
-    const p = percentileMap.get(item.remId) ?? 50;
+  for (let idx = 0; idx < n; idx++) {
+    const item = sorted[idx];
+    const p = ((idx + 1) / n) * 100;
+    // Rank-only items (a paused deck's cards) set everyone else's percentile
+    // but are not workload themselves — see ShieldPopulationOptions.
+    if (opts?.isRankOnly?.(item)) continue;
     const weight = Math.exp(-k * p / 100);
     totalWeight += weight;
 
@@ -262,19 +287,18 @@ export interface WeightedShieldBreakdown {
  */
 export function computeWeightedShieldBreakdown<T extends { priority: number; remId: string }>(
   allItems: T[],
-  isDuePredicate: (item: T) => boolean
+  isDuePredicate: (item: T) => boolean,
+  opts?: ShieldPopulationOptions<T>
 ): WeightedShieldBreakdown {
   const k = 2.3026;
 
   // Pre-filter: Ignore rems that explicitly have 0 cards
   const validItems = allItems.filter((item: any) => item.cardCount === undefined || item.cardCount > 0);
 
-  // Sort and compute percentiles
+  // Sort and compute percentiles. Per ITEM, by index — see the note in
+  // calculateWeightedShield about the remId-keyed map this replaced.
   const sorted = [...validItems].sort((a, b) => a.priority - b.priority);
-  const percentileMap = new Map<string, number>();
-  sorted.forEach((item, idx) => {
-    percentileMap.set(item.remId, ((idx + 1) / sorted.length) * 100);
-  });
+  const n = sorted.length;
 
   // Initialize 10 buckets
   const bucketData: { total: number; processed: number; due: number; weightSum: number; minPriority: number; maxPriority: number }[] =
@@ -290,8 +314,10 @@ export function computeWeightedShieldBreakdown<T extends { priority: number; rem
   // its own due state.
   const dueByItem = new Map<T, boolean>();
 
-  for (const item of validItems) {
-    const p = percentileMap.get(item.remId) ?? 50;
+  for (let idx = 0; idx < n; idx++) {
+    const item = sorted[idx];
+    const p = ((idx + 1) / n) * 100;
+    if (opts?.isRankOnly?.(item)) continue;
     const weight = Math.exp(-k * p / 100);
     const bucketIdx = Math.min(Math.floor(p / 10), 9); // 0-9
     const isDue = isDuePredicate(item);
@@ -313,10 +339,12 @@ export function computeWeightedShieldBreakdown<T extends { priority: number; rem
   }
 
   // Slim, ordered snapshot for the interactive subset-stats slider in the popup.
-  const sortedItems = sorted.map((item) => ({
-    priority: item.priority,
-    isDue: dueByItem.get(item) ?? false,
-  }));
+  const sortedItems = sorted
+    .filter((item) => !opts?.isRankOnly?.(item))
+    .map((item) => ({
+      priority: item.priority,
+      isDue: dueByItem.get(item) ?? false,
+    }));
 
   const shieldValue = totalWeight > 0
     ? Math.round(((totalWeight - dueWeight) / totalWeight) * 1000) / 10

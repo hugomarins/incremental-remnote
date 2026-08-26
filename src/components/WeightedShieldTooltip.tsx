@@ -30,10 +30,16 @@ export function WeightedShieldTooltip({
     e.stopPropagation();
     if (!allItems || allItems.length === 0) return;
 
-    const kbBreakdown: WeightedShieldBreakdown = computeWeightedShieldBreakdown(allItems, isDuePredicate);
+    // Harmless for Incremental Rems, which never carry `paused` — keeping the
+    // option on every call site means the rule cannot be forgotten at one.
+    const kbBreakdown: WeightedShieldBreakdown = computeWeightedShieldBreakdown(
+      allItems,
+      isDuePredicate,
+      { isRankOnly: (i) => !!(i as { paused?: boolean }).paused }
+    );
     const docBreakdown: WeightedShieldBreakdown | null =
       docItems && docItems.length > 0
-        ? computeWeightedShieldBreakdown(docItems, isDuePredicate)
+        ? computeWeightedShieldBreakdown(docItems, isDuePredicate, { isRankOnly: (i) => !!(i as { paused?: boolean }).paused })
         : null;
 
     await plugin.widget.openPopup('weighted_shield_popup', {
