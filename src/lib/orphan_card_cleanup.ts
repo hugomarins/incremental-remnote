@@ -15,9 +15,14 @@
  *  - that cloze id is NOT among the ids in the Rem's current text,
  *  - it has no `nextRepetitionTime` (RemNote will never surface it anyway).
  *
- * Everything else on the Rem is reported with a reason and left alone —
- * including forward/backward records, which a disabled direction can explain
- * and which a text-based markup check cannot rule on.
+ * Forward/backward records get their own, SEPARATE list, because the rule that
+ * clears them is different: a Rem with no back side cannot generate a card in
+ * either direction, whatever its practice direction says. That list is never
+ * merged into the cloze one — the caller has to opt into it — because when the
+ * Rem DOES have a back side, an unscheduled forward/backward record is fully
+ * explained by a disabled direction and must be left alone.
+ *
+ * Everything else is reported with a reason and untouched.
  *
  * Card deletion is not undoable through this API. `analyzeOrphanCards` therefore
  * returns the full repetition history of every candidate, so the caller can hand
@@ -30,12 +35,17 @@ import { SuppressionLease } from './operation_suppression';
 import { safeRemTextToString } from './pdfUtils';
 
 /** Why a card on the Rem was NOT selected for deletion. */
-export type KeepReason = 'markup-present' | 'scheduled' | 'not-a-cloze' | 'no-cloze-id';
+export type KeepReason =
+  | 'markup-present'
+  | 'scheduled'
+  | 'direction-explainable'
+  | 'no-cloze-id';
 
 export const KEEP_REASON_LABELS: Record<KeepReason, string> = {
   'markup-present': 'Its cloze is still in the Rem’s text',
   scheduled: 'It has a nextRepetitionTime — RemNote still schedules it',
-  'not-a-cloze': 'Forward/backward card — a disabled direction would explain it',
+  'direction-explainable':
+    'Forward/backward card on a Rem that HAS a back side — a disabled direction explains it',
   'no-cloze-id': 'Cloze card with no readable cloze id',
 };
 
@@ -47,8 +57,16 @@ export interface OrphanCardAnalysis {
   totalCards: number;
   /** Cards the Rem currently surfaces, for context. */
   surfacedCards: number;
-  /** Ids selected for deletion — every one meets all three conditions. */
+  /** Does the Rem still have a back side? Decides the forward/backward list. */
+  hasBackText: boolean;
+  /** Cloze ids selected for deletion — every one meets all three conditions. */
   deletable: string[];
+  /**
+   * Forward/backward records on a Rem with NO back side, unscheduled. RemNote
+   * cannot generate either direction without one, so these correspond to
+   * nothing — but they are opt-in, never folded into `deletable`.
+   */
+  deletableDirectionless: string[];
   /** Everything not selected, with the reason it was kept. */
   kept: Array<{ cardId: string; type: string; reason: KeepReason }>;
   keptByReason: Record<KeepReason, number>;
@@ -79,12 +97,15 @@ export async function analyzeOrphanCards(
   const remClozeIds = collectClozeIds(rem.text);
   const owned = ((allCards || []) as any[]).filter((c: any) => c.remId === remId);
 
+  const hasBackText = Array.isArray((rem as any).backText) && (rem as any).backText.length > 0;
+
   const deletable: string[] = [];
+  const deletableDirectionless: string[] = [];
   const kept: OrphanCardAnalysis['kept'] = [];
   const keptByReason: Record<KeepReason, number> = {
     'markup-present': 0,
     scheduled: 0,
-    'not-a-cloze': 0,
+    'direction-explainable': 0,
     'no-cloze-id': 0,
   };
   const backup: OrphanCardAnalysis['backup'] = [];
@@ -100,7 +121,22 @@ export async function analyzeOrphanCards(
     };
 
     if (!isCloze) {
-      reject('not-a-cloze');
+      // A back side means RemNote could still generate this direction, so a
+      // disabled direction explains the record and it is not ours to remove.
+      const scheduled = c.nextRepetitionTime !== null && c.nextRepetitionTime !== undefined;
+      if (hasBackText || scheduled) {
+        reject('direction-explainable');
+        continue;
+      }
+      deletableDirectionless.push(c._id);
+      backup.push({
+        cardId: c._id,
+        remId,
+        clozeId: null,
+        createdAt: c.createdAt ?? null,
+        nextRepetitionTime: c.nextRepetitionTime ?? null,
+        repetitionHistory: c.repetitionHistory ?? [],
+      });
       continue;
     }
     if (!clozeId) {
@@ -133,7 +169,9 @@ export async function analyzeOrphanCards(
     remClozeIds: Array.from(remClozeIds),
     totalCards: owned.length,
     surfacedCards: surfaced.length,
+    hasBackText,
     deletable,
+    deletableDirectionless,
     kept,
     keptByReason,
     backup,

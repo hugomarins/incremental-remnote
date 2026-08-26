@@ -1354,7 +1354,12 @@ export function CardMemoryAnalyticsView() {
       const meta = `period=${period}, ignorePreReset=${ignorePreReset}, ${rows.length} cards`;
       const summaryText = summaryToText(summary, meta);
       console.log(`[CardMemoryAnalytics] export\n${summaryText}`);
+      // Two downloads fired back-to-back from a plugin iframe: the browser
+      // coalesces them and one silently never lands. Space them out, and put
+      // the big per-card CSV first so it is the one that is never at risk.
+      setPhaseLabel('Writing files…');
       downloadText(rowsToCsv(rows, context), `card-analytics-cards-${stamp}.csv`);
+      await new Promise((resolve) => setTimeout(resolve, 1200));
       downloadText(summaryText, `card-analytics-summary-${stamp}.txt`, 'text/plain');
 
       await plugin.storage.setSession(cardAnalyticsCacheKey, breakdown);

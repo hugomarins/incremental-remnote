@@ -574,6 +574,9 @@ function Debug() {
   const [orphanAnalysis, setOrphanAnalysis] = useState<OrphanCardAnalysis | null>(null);
   const [orphanBusy, setOrphanBusy] = useState<string | null>(null);
   const [orphanBackedUp, setOrphanBackedUp] = useState(false);
+  // Forward/backward records are a separate judgement from the cloze rule, so
+  // they are opted into explicitly rather than folded into the same count.
+  const [orphanIncludeDirectionless, setOrphanIncludeDirectionless] = useState(false);
   const [globalInflationPreview, setGlobalInflationPreview] = useState<null | {
     cutoffMs: number;
     scannedRems: number;
@@ -2346,11 +2349,13 @@ function Debug() {
         return;
       }
       setOrphanAnalysis(analysis);
+      setOrphanIncludeDirectionless(false);
       console.log(
         `🧹 Orphan card analysis for ${analysis.remId} — ${analysis.remText}\n` +
           `   ${analysis.totalCards} card record(s), ${analysis.surfacedCards} surfaced by rem.getCards()\n` +
-          `   cloze ids in the rem text: ${analysis.remClozeIds.length}\n` +
+          `   cloze ids in the rem text: ${analysis.remClozeIds.length}, hasBackText=${analysis.hasBackText}\n` +
           `   DELETABLE (cloze markup gone AND unscheduled): ${analysis.deletable.length}\n` +
+          `   OPT-IN (forward/backward, no back side, unscheduled): ${analysis.deletableDirectionless.length}\n` +
           `   kept: ${JSON.stringify(analysis.keptByReason)}`
       );
       console.table(analysis.kept.slice(0, 50));
@@ -2387,11 +2392,14 @@ function Debug() {
    *  user was shown is what gets deleted. */
   const handleDeleteOrphanCards = async () => {
     if (!orphanAnalysis || !orphanBackedUp) return;
-    const n = orphanAnalysis.deletable.length;
+    const ids = orphanIncludeDirectionless
+      ? [...orphanAnalysis.deletable, ...orphanAnalysis.deletableDirectionless]
+      : orphanAnalysis.deletable;
+    const n = ids.length;
     if (n === 0) return;
     setOrphanBusy(`Deleting 0 / ${n}…`);
     try {
-      const res = await deleteCards(plugin, orphanAnalysis.deletable, (done, total) =>
+      const res = await deleteCards(plugin, ids, (done, total) =>
         setOrphanBusy(`Deleting ${done} / ${total}…`)
       );
       await plugin.app.toast(
@@ -2402,6 +2410,7 @@ function Debug() {
       const after = await analyzeOrphanCards(plugin, orphanAnalysis.remId);
       setOrphanAnalysis(after);
       setOrphanBackedUp(false);
+      setOrphanIncludeDirectionless(false);
     } catch (e: any) {
       console.error('[orphan cleanup] delete failed', e);
       await plugin.app.toast(`Delete failed: ${e?.message || String(e)}`);
@@ -5513,14 +5522,40 @@ function Debug() {
                     kept {orphanAnalysis.keptByReason[r]} — {KEEP_REASON_LABELS[r]}
                   </div>
                 ))}
-              {orphanAnalysis.deletable.length > 0 && (
+              {orphanAnalysis.deletableDirectionless.length > 0 && (
+                <label
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', marginTop: '6px', cursor: 'pointer' }}
+                  title="The Rem has no back side, so RemNote cannot generate a forward or backward card for it whatever the practice direction says. These records correspond to nothing — but they may carry a lot of history, so they are opt-in."
+                >
+                  <input
+                    type="checkbox"
+                    checked={orphanIncludeDirectionless}
+                    onChange={(e) => setOrphanIncludeDirectionless(e.target.checked)}
+                    style={{ marginTop: '2px', cursor: 'pointer' }}
+                  />
+                  <span>
+                    Also delete <strong>{orphanAnalysis.deletableDirectionless.length}</strong>{' '}
+                    forward/backward record(s) — this Rem has <strong>no back side</strong>, so neither
+                    direction can be generated.
+                  </span>
+                </label>
+              )}
+              {(orphanAnalysis.deletable.length > 0 || orphanAnalysis.deletableDirectionless.length > 0) && (
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px' }}>
                   <button onClick={handleBackupOrphanCards} disabled={!!orphanBusy} style={{ ...smallBtnStyle, cursor: orphanBusy ? 'wait' : 'pointer' }}>
                     {orphanBackedUp ? '✓ Backup saved' : '1. Save backup JSON'}
                   </button>
                   <button
                     onClick={handleDeleteOrphanCards}
-                    disabled={!!orphanBusy || !orphanBackedUp}
+                    disabled={
+                      !!orphanBusy ||
+                      !orphanBackedUp ||
+                      orphanAnalysis.deletable.length +
+                        (orphanIncludeDirectionless
+                          ? orphanAnalysis.deletableDirectionless.length
+                          : 0) ===
+                        0
+                    }
                     title={orphanBackedUp ? '' : 'Save the backup first'}
                     style={{
                       ...smallBtnStyle,
@@ -5531,7 +5566,12 @@ function Debug() {
                       border: '1px solid var(--rn-clr-border-warning)',
                     }}
                   >
-                    2. Delete {orphanAnalysis.deletable.length.toLocaleString()} card(s)
+                    2. Delete{' '}
+                    {(
+                      orphanAnalysis.deletable.length +
+                      (orphanIncludeDirectionless ? orphanAnalysis.deletableDirectionless.length : 0)
+                    ).toLocaleString()}{' '}
+                    card(s)
                   </button>
                 </div>
               )}
