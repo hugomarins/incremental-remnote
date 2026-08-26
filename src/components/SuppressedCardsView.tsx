@@ -41,6 +41,7 @@ import {
 import { parseWeightsString } from '../lib/fsrs';
 import { getPausedRemIds } from '../lib/paused_decks';
 import { buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
+import { RemText } from './RemText';
 import { resolvePeriod } from '../lib/period';
 import { getIESetting } from '../lib/settings';
 import { formatTimeAgo } from '../lib/utils';
@@ -91,27 +92,36 @@ function RemPicker({
   onReEnable: (remIds: string[]) => void;
 }) {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
-  // Breadcrumbs are resolved here rather than during the KB-wide compute: one
-  // ancestor walk per Rem is cheap for the few hundred Rems in a picker and
-  // ruinous for the thousands the report covers.
-  const [breadcrumbs, setBreadcrumbs] = React.useState<Map<string, string>>(new Map());
+  /**
+   * Per-Rem detail resolved when the picker opens, not during the KB-wide
+   * compute: one ancestor walk per Rem is cheap for the few hundred Rems in a
+   * picker and ruinous for the thousands the report covers. The raw back text
+   * is captured on the same lookup so <RemText> can render it without a second
+   * round trip.
+   */
+  const [detail, setDetail] = React.useState<
+    Map<string, { breadcrumb: string; backRich: unknown }>
+  >(new Map());
 
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
-      const out = new Map<string, string>();
+      const out = new Map<string, { breadcrumb: string; backRich: unknown }>();
       for (const e of entries) {
         if (cancelled) return;
         try {
           const rem = await plugin.rem.findOne(e.remId);
-          out.set(e.remId, rem ? await buildAncestorBreadcrumb(plugin, rem) : '');
+          out.set(e.remId, {
+            breadcrumb: rem ? await buildAncestorBreadcrumb(plugin, rem) : '',
+            backRich: rem?.backText ?? null,
+          });
         } catch {
-          out.set(e.remId, '');
+          out.set(e.remId, { breadcrumb: '', backRich: null });
         }
         // Publish incrementally so a long list fills in as it resolves.
-        if (out.size % 15 === 0 && !cancelled) setBreadcrumbs(new Map(out));
+        if (out.size % 15 === 0 && !cancelled) setDetail(new Map(out));
       }
-      if (!cancelled) setBreadcrumbs(out);
+      if (!cancelled) setDetail(out);
     })();
     return () => {
       cancelled = true;
@@ -228,16 +238,37 @@ function RemPicker({
                 style={{ marginTop: '3px', cursor: 'pointer' }}
               />
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div>
-                  <span>{e.text || '(no text)'}</span>
+                {/*
+                  Rendered through <RemText> rather than the pre-resolved plain
+                  string: a Rem whose text embeds references would otherwise dump
+                  every referenced Rem's full body into the row. Pins collapse to
+                  📌 (referenced text on hover), images to 🖼️, links to 🔗, and
+                  clozes show as {{…}}. The row is clamped to four lines with the
+                  whole resolved text on hover, so one enormous Rem cannot push
+                  the rest of the list off screen.
+                */}
+                <div
+                  title={e.text}
+                  style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 4,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <RemText remId={e.remId} markClozes />
                   {e.backText && (
                     <>
                       <span style={{ color: 'var(--rn-clr-content-tertiary)' }}> → </span>
-                      <span>{e.backText}</span>
+                      {detail.get(e.remId)?.backRich ? (
+                        <RemText text={detail.get(e.remId)!.backRich} />
+                      ) : (
+                        <span>{e.backText}</span>
+                      )}
                     </>
                   )}
                 </div>
-                {breadcrumbs.get(e.remId) ? (
+                {detail.get(e.remId)?.breadcrumb ? (
                   <div
                     style={{
                       fontSize: '10px',
@@ -247,10 +278,10 @@ function RemPicker({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {breadcrumbs.get(e.remId)}
+                    {detail.get(e.remId)!.breadcrumb}
                   </div>
                 ) : (
-                  !breadcrumbs.has(e.remId) && (
+                  !detail.has(e.remId) && (
                     <div style={{ fontSize: '10px', color: 'var(--rn-clr-content-tertiary)' }}>
                       loading path…
                     </div>
