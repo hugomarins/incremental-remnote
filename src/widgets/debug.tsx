@@ -44,7 +44,7 @@ import {
   RestoreReport,
 } from '../lib/card_priority_snapshot';
 import { probeLocalPerKeyLimit, LocalLimitReport } from '../lib/local_storage_probe';
-import { probeRemCardEnablement } from '../lib/card_analytics_export';
+import { probeRemCardEnablement, probeCardOwnership } from '../lib/card_analytics_export';
 import {
   readCardPriorityStoreMeta,
   clearPersistedCardPriorities,
@@ -561,6 +561,8 @@ function Debug() {
   const [isCleaningInflation, setIsCleaningInflation] = useState(false);
   const [isGlobalCleaning, setIsGlobalCleaning] = useState(false);
   const [globalScanProgress, setGlobalScanProgress] = useState<string>('');
+  const [cardOwnerIdInput, setCardOwnerIdInput] = useState<string>('');
+  const [isProbingCardOwner, setIsProbingCardOwner] = useState(false);
   const [globalInflationPreview, setGlobalInflationPreview] = useState<null | {
     cutoffMs: number;
     scannedRems: number;
@@ -2271,6 +2273,48 @@ function Debug() {
         (disablingAncestor ? ', disabled by ancestor' : '') +
         '. See console.'
     );
+  };
+
+  /**
+   * Ownership probe. Every per-Rem verdict in the analytics groups cards by
+   * `card.remId`. This checks that field against the SDK's own `card.getRem()`
+   * for a single card: if they disagree, the grouping — and every cause derived
+   * from it — is attributing cards to the wrong Rem.
+   */
+  const handleProbeCardOwnership = async () => {
+    const cardId = cardOwnerIdInput.trim();
+    if (!cardId) return;
+    setIsProbingCardOwner(true);
+    try {
+      const report = await probeCardOwnership(plugin, cardId);
+      if (!report) {
+        await plugin.app.toast('Card not found.');
+        return;
+      }
+      console.log(
+        `🔗 Card ownership probe for ${report.cardId}\n` +
+          `   card.remId      = ${report.remIdField}  — ${report.remIdFieldText}\n` +
+          `   card.getRem()   = ${report.getRemId ?? '(null)'}${report.getRemText ? `  — ${report.getRemText}` : ''}\n` +
+          `   AGREE: ${report.agrees}\n` +
+          `   type=${report.cardType} cloze=${report.clozeId ?? '—'} reps=${report.reps} next=${report.nextRepetitionTime}\n` +
+          `   cloze ids on card.remId's rem: ${report.remIdFieldClozeIds.length ? report.remIdFieldClozeIds.join(', ') : '(none)'}\n` +
+          `   markup present on card.remId's rem: ${report.markupPresentOnRemIdField}` +
+          (report.agrees
+            ? ''
+            : `\n   markup present on getRem()'s rem: ${report.markupPresentOnGetRem}`)
+      );
+      console.table(report.ancestors);
+      await plugin.app.toast(
+        report.agrees
+          ? `remId and getRem() agree (${report.remIdField}). See console.`
+          : `MISMATCH: remId=${report.remIdField} but getRem()=${report.getRemId}. See console.`
+      );
+    } catch (e: any) {
+      console.error('[card ownership probe] failed', e);
+      await plugin.app.toast(`Probe failed: ${e?.message || String(e)}`);
+    } finally {
+      setIsProbingCardOwner(false);
+    }
   };
 
   const handleDumpStructure = async () => {
@@ -5310,6 +5354,27 @@ function Debug() {
             ))}
           </div>
         )}
+
+        {/* Which Rem does a card really belong to? */}
+        <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Card ownership probe</div>
+          <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)', marginBottom: '6px' }}>
+            Paste a card id. Compares the <code>card.remId</code> field this plugin groups by against the SDK's own{' '}
+            <code>card.getRem()</code>, and reports whether the card's cloze markup lives on either Rem. A mismatch
+            means per-Rem attribution — and every cause derived from it — is pointing at the wrong Rem.
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              value={cardOwnerIdInput}
+              onChange={(e) => setCardOwnerIdInput(e.target.value)}
+              placeholder="cardId"
+              style={{ flex: 1, fontSize: '11px', padding: '3px 6px', border: '1px solid var(--rn-clr-border)', borderRadius: '4px', backgroundColor: 'var(--rn-clr-background-primary)', color: 'var(--rn-clr-content-primary)', fontFamily: 'monospace' }}
+            />
+            <button onClick={handleProbeCardOwnership} disabled={isProbingCardOwner} style={{ ...smallBtnStyle, cursor: isProbingCardOwner ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+              {isProbingCardOwner ? 'Probing…' : 'Probe Card'}
+            </button>
+          </div>
+        </div>
 
         {/* Locate the rem named in a "Diff for <remId> is too large to sync" error. */}
         <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>

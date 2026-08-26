@@ -881,3 +881,109 @@ export async function probeRemCardEnablement(
     }),
   };
 }
+
+
+// --- Single-card ownership probe ------------------------------------------
+//
+// Everything in this file attributes a card to `card.remId`. The SDK documents
+// that field as "the Rem this card was generated from", and every per-Rem
+// verdict here — the markup check above included — is only valid if that is
+// literally true. This probe tests it against the SDK's own resolution,
+// `card.getRem()`, for one card. If the two disagree, per-Rem attribution is
+// wrong and the causes derived from it cannot be trusted.
+
+export interface CardOwnershipProbe {
+  cardId: string;
+  /** The raw field this codebase groups by. */
+  remIdField: string;
+  /** What the SDK itself resolves the card's Rem to. */
+  getRemId: string | null;
+  /** Do the two agree? False means our attribution is wrong. */
+  agrees: boolean;
+  cardType: string;
+  clozeId: string | null;
+  nextRepetitionTime: string;
+  reps: number;
+  /** Text of the Rem named by `card.remId`. */
+  remIdFieldText: string;
+  /** Cloze ids in that Rem's text, and whether this card's cloze is among them. */
+  remIdFieldClozeIds: string[];
+  markupPresentOnRemIdField: boolean | null;
+  /** Same, for the Rem `getRem()` returned — only when the two differ. */
+  getRemText: string | null;
+  getRemClozeIds: string[] | null;
+  markupPresentOnGetRem: boolean | null;
+  /** Ancestors of the resolved Rem, nearest first. */
+  ancestors: Array<{ remId: string; text: string }>;
+}
+
+export async function probeCardOwnership(
+  plugin: RNPlugin,
+  cardId: string,
+): Promise<CardOwnershipProbe | null> {
+  const card: any = await plugin.card.findOne(cardId);
+  if (!card) return null;
+
+  const resolvedRem: any = await card.getRem().catch(() => null);
+  const fieldRem: any = await plugin.rem.findOne(card.remId).catch(() => null);
+
+  const cardType =
+    card.type && typeof card.type === 'object' && 'clozeId' in card.type
+      ? 'cloze'
+      : String(card.type);
+  const clozeId =
+    card.type && typeof card.type === 'object' && 'clozeId' in card.type
+      ? String(card.type.clozeId)
+      : null;
+
+  const fieldClozeIds = fieldRem ? Array.from(collectClozeIds(fieldRem.text)) : [];
+  const fieldHasBack = !!(fieldRem && Array.isArray(fieldRem.backText) && fieldRem.backText.length);
+  const agrees = !!resolvedRem && resolvedRem._id === card.remId;
+
+  const ancestors: CardOwnershipProbe['ancestors'] = [];
+  let cursor = resolvedRem ? await resolvedRem.getParentRem() : null;
+  let hops = 0;
+  while (cursor && hops < 24) {
+    ancestors.push({ remId: cursor._id, text: await safeRemTextToString(plugin, cursor.text) });
+    cursor = await cursor.getParentRem();
+    hops++;
+  }
+
+  let getRemText: string | null = null;
+  let getRemClozeIds: string[] | null = null;
+  let markupPresentOnGetRem: boolean | null = null;
+  if (resolvedRem && !agrees) {
+    getRemText = await safeRemTextToString(plugin, resolvedRem.text);
+    getRemClozeIds = Array.from(collectClozeIds(resolvedRem.text));
+    markupPresentOnGetRem = markupStillPresent(
+      {
+        clozeIds: getRemClozeIds,
+        hasBackText: Array.isArray(resolvedRem.backText) && resolvedRem.backText.length > 0,
+      },
+      cardType,
+      clozeId,
+    );
+  }
+
+  return {
+    cardId,
+    remIdField: card.remId,
+    getRemId: resolvedRem?._id ?? null,
+    agrees,
+    cardType,
+    clozeId,
+    nextRepetitionTime: card.nextRepetitionTime
+      ? new Date(card.nextRepetitionTime).toISOString()
+      : '(null)',
+    reps: card.repetitionHistory?.length ?? 0,
+    remIdFieldText: fieldRem ? await safeRemTextToString(plugin, fieldRem.text) : '(rem not found)',
+    remIdFieldClozeIds: fieldClozeIds,
+    markupPresentOnRemIdField: fieldRem
+      ? markupStillPresent({ clozeIds: fieldClozeIds, hasBackText: fieldHasBack }, cardType, clozeId)
+      : null,
+    getRemText,
+    getRemClozeIds,
+    markupPresentOnGetRem,
+    ancestors,
+  };
+}
