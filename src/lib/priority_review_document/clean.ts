@@ -1,7 +1,7 @@
 import { RNPlugin, PluginRem, RemId, RichTextInterface } from '@remnote/plugin-sdk';
 import dayjs from 'dayjs';
 import { IncrementalRem } from '../incremental_rem';
-import { allIncrementalRemKey } from '../consts';
+import { allIncrementalRemKey, priorityGraphPowerupCode } from '../consts';
 
 /**
  * Cleaning a Priority Review Document of entries that are no longer due.
@@ -32,6 +32,12 @@ import { allIncrementalRemKey } from '../consts';
  * Two whole-KB reads (`card.getAll()` and the IncRem session cache) answer
  * every entry in every document, so the per-entry cost is a map lookup rather
  * than a round trip.
+ *
+ * A document that cleaning would leave with nothing due is finished, and the
+ * cleaner offers to delete it outright — including one that already holds
+ * nothing at all. That is only ever offered when the document carries none of
+ * your own writing: an entry kept for the notes under it, or a bullet you added
+ * to the document, blocks it, since `remove()` takes descendants with it.
  */
 
 /** Name of the plain tag createPriorityReviewDocument puts on every PRD. */
@@ -72,14 +78,24 @@ export interface PrdEntry {
   keepReason?: KeepReason;
 }
 
+/** Why a document that holds nothing due cannot simply be deleted. */
+export type UndeletableReason = 'kept-entries' | 'your-notes';
+
+export const UNDELETABLE_REASON_LABELS: Record<UndeletableReason, string> = {
+  'kept-entries': 'holds entries kept for your notes',
+  'your-notes': 'holds bullets of your own',
+};
+
 export interface PrdDocReport {
   docRemId: RemId;
   docName: string;
   createdAt: number;
   /** Entries (reference-bearing children) found in the document. */
   totalEntries: number;
-  /** Children that are not entries: the metadata block, the graph, your own notes. */
-  otherChildren: number;
+  /** The plugin's own children: the metadata block and the distribution graph. */
+  generatedChildren: number;
+  /** Non-entry children that are yours — bullets you added to the document. */
+  userChildren: number;
   /** Entries whose target is still due. */
   dueEntries: PrdEntry[];
   /** Entries that will be deleted. */
@@ -88,6 +104,17 @@ export interface PrdDocReport {
   keptEntries: PrdEntry[];
   /** Entries that could not be judged. */
   unknownEntries: PrdEntry[];
+  /**
+   * True when cleaning this document would leave nothing due in it — including
+   * a document that already holds nothing at all — and it carries none of your
+   * own content, so the document itself can go.
+   */
+  deletable: boolean;
+  /**
+   * Set when the document would hold nothing due but must be kept anyway.
+   * `deletable` is then false.
+   */
+  undeletableReason?: UndeletableReason;
 }
 
 export interface PrdScanResult {
@@ -98,6 +125,8 @@ export interface PrdScanResult {
   totalRemovable: number;
   totalDue: number;
   totalKept: number;
+  /** Documents that hold nothing due and can be deleted outright. */
+  totalDeletableDocs: number;
   /**
    * True when the IncRem session cache was empty. INC entries are then reported
    * as `unknown` and never deleted — an unbuilt cache would otherwise look
@@ -108,10 +137,22 @@ export interface PrdScanResult {
 }
 
 export interface PrdCleanResult {
+  /** Entry Rems removed. Entries inside a deleted document are not counted here. */
   deleted: number;
   failed: number;
-  /** Documents left with no due entries at all after the deletion. */
-  emptiedDocs: { docRemId: RemId; docName: string }[];
+  /** Documents removed outright. */
+  deletedDocs: { docRemId: RemId; docName: string }[];
+  /** Documents left holding nothing due that were kept, and why. */
+  emptiedDocs: { docRemId: RemId; docName: string; reason: UndeletableReason | 'not-requested' }[];
+}
+
+export interface PrdCleanOptions {
+  /**
+   * Delete a document outright once cleaning would leave nothing due in it.
+   * A document holding entries kept for your notes, or bullets of your own, is
+   * never deleted whatever this says — see {@link PrdDocReport.deletable}.
+   */
+  deleteEmptiedDocs: boolean;
 }
 
 /**
@@ -204,6 +245,29 @@ function hasTextOfItsOwn(text: RichTextInterface | undefined): boolean {
   return refs > 1;
 }
 
+/**
+ * True for the two children createPriorityReviewDocument writes itself: the
+ * metadata code block and the priority-distribution graph. Telling them apart
+ * from bullets you added is what lets an exhausted document be deleted without
+ * ever risking your own writing — the text checks answer for every document the
+ * plugin has built, and the powerup read is the fallback for a renamed one.
+ */
+async function isGeneratedChild(child: PluginRem): Promise<boolean> {
+  const text = flattenRichText(child.text);
+  if (text.startsWith('Scope: ')) return true;
+  if (text === 'Priority Distribution Graph') return true;
+  try {
+    return await child.hasPowerup(priorityGraphPowerupCode);
+  } catch {
+    return false;
+  }
+}
+
+/** An empty bullet with nothing under it — no content, so nothing to lose. */
+function isEmptyBullet(child: PluginRem): boolean {
+  return flattenRichText(child.text).length === 0 && (child.children || []).length === 0;
+}
+
 /** Rem IDs that own at least one card due at any point up to the end of today. */
 async function buildDueCardRemIds(plugin: RNPlugin): Promise<Set<RemId>> {
   const cutoff = dayjs().endOf('day').valueOf();
@@ -260,6 +324,7 @@ export async function scanPriorityReviewDocuments(
     totalRemovable: 0,
     totalDue: 0,
     totalKept: 0,
+    totalDeletableDocs: 0,
     incCacheUnavailable: false,
     elapsedMs: 0,
   };
@@ -306,18 +371,24 @@ export async function scanPriorityReviewDocuments(
       docName,
       createdAt: doc.createdAt,
       totalEntries: 0,
-      otherChildren: 0,
+      generatedChildren: 0,
+      userChildren: 0,
       dueEntries: [],
       removableEntries: [],
       keptEntries: [],
       unknownEntries: [],
+      deletable: false,
     };
 
     for (const child of children) {
       const refs = remRefIds(child.text);
       if (refs.length === 0) {
-        // The metadata code block, the distribution graph, or a note of your own.
-        report.otherChildren++;
+        // Not an entry. Which of these it is decides whether the document can
+        // ever be deleted, so the plugin's own two children are told apart from
+        // anything you added.
+        if (await isGeneratedChild(child)) report.generatedChildren++;
+        else if (isEmptyBullet(child)) report.generatedChildren++;
+        else report.userChildren++;
         continue;
       }
       report.totalEntries++;
@@ -375,6 +446,22 @@ export async function scanPriorityReviewDocuments(
       }
     }
 
+    // Deletable = cleaning it would leave nothing due, and nothing of yours is
+    // in it. Kept entries and unjudged entries both block deletion: the first
+    // hold your notes, the second we cannot prove are done. A document that
+    // already holds no entries at all lands here too, which is the point —
+    // those are finished snapshots with nothing left in them.
+    const holdsNothingDue = report.dueEntries.length === 0 && report.unknownEntries.length === 0;
+    if (holdsNothingDue) {
+      if (report.keptEntries.length > 0) {
+        report.undeletableReason = 'kept-entries';
+      } else if (report.userChildren > 0) {
+        report.undeletableReason = 'your-notes';
+      } else {
+        report.deletable = true;
+      }
+    }
+
     reports.push(report);
   }
 
@@ -388,6 +475,7 @@ export async function scanPriorityReviewDocuments(
     totalRemovable: reports.reduce((n, d) => n + d.removableEntries.length, 0),
     totalDue: reports.reduce((n, d) => n + d.dueEntries.length, 0),
     totalKept: reports.reduce((n, d) => n + d.keptEntries.length, 0),
+    totalDeletableDocs: reports.filter((d) => d.deletable).length,
     incCacheUnavailable: !incState.available,
     elapsedMs: Date.now() - startedAt,
   };
@@ -401,7 +489,8 @@ function logScan(result: PrdScanResult) {
   console.log(
     `[PRD Clean] Scanned ${result.scannedDocs} review documents, ${result.totalEntries} entries, ` +
       `in ${(result.elapsedMs / 1000).toFixed(1)}s — ` +
-      `${result.totalDue} still due, ${result.totalRemovable} removable, ${result.totalKept} kept.`
+      `${result.totalDue} still due, ${result.totalRemovable} removable, ${result.totalKept} kept, ` +
+      `${result.totalDeletableDocs} documents exhausted.`
   );
   if (result.incCacheUnavailable) {
     console.warn(
@@ -410,7 +499,13 @@ function logScan(result: PrdScanResult) {
   }
   for (const doc of result.docs) {
     console.groupCollapsed(
-      `[PRD Clean] ${doc.docName} — ${doc.dueEntries.length} due / ${doc.removableEntries.length} removable / ${doc.totalEntries} entries`
+      `[PRD Clean] ${doc.docName} — ${doc.dueEntries.length} due / ${doc.removableEntries.length} removable / ` +
+        `${doc.totalEntries} entries` +
+        (doc.deletable
+          ? ' — EXHAUSTED, the document itself can go'
+          : doc.undeletableReason
+            ? ` — nothing due left, but it ${UNDELETABLE_REASON_LABELS[doc.undeletableReason]}`
+            : '')
     );
     const row = (e: PrdEntry) => ({
       status: e.status,
@@ -431,23 +526,40 @@ function logScan(result: PrdScanResult) {
 }
 
 /**
- * Deletes the removable entries of the given documents and stamps what was
- * removed onto each document's metadata block.
+ * Deletes the removable entries of the given documents, and the documents that
+ * cleaning leaves with nothing due, stamping what was removed onto the metadata
+ * block of the ones that survive.
  *
  * Takes the reports produced by {@link scanPriorityReviewDocuments} — already
- * filtered to the documents the user ticked — and re-reads each entry Rem by ID
- * rather than trusting an object captured during the scan.
+ * filtered to the documents the user ticked — and re-reads each Rem by ID rather
+ * than trusting an object captured during the scan.
  */
 export async function cleanPriorityReviewDocuments(
   plugin: RNPlugin,
   docs: PrdDocReport[],
+  options: PrdCleanOptions,
   onProgress?: (message: string) => void
 ): Promise<PrdCleanResult> {
-  const result: PrdCleanResult = { deleted: 0, failed: 0, emptiedDocs: [] };
-  const total = docs.reduce((n, d) => n + d.removableEntries.length, 0);
+  const result: PrdCleanResult = { deleted: 0, failed: 0, deletedDocs: [], emptiedDocs: [] };
+  const total = docs
+    .filter((d) => !(options.deleteEmptiedDocs && d.deletable))
+    .reduce((n, d) => n + d.removableEntries.length, 0);
 
   for (const doc of docs) {
-    if (doc.removableEntries.length === 0) continue;
+    // Removing the document removes its entries with it, so a document on its
+    // way out is never walked entry by entry — one call instead of N.
+    if (options.deleteEmptiedDocs && doc.deletable) {
+      try {
+        const docRem = await plugin.rem.findOne(doc.docRemId);
+        if (docRem) await docRem.remove();
+        result.deletedDocs.push({ docRemId: doc.docRemId, docName: doc.docName });
+      } catch (e) {
+        console.error(`[PRD Clean] Could not delete document ${doc.docRemId}:`, e);
+        result.failed++;
+      }
+      onProgress?.(`Deleted ${result.deletedDocs.length} exhausted document(s)…`);
+      continue;
+    }
 
     let deletedHere = 0;
     for (const entry of doc.removableEntries) {
@@ -466,16 +578,21 @@ export async function cleanPriorityReviewDocuments(
 
     await stampMetadata(plugin, doc, deletedHere);
 
-    if (doc.dueEntries.length === 0) {
-      result.emptiedDocs.push({ docRemId: doc.docRemId, docName: doc.docName });
+    if (doc.dueEntries.length === 0 && doc.unknownEntries.length === 0) {
+      result.emptiedDocs.push({
+        docRemId: doc.docRemId,
+        docName: doc.docName,
+        reason: doc.undeletableReason ?? 'not-requested',
+      });
     }
   }
 
   console.log(
     `[PRD Clean] Removed ${result.deleted} entries across ${docs.length} documents` +
+      (result.deletedDocs.length ? `, deleted ${result.deletedDocs.length} exhausted documents` : '') +
       (result.failed ? ` (${result.failed} failed)` : '') +
       (result.emptiedDocs.length
-        ? `. ${result.emptiedDocs.length} document(s) now hold nothing due.`
+        ? `. ${result.emptiedDocs.length} document(s) hold nothing due and were kept.`
         : '.')
   );
   return result;

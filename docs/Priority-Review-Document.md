@@ -185,21 +185,35 @@ It reads *every* review document in your knowledge base, works out which entries
 
 "Due" here means **due at any point up to the end of today**, not due at this exact second. A card you answered *Forgot* an hour ago is sitting in a learning step ten minutes out: it is not due right now, but it is coming back in this very session, and deleting its entry would take it out of the document that is meant to bring it back.
 
+### Exhausted documents are deleted too
+
+A review document with **nothing due left in it** is finished. Leaving it behind keeps its Rem references in your knowledge base for nothing, so the cleaner offers to delete the document itself — including one that already holds no entries at all.
+
+This is a checkbox on the review screen, ticked by default: *Delete the N documents left with nothing due*. Untick it to clean the entries and keep the documents. Documents on their way out are struck through in the list and named in the report afterwards.
+
+A document is only ever offered for deletion when it carries **none of your own writing**. Any of these keeps it:
+
+- an entry kept for the notes you wrote under it,
+- a bullet of your own added to the document,
+- an `INC` entry that could not be judged (see the note at the end).
+
+Its metadata block and distribution graph do not count — those are the plugin's own. When a document holds nothing due but cannot be deleted, the review screen says so and why, and you can delete it by hand.
+
 ### What it never deletes
 
 - **Entries you have written under.** If you added notes as children of an entry, it is kept — deleting a Rem takes its descendants with it, and those notes are not recoverable by re-running the command.
 - **Entries you have typed next to.** Anything beyond the bare reference counts as yours.
-- **The document itself**, its metadata block, its distribution graph, and any bullet of your own that holds no reference.
+- **Any bullet of your own** in the document that holds no reference — and, as above, the document itself for as long as it holds one.
 
-Both kinds are listed separately in the review screen as *Reviewed, but kept*, so you can deal with them by hand.
+Both kinds of kept entry are listed separately in the review screen as *Reviewed, but kept*, so you can deal with them by hand.
 
 ### Using it
 
 Run the command from the Command Palette. The scan is read-only and takes a few seconds — it answers every entry in every document from two knowledge-base-wide reads rather than one lookup per entry.
 
-The review screen lists each document with **how many entries are still due, how many have been reviewed, and how many it holds in total**, most recently built first. Expand any row to see the entries by name, with their `INC` / `FC` tag. Tick the documents you want cleaned — every document with work to do starts ticked — and press **Remove**. Deleting cannot be undone, and `Enter` is inert on that screen: the red button has to be clicked.
+The review screen lists each document with **how many entries are still due, how many have been reviewed, and how many it holds in total**, most recently built first. Expand any row to see the entries by name, with their `INC` / `FC` tag. Tick the documents you want cleaned — every document with work to do starts ticked — and press the button, which counts both the entries and the documents it will remove. Deleting cannot be undone, and `Enter` is inert on that screen: the red button has to be clicked.
 
-Afterwards, each cleaned document's metadata block gains a line recording what was removed, and any document left holding **nothing due at all** is named in the report — those are finished, and can be deleted.
+Afterwards, each surviving document's metadata block gains a line recording what was removed, and the report names every document that was deleted, plus any that hold nothing due but were kept.
 
 !!! note "Incremental Rems need the queue to have been opened once"
     `INC` entries are judged against the plugin's Incremental Rem cache. If that cache has not been built yet in this session, an unbuilt cache is indistinguishable from *every incremental Rem has been reviewed* — so the command says so and leaves all `INC` entries alone. Open the queue once and run it again.
@@ -211,7 +225,7 @@ Afterwards, each cleaned document's metadata block gains a line recording what w
 * **The "Overwhelmed" Workflow:** If you wake up to 1000+ due cards, don't panic. Create a Priority Review Document for 100 items (Full KB). Review them. If you have energy left, create another. If not, you can stop knowing you tackled the most important 100 items.
 * **The "Deep Dive" Workflow:** If you want to focus specifically on one project, navigate to that folder, create a Priority Review Document (Current Document scope), and finish that queue completely before moving on.
 * **Maintain Priority Hygiene:** To ensure your Priority Review Documents accurately catch your most critical content, regularly set priorities on your key documents and flashcards. Crucially, run the "**[Priorities-for-Flashcards#maintenance-the-update-all-inherited-card-priorities-command](Priorities-for-Flashcards.md#manual-full-kb-sweep-update-all-inherited-card-priorities)**" command periodically (e.g., weekly). This updates the priority inheritance across your entire knowledge base, ensuring that every single flashcard — even those you haven't manually touched — inherits the correct priority from its parent document.
-* **Cleanup:** Get in the habit of deleting these documents after you finish the queue. They are meant to be temporary snapshots of your priorities at that specific moment. Leaving them in your collection will create unnecessary rem references to your items, cluttering the UI and making your KB heavier and slower. If you would rather keep a document in play across several sessions, run [Clean Priority Review Documents](#cleaning-a-review-document) so it stops serving what you have already reviewed.
+* **Cleanup:** Get in the habit of deleting these documents after you finish the queue. They are meant to be temporary snapshots of your priorities at that specific moment. Leaving them in your collection will create unnecessary rem references to your items, cluttering the UI and making your KB heavier and slower. [Clean Priority Review Documents](#cleaning-a-review-document) does both halves of this for you: it stops a document you are keeping in play from serving what you have already reviewed, and deletes the ones you have finished.
 
 ---
 

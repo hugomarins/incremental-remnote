@@ -541,8 +541,9 @@ Two stages, like the Empty Extra Card Detail popup and for the same reason: the 
 - **Stage one — the scan** runs as soon as the popup opens and is read-only. It reads every document tagged *Priority Review Queue* and works out which of its entries still have something due.
 - **Stage two — review.** One row per document, most recently built first: **still due / reviewed / total entries**, the date it was built, and a note of anything being kept back. **Show** expands the row into the entries themselves, by name and with their `INC` / `FC` tag, split into *To remove*, *Reviewed, but kept*, and *Still due, staying*.
 - **Tick the documents to clean.** Every document with work to do starts ticked; untick to leave one alone. The button counts what you have selected and estimates how long it will take.
-- **`Enter` is inert here** — the red **Remove N entries** button has to be clicked. `Esc` is ignored while the scan or the deletion runs.
-- **The report stays on screen**: how many entries were removed, and which documents are left holding nothing due at all — those are finished and can be deleted.
+- **Delete the documents left with nothing due** — a checkbox above the buttons, ticked by default. A review document with nothing due in it is finished, so the document itself goes; one holding notes of your own never does, and the row says why. Doomed documents are struck through in the list.
+- **`Enter` is inert here** — the red button has to be clicked. `Esc` is ignored while the scan or the deletion runs.
+- **The report stays on screen**: how many entries were removed, which documents were deleted, and which hold nothing due but were kept.
 - **The console holds the full readout**: a table per document with every entry's status, kind, name and Rem ID, which is the quickest way to see what a review document is still carrying.
 
 📖 **Full documentation:** [Cleaning a Review Document](Priority-Review-Document.md#cleaning-a-review-document)

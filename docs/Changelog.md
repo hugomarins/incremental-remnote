@@ -44,6 +44,8 @@ A Priority Review Document is a snapshot: its entries are chosen from what was d
 
 **Clean Priority Review Documents** (quick code `cprd`) reads every review document in the knowledge base and removes the entries whose Rem no longer has anything due. `FC` entries are judged on the referenced Rem's own cards, `INC` entries on its next repetition date; entries whose Rem has been deleted go too. "Due" means due at any point up to the end of today, so a card sitting in a learning step is not thrown away.
 
+A document left with **nothing due at all** is finished, and is deleted outright — including one that already holds no entries. A checkbox, ticked by default, controls that. Nothing of yours is ever caught by it: an entry kept for the notes under it, or a bullet you added to the document, keeps the document too, and the review screen says so.
+
 Nothing is deleted until you confirm. The review screen lists each document with how many entries are still due, how many have been reviewed and how many it holds, expandable to the entries by name — useful on its own as a readout of what a document is still carrying. Tick which documents to clean. Entries you have written notes under, or typed next to, are never deleted and are listed separately.
 
 📖 [Cleaning a Review Document](Priority-Review-Document.md#cleaning-a-review-document)
@@ -54,7 +56,7 @@ Two knowledge-base-wide reads — one `card.getAll()` and the IncRem session cac
 
 The due cutoff is the end of today rather than the builder's `now`. The builder is choosing what to serve at this instant; this is deciding what to throw away, and a card answered *Forgot* an hour ago is ten minutes out — not due by `now`, but returning in the same session. For `INC` entries the two coincide, since `nextRepDate` is a Daily Document date at midnight.
 
-An empty IncRem cache is treated as "cannot judge", not as "nothing is due": `INC` entries are reported as unjudgeable and left alone, since an unbuilt cache and a fully reviewed knowledge base look identical. Cards in paused documents still read as due and are kept. `remove()` deletes descendants, so an entry with children is never a candidate whatever its state.
+An empty IncRem cache is treated as "cannot judge", not as "nothing is due": `INC` entries are reported as unjudgeable and left alone, since an unbuilt cache and a fully reviewed knowledge base look identical. Cards in paused documents still read as due and are kept. `remove()` deletes descendants, so an entry with children is never a candidate whatever its state — and neither is a document holding one, which is what separates a deletable document from one that merely has nothing due. The plugin's own two children, the metadata block and the graph Rem, are told apart from yours by text with a powerup read as fallback, so they never block a deletion; the graph's data lives on that Rem, so it goes with it. A document on its way out is removed in one call rather than walked entry by entry.
 
 ## v1.0.53 - August 21st, 2026
 
