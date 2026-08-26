@@ -114,3 +114,39 @@ export async function resolveRemTextSegments(
   }
   return segments;
 }
+
+
+/**
+ * Ancestor breadcrumb for a Rem — root, then the closest ancestors, with any
+ * middle gap collapsed to "…". Mirrors RemNote's own reference-search
+ * breadcrumb so a Rem shown out of context can still be placed.
+ *
+ * Extracted from the Reference Finder so every list that shows Rems out of
+ * context renders the same string. Empty/"Untitled" ancestors are skipped
+ * rather than rendered as blanks, and the walk is capped against cycles.
+ */
+export async function buildAncestorBreadcrumb(
+  plugin: RNPlugin,
+  rem: any,
+  opts: { maxDepth?: number; maxLabel?: number } = {}
+): Promise<string> {
+  const { maxDepth = 20, maxLabel = 24 } = opts;
+  const names: string[] = [];
+  try {
+    let cur = await rem.getParentRem();
+    let depth = 0;
+    while (cur && depth < maxDepth) {
+      const raw = (await resolveRemTextForBreadcrumb(plugin, cur.text)).trim();
+      const t = raw === 'Untitled' ? '' : raw;
+      if (t) names.push(t.length > maxLabel ? t.slice(0, maxLabel) + '…' : t);
+      cur = await cur.getParentRem();
+      depth++;
+    }
+  } catch {
+    /* a partial breadcrumb is still useful; an unreadable ancestor ends it */
+  }
+  if (names.length === 0) return '';
+  const topDown = names.reverse();
+  if (topDown.length <= 4) return topDown.join(' / ');
+  return `${topDown[0]} / … / ${topDown.slice(-3).join(' / ')}`;
+}

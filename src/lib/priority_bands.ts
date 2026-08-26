@@ -803,9 +803,18 @@ export async function computeBandPercentiles(plugin: RNPlugin): Promise<BandPerc
       }
     }
     for (const item of cardInfos || []) {
-      if (typeof item?.priority === 'number' && !isNaN(item.priority)) {
-        cardPriorities.push(item.priority);
+      if (typeof item?.priority !== 'number' || isNaN(item.priority)) continue;
+      // A rem whose cards are ALL unscheduled owns nothing the user intends to
+      // practise, so it takes no part in the ranking that colours the bands —
+      // same population rule as expandCardInfosToCards. Rems with at least one
+      // schedulable card (paused decks included) still count once, so this
+      // keeps the pool rem-weighted rather than quietly switching it to
+      // card-weighted, which would shift every band colour.
+      const nextReps = (item as { cardsNextRep?: (number | null)[] }).cardsNextRep;
+      if (nextReps && nextReps.length > 0 && nextReps.every((n) => n === null || n === undefined)) {
+        continue;
       }
+      cardPriorities.push(item.priority);
     }
   } catch (err) {
     console.error('[PriorityBands] percentile sampling failed', err);

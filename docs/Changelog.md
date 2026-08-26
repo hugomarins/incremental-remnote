@@ -2,6 +2,40 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.58 - August 26th, 2026
+
+### ✨ New - find the cards your queue can never show you
+
+Cards can sit in your knowledge base unable to ever come up: disabled on the Rem, silenced by an ancestor's tag, parked in a paused deck, or left behind when a cloze was deleted. They were counted as ordinary cards, so `%New` and `Done` described a knowledge base larger than the one you can practise, and a paused deck's cards were counted as **due**.
+
+A new **🚫 Suppressed Cards** tab breaks them down by bucket and cause, and lets you re-enable in bulk the ones that were switched off by mistake — each Rem shown as `front → back` with its breadcrumb, an **IncRem** badge where practice is meant to be off, and a **✓ checked** mark that syncs across devices so a long list can be worked through over several sittings.
+
+![The Suppressed Cards tab, with every cause counted per priority bucket](assets/suppressed-cards.png){ width="900" }
+
+The analytics table gained `Unsched` and `Paused` columns, and `Done`, `%New`, `%Stale` and the FSRS averages now divide by `Active` — the cards you can actually practise.
+
+![Card Priority × Memory Analytics](assets/weighted-shield-memory-analytics-2.png){ width="1000" }
+
+📖 [Suppressed cards](Prioritization-&-Sorting.md#suppressed-cards)
+
+### ✨ New - diagnosing and cleaning up card records
+
+**Probe Card Enablement** and a **card ownership probe** in the Debug widget print every signal that decides whether a card can be practised. Two clean-up tools delete cloze card records whose markup no longer exists — one for a single Rem, one sweeping the knowledge base — always keeping cards that carry real graded practice, and always after a backup file has been saved.
+
+📖 [Why can't this card be practised?](Troubleshooting.md#-why-cant-this-card-be-practised)
+
+### 🐛 Fixed - paused decks were counted as due
+
+Pausing a deck does not clear its cards' next repetition dates, so the two card-priority build paths disagreed: the cold path read `rem.getCards()` and excluded them, the warm path read `card.getAll()` and counted them as due. Shield figures therefore depended on whether the cache came up warm or cold. Run **⏸ Scan paused decks** once and both paths exclude them.
+
+#### Technical explanation
+
+Unscheduled cards (`cardsNextRep === null`) now leave the per-card universe in `expandCardInfosToCards`, which by construction updates the Weighted Shield, the standard Priority Shield, the badge `kbPercentile` and the Priority Review Document together. Paused cards are deliberately kept: pausing defers a card without demoting it, and excluding them would shift every other card's percentile on pause and shift it back on unpause. `priority_bands.ts` applies the same rule per Rem — a Rem whose cards are *all* unscheduled drops out, one with any schedulable card still counts once, so the pool stays rem-weighted.
+
+Paused decks are found top-down: a Rem whose cards are all suppressed cannot be found by walking up from every card-owning Rem (~45k of them here), so the scan probes for the Deck powerup with a snapshot prefilter and expands each paused deck with one `getDescendants()` call, caching the result in session and local storage. Built-in powerup membership is not enumerable, hence the scan rather than `taggedRem()`.
+
+Distinguishing a card the user disabled from one whose cloze was deleted needs the markup itself: a cloze card's `type.clozeId` is matched against the `cId` values in the Rem's rich text, since no Rem-level signal separates the two. Table rows report `enablePractice === false` exactly like a deliberate switch-off and are split out with `rem.isTable()` on the Rem and its ancestors.
+
 ## v1.0.57 - August 24th, 2026
 
 ### ✨ New - clean the reviewed entries out of a Priority Review Document

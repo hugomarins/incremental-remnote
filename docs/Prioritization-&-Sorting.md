@@ -540,15 +540,15 @@ The **Weighted Shield value** (⚖️ %) shown in the shield header is precisely
 
 When both Incremental Rems and Cards groups are present, the wide popup exposes a second tab — **Card Priority × Memory Analytics** — that replays FSRS over every card in your knowledge base and aggregates per priority-percentile bucket. Each bucket holds an equal number of cards (deciles by inherited Rem priority, so a Rem with multiple cards contributes one entry per card), plus a consolidated **All KB** row at the bottom for comparison.
 
-![Card Priority × Memory Analytics](assets/weighted-shield-memory-analytics.png){ width="1000" }
+![Card Priority × Memory Analytics](assets/weighted-shield-memory-analytics-2.png){ width="1000" }
 
 20 columns are organized into four groups, with hover tooltips explaining each one:
 
 *   **Identity** — bucket label and the raw priority range it covers.
-*   **Population** *(always-current — not affected by the period filter)* — `Items` (cards in the bucket), `Due` (cards with `nextRepetitionTime ≤ now`), `Done`, `%New` (cards never graded), `%Stale` (cards overdue by > 2× their last interval).
+*   **Population** *(always-current — not affected by the period filter)* — `Items` (every card record in the bucket), `Unsched` (cards RemNote will never surface), `Paused` (cards inside a paused deck), `Active` = `Items − Unsched − Paused`, `Due` (active cards with `nextRepetitionTime ≤ now`), `Done`, `%New` (cards never graded), `%Stale` (cards overdue by > 2× their last interval). **`Active` is the denominator** for `Done`, `%New`, `%Stale` and the FSRS averages: a card that cannot be practised is not "done", and is not a new card you could learn. See [Suppressed cards](#suppressed-cards).
 *   **Throughput** *(period-filtered)* — total / avg `Reps`, total / avg `Time`, `CPM`, `t/rep`, and per-card `Cost`. `Cost` is lifetime-coverage `totalMinutes / coverageYears` when the period is "All", and annualized `time-in-period / period-length` when the period is finite.
 *   **Outcome** *(period-filtered)* — `Lapses` (per non-new card), `Retention` = `(gradeable − Again) / gradeable`, `Avg pR`, `R-dev = Retention − Avg pR` in percentage points (positive ⇒ you remember better than FSRS expected; negative ⇒ you forget more), and average `Grade` (1 = Again, 4 = Easy).
-*   **FSRS today** *(always-current)* — average current FSRS Difficulty `D`, Retrievability `R` (as of today), and Stability `S` across all cards reviewed at least once.
+*   **FSRS today** *(always-current)* — average current FSRS Difficulty `D`, Retrievability `R` (as of today), and Stability `S` across all **active** cards reviewed at least once. Suppressed cards are left out: an unpractisable card's retrievability decays toward zero and would drag the bucket down for no actionable reason.
 
 `Avg pR` is the average FSRS-predicted retrievability at the moment of every gradeable rep in the period, except the first rep of each card / each post-RESET lifetime (the model has no prior state to predict from). For learning and relearning reps where FSRS leaves *r* undefined, the forgetting curve is computed locally from the previous gradeable rep's stability — so `Avg pR` and `Retention` share the same denominator and `R-dev` is meaningful.
 
@@ -561,10 +561,34 @@ To stay aligned with the [Study Dashboard](Study-Dashboard.md) and Practiced Que
 Results are session-cached so reopening the popup in the same session is instant; flipping the toggle or the period re-runs the aggregation (typically a few seconds for tens of thousands of cards) and updates the cache. A "Computed N seconds ago over X cards — Recompute" pill at the top of the tab lets you force a fresh run.
 
 > **Note on Cards bucketing — unified per-card universe:**
-> The Weighted Shield of Flashcards, the standard Priority Shield (cards), the relative percentile shown next to a card's priority, the document-scope percentile, and the percentiles attached to portals in a Priority Review Document are **all computed over the same per-card universe**. Each card is one item, inherits its owning Rem's priority, and its own `nextRepetitionTime` decides whether it counts as due. A Rem that owns 5 cards contributes 5 items at the same priority. A rem's effective percentile is the **mean rank of its cards** within the sorted card population — so the 5-card rem occupies 5 adjacent ranks and lands at the midpoint of its own cluster, while a 1-card rem at the same priority lands at a single rank within the same cluster. This means a rem with more cards weighs slightly more in the percentile ranking, but every shield, every badge and the PRD now read from a single consistent ranking. The PRD itself still produces one portal per due rem (deduplicated) — only the percentile metadata it attaches comes from this unified universe.
+> The Weighted Shield of Flashcards, the standard Priority Shield (cards), the relative percentile shown next to a card's priority, the document-scope percentile, and the percentiles attached to portals in a Priority Review Document are **all computed over the same per-card universe**. Each card is one item, inherits its owning Rem's priority, and its own `nextRepetitionTime` decides whether it counts as due. **Unscheduled cards are excluded from that universe** — a disabled card or one whose cloze was deleted is not material you intend to practise, and leaving it in would push real cards across percentile boundaries. **Cards in a paused deck are kept**: pausing defers a card, it does not demote it, and dropping them would shift every other card's percentile the moment a deck is paused and shift it back on unpause. A Rem that owns 5 cards contributes 5 items at the same priority. A rem's effective percentile is the **mean rank of its cards** within the sorted card population — so the 5-card rem occupies 5 adjacent ranks and lands at the midpoint of its own cluster, while a 1-card rem at the same priority lands at a single rank within the same cluster. This means a rem with more cards weighs slightly more in the percentile ranking, but every shield, every badge and the PRD now read from a single consistent ranking. The PRD itself still produces one portal per due rem (deduplicated) — only the percentile metadata it attaches comes from this unified universe.
 
 > [!NOTE]
 > Both **Shields** can be toggled on and off the queue toolbar in the plugins [Settings](Plugin-Settings-Reference.md#queue).
+
+#### Suppressed cards { #suppressed-cards }
+
+Some cards exist in your knowledge base but can never come up in the queue. The **🚫 Suppressed Cards** tab of the wide popup counts them, splits them by *why*, and lets you act on the one cause that is a simple mistake.
+
+![The Suppressed Cards tab: 15,966 of 70,484 card records suppressed, broken down by cause and by priority bucket](assets/suppressed-cards.png){ width="1000" }
+
+Press **Compute** and the tab reports a bucket × cause matrix — the same deciles as the analytics table, with one column per reason:
+
+| Cause | What it means |
+| --- | --- |
+| **Inside a paused deck** | An ancestor's Deck status is *Paused*. The cards keep a real due date; RemNote simply refuses to serve them. |
+| **Part of a table** | RemNote creates table rows and cells with cards switched off. Structural, not a decision anyone made. |
+| **Cards switched off on the Rem itself** | The *Enable Cards* toggle is off on that Rem. **The one worth investigating.** |
+| **Disabled by an ancestor's "Disable Descendant Cards"** | A tag on an ancestor silences the whole subtree. |
+| **This direction is switched off on the Rem** | A forward or backward card was disabled from the queue. |
+| **This single card switched off** | One cloze disabled from the queue; its markup is still in the text. |
+| **The cloze / back side this card came from is gone** | The Rem was reworded, or a cloze split or deleted, and the card record outlived its markup. |
+
+Click the number in the **off-rem** column of any bucket to open the Rems behind it. Each entry shows `front → back` with clozes marked, its ancestor breadcrumb, its priority and card count, and — where relevant — a **📚 IncRem** badge, which means practice is *expected* to be off until you decide the card is ready. Tick the ones that should be practised again and press **Re-enable**; their cards become due immediately. **↗** opens a Rem in a new browser tab, leaving the list where it was.
+
+Anything you have looked at can be marked **✓ checked**, which is remembered across devices, shown as a count next to each bucket's off-rem number, and can be filtered out of the list — so working through a few hundred Rems over several sittings picks up where you left off.
+
+**Paused decks must be scanned before they can be counted.** Pausing a deck does not clear its cards' `nextRepetitionTime`, so without the scan those cards read as *due* everywhere. Press **⏸ Scan paused decks** in the analytics tab (one pass over the knowledge base, then cached) and the `Paused` column fills in; until then the status bar says so in as many words rather than showing a confident zero.
 
 #### Queue Selection Odds
 

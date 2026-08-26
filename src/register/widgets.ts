@@ -339,7 +339,10 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
   // can show Incremental Rems and Cards side-by-side when both groups are present.
   plugin.app.registerWidget('weighted_shield_popup_wide', WidgetLocation.Popup, {
     dimensions: {
-      width: '1150px',
+      // Wide enough for the Card Priority × Memory Analytics table's 23 columns
+      // without a horizontal scroller — the table is the reason this variant
+      // exists, and a scroller hides the FSRS columns at the right edge.
+      width: '1400px',
       height: 900,
     },
   });

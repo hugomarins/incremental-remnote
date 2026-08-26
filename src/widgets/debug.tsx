@@ -44,6 +44,16 @@ import {
   RestoreReport,
 } from '../lib/card_priority_snapshot';
 import { probeLocalPerKeyLimit, LocalLimitReport } from '../lib/local_storage_probe';
+import { probeRemCardEnablement, probeCardOwnership } from '../lib/card_analytics_export';
+import {
+  OrphanCardAnalysis,
+  KEEP_REASON_LABELS,
+  KeepReason,
+  MarkupGoneScan,
+  analyzeOrphanCards,
+  deleteCards,
+  scanMarkupGoneCards,
+} from '../lib/orphan_card_cleanup';
 import {
   readCardPriorityStoreMeta,
   clearPersistedCardPriorities,
@@ -560,6 +570,21 @@ function Debug() {
   const [isCleaningInflation, setIsCleaningInflation] = useState(false);
   const [isGlobalCleaning, setIsGlobalCleaning] = useState(false);
   const [globalScanProgress, setGlobalScanProgress] = useState<string>('');
+  const [cardOwnerIdInput, setCardOwnerIdInput] = useState<string>('');
+  const [isProbingCardOwner, setIsProbingCardOwner] = useState(false);
+  const [orphanRemIdInput, setOrphanRemIdInput] = useState<string>('');
+  const [orphanAnalysis, setOrphanAnalysis] = useState<OrphanCardAnalysis | null>(null);
+  const [orphanBusy, setOrphanBusy] = useState<string | null>(null);
+  const [orphanBackedUp, setOrphanBackedUp] = useState(false);
+  // Forward/backward records are a separate judgement from the cloze rule, so
+  // they are opted into explicitly rather than folded into the same count.
+  const [orphanIncludeDirectionless, setOrphanIncludeDirectionless] = useState(false);
+  const [markupScan, setMarkupScan] = useState<MarkupGoneScan | null>(null);
+  const [markupBusy, setMarkupBusy] = useState<string | null>(null);
+  const [markupBackedUp, setMarkupBackedUp] = useState(false);
+  // History entries with no grade among them (skips, resets, views) are a
+  // judgement call, so they are opted into rather than swept up by default.
+  const [markupIncludeTouched, setMarkupIncludeTouched] = useState(false);
   const [globalInflationPreview, setGlobalInflationPreview] = useState<null | {
     cutoffMs: number;
     scannedRems: number;
@@ -2231,6 +2256,245 @@ function Debug() {
       `${cards.length} card(s), ${rows.filter((r) => r.countsAsDue).length} due ` +
         `(practice: ${enablePractice ? direction : 'off'}). See console.`
     );
+  };
+
+  /**
+   * Card enablement probe. `rem.getCards()` hides DISABLED cards, so a Rem that
+   * still owns card records can report zero cards — which makes a deliberately
+   * switched-off card indistinguishable from one the Rem no longer produces.
+   * This prints every signal that CAN tell them apart, for this rem: the
+   * per-Rem Enable Cards flag, the practice direction, the own / inherited
+   * "Disable Descendant Cards" tag along the whole ancestor chain, and each
+   * card record with whether getCards() surfaces it.
+   */
+  const handleProbeCardEnablement = async () => {
+    if (!remId) return;
+    await plugin.app.toast('Probing card enablement (reads the card table)…');
+    const report = await probeRemCardEnablement(plugin, remId);
+    if (!report) {
+      await plugin.app.toast('Rem not found.');
+      return;
+    }
+    const disablingAncestor = report.ancestors.find((a) => a.disableCards);
+    const pausedAncestor = report.ancestors.find((a) => a.deckStatus === 'Paused');
+    console.log(
+      `🃏 Card enablement probe for ${report.remId} — ${report.text}\n` +
+        `   enablePractice=${report.enablePractice}, practiceDirection=${report.practiceDirection}\n` +
+        `   cards: ${report.cardsViaGetAll} in the card table, ${report.cardsViaGetCards} surfaced by rem.getCards()\n` +
+        `   DisableCards on this rem: ${report.disableCardsOwn}\n` +
+        `   cloze ids in the rem text: ${report.clozeIds.length ? report.clozeIds.join(', ') : '(none)'}, hasBackText=${report.hasBackText}\n` +
+        `   isTable=${report.isTableOwn}, inTable=${report.inTable}\n` +
+        `   raw card fields: ${report.rawCardKeys.join(', ')}\n` +
+        `   disabling ancestor: ${disablingAncestor ? `${disablingAncestor.remId} — ${disablingAncestor.text}` : 'none'}\n` +
+        `   paused deck ancestor: ${pausedAncestor ? `${pausedAncestor.remId} — ${pausedAncestor.text}` : 'none'}`
+    );
+    console.table(report.cards);
+    console.table(report.ancestors);
+    await plugin.app.toast(
+      `${report.cardsViaGetAll} card record(s), ${report.cardsViaGetCards} surfaced. ` +
+        `enablePractice=${report.enablePractice}, direction=${report.practiceDirection}` +
+        (disablingAncestor ? ', disabled by ancestor' : '') +
+        '. See console.'
+    );
+  };
+
+  /**
+   * Ownership probe. Every per-Rem verdict in the analytics groups cards by
+   * `card.remId`. This checks that field against the SDK's own `card.getRem()`
+   * for a single card: if they disagree, the grouping — and every cause derived
+   * from it — is attributing cards to the wrong Rem.
+   */
+  const handleProbeCardOwnership = async () => {
+    const cardId = cardOwnerIdInput.trim();
+    if (!cardId) return;
+    setIsProbingCardOwner(true);
+    try {
+      const report = await probeCardOwnership(plugin, cardId);
+      if (!report) {
+        await plugin.app.toast('Card not found.');
+        return;
+      }
+      console.log(
+        `🔗 Card ownership probe for ${report.cardId}\n` +
+          `   card.remId      = ${report.remIdField}  — ${report.remIdFieldText}\n` +
+          `   card.getRem()   = ${report.getRemId ?? '(null)'}${report.getRemText ? `  — ${report.getRemText}` : ''}\n` +
+          `   AGREE: ${report.agrees}\n` +
+          `   type=${report.cardType} cloze=${report.clozeId ?? '—'} reps=${report.reps} next=${report.nextRepetitionTime}\n` +
+          `   cloze ids on card.remId's rem: ${report.remIdFieldClozeIds.length ? report.remIdFieldClozeIds.join(', ') : '(none)'}\n` +
+          `   markup present on card.remId's rem: ${report.markupPresentOnRemIdField}` +
+          (report.agrees
+            ? ''
+            : `\n   markup present on getRem()'s rem: ${report.markupPresentOnGetRem}`)
+      );
+      console.table(report.ancestors);
+      await plugin.app.toast(
+        report.agrees
+          ? `remId and getRem() agree (${report.remIdField}). See console.`
+          : `MISMATCH: remId=${report.remIdField} but getRem()=${report.getRemId}. See console.`
+      );
+    } catch (e: any) {
+      console.error('[card ownership probe] failed', e);
+      await plugin.app.toast(`Probe failed: ${e?.message || String(e)}`);
+    } finally {
+      setIsProbingCardOwner(false);
+    }
+  };
+
+  /**
+   * Step 1 of the orphaned-cloze cleanup: analyze and back up. Deleting cards is
+   * not undoable, so the delete button stays locked until the backup file has
+   * actually been written.
+   */
+  const handleAnalyzeOrphanCards = async () => {
+    const remId = orphanRemIdInput.trim();
+    if (!remId) return;
+    setOrphanBusy('Analyzing…');
+    setOrphanAnalysis(null);
+    setOrphanBackedUp(false);
+    try {
+      const analysis = await analyzeOrphanCards(plugin, remId);
+      if (!analysis) {
+        await plugin.app.toast('Rem not found.');
+        return;
+      }
+      setOrphanAnalysis(analysis);
+      setOrphanIncludeDirectionless(false);
+      console.log(
+        `🧹 Orphan card analysis for ${analysis.remId} — ${analysis.remText}\n` +
+          `   ${analysis.totalCards} card record(s), ${analysis.surfacedCards} surfaced by rem.getCards()\n` +
+          `   cloze ids in the rem text: ${analysis.remClozeIds.length}, hasBackText=${analysis.hasBackText}\n` +
+          `   DELETABLE (cloze markup gone AND unscheduled): ${analysis.deletable.length}\n` +
+          `   OPT-IN (forward/backward, no back side, unscheduled): ${analysis.deletableDirectionless.length}\n` +
+          `   kept: ${JSON.stringify(analysis.keptByReason)}`
+      );
+      console.table(analysis.kept.slice(0, 50));
+    } catch (e: any) {
+      console.error('[orphan cleanup] analyze failed', e);
+      await plugin.app.toast(`Analyze failed: ${e?.message || String(e)}`);
+    } finally {
+      setOrphanBusy(null);
+    }
+  };
+
+  const handleBackupOrphanCards = () => {
+    if (!orphanAnalysis) return;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const payload = {
+      remId: orphanAnalysis.remId,
+      remText: orphanAnalysis.remText,
+      exportedAt: new Date().toISOString(),
+      cards: orphanAnalysis.backup,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orphan-cards-backup-${orphanAnalysis.remId}-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setOrphanBackedUp(true);
+  };
+
+  /** Step 2: delete exactly the analyzed list. Never recomputed here — what the
+   *  user was shown is what gets deleted. */
+  const handleDeleteOrphanCards = async () => {
+    if (!orphanAnalysis || !orphanBackedUp) return;
+    const ids = orphanIncludeDirectionless
+      ? [...orphanAnalysis.deletable, ...orphanAnalysis.deletableDirectionless]
+      : orphanAnalysis.deletable;
+    const n = ids.length;
+    if (n === 0) return;
+    setOrphanBusy(`Deleting 0 / ${n}…`);
+    try {
+      const res = await deleteCards(plugin, ids, (done, total) =>
+        setOrphanBusy(`Deleting ${done} / ${total}…`)
+      );
+      await plugin.app.toast(
+        `Deleted ${res.deleted} card(s)` + (res.failed ? `, ${res.failed} failed` : '') +
+          ` in ${(res.elapsedMs / 1000).toFixed(1)}s.`
+      );
+      // Re-analyze so the panel reflects reality rather than the pre-delete list.
+      const after = await analyzeOrphanCards(plugin, orphanAnalysis.remId);
+      setOrphanAnalysis(after);
+      setOrphanBackedUp(false);
+      setOrphanIncludeDirectionless(false);
+    } catch (e: any) {
+      console.error('[orphan cleanup] delete failed', e);
+      await plugin.app.toast(`Delete failed: ${e?.message || String(e)}`);
+    } finally {
+      setOrphanBusy(null);
+    }
+  };
+
+  const handleScanMarkupGone = async () => {
+    setMarkupBusy('Scanning…');
+    setMarkupScan(null);
+    setMarkupBackedUp(false);
+    setMarkupIncludeTouched(false);
+    try {
+      const scan = await scanMarkupGoneCards(plugin, (done, total, phase) =>
+        setMarkupBusy(total ? `${phase} ${done.toLocaleString()} / ${total.toLocaleString()}` : phase)
+      );
+      setMarkupScan(scan);
+      await plugin.app.toast(
+        `${scan.untouched.length} card(s) with no history, ${scan.touched.length} never-graded, ` +
+          `${scan.gradedCount} kept (real practice). See console.`
+      );
+    } catch (e: any) {
+      console.error('[markup-gone scan] failed', e);
+      await plugin.app.toast(`Scan failed: ${e?.message || String(e)}`);
+    } finally {
+      setMarkupBusy(null);
+    }
+  };
+
+  const handleBackupMarkupGone = () => {
+    if (!markupScan) return;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      untouched: markupScan.untouched,
+      touched: markupScan.touched,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `markup-gone-cards-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setMarkupBackedUp(true);
+  };
+
+  const handleDeleteMarkupGone = async () => {
+    if (!markupScan || !markupBackedUp) return;
+    const ids = [
+      ...markupScan.untouched.map((c) => c.cardId),
+      ...(markupIncludeTouched ? markupScan.touched.map((c) => c.cardId) : []),
+    ];
+    if (ids.length === 0) return;
+    setMarkupBusy(`Deleting 0 / ${ids.length}…`);
+    try {
+      const res = await deleteCards(plugin, ids, (done, total) =>
+        setMarkupBusy(`Deleting ${done} / ${total}…`)
+      );
+      await plugin.app.toast(
+        `Deleted ${res.deleted} card(s)` + (res.failed ? `, ${res.failed} failed` : '') +
+          ` in ${(res.elapsedMs / 1000).toFixed(1)}s.`
+      );
+      setMarkupScan(null);
+      setMarkupBackedUp(false);
+      setMarkupIncludeTouched(false);
+    } catch (e: any) {
+      console.error('[markup-gone delete] failed', e);
+      await plugin.app.toast(`Delete failed: ${e?.message || String(e)}`);
+    } finally {
+      setMarkupBusy(null);
+    }
   };
 
   const handleDumpStructure = async () => {
@@ -4011,6 +4275,21 @@ function Debug() {
                  Probe Spoiler State
                </button>
                <button
+                 onClick={handleProbeCardEnablement}
+                 style={{
+                   fontSize: '11px',
+                   padding: '2px 8px',
+                   backgroundColor: 'var(--rn-clr-background-secondary)',
+                   color: 'var(--rn-clr-content-primary)',
+                   border: '1px solid var(--rn-clr-border)',
+                   borderRadius: '4px',
+                   cursor: 'pointer'
+                 }}
+                 title="Print every signal that decides whether this rem's cards are enabled: enablePractice, practice direction, own and inherited Disable Descendant Cards, and each card record with whether rem.getCards() surfaces it"
+               >
+                 Probe Card Enablement
+               </button>
+               <button
                  onClick={handleDumpStructure}
                  style={{
                    fontSize: '11px',
@@ -5255,6 +5534,216 @@ function Debug() {
             ))}
           </div>
         )}
+
+        {/* Which Rem does a card really belong to? */}
+        <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Card ownership probe</div>
+          <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)', marginBottom: '6px' }}>
+            Paste a card id. Compares the <code>card.remId</code> field this plugin groups by against the SDK's own{' '}
+            <code>card.getRem()</code>, and reports whether the card's cloze markup lives on either Rem. A mismatch
+            means per-Rem attribution — and every cause derived from it — is pointing at the wrong Rem.
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              value={cardOwnerIdInput}
+              onChange={(e) => setCardOwnerIdInput(e.target.value)}
+              placeholder="cardId"
+              style={{ flex: 1, fontSize: '11px', padding: '3px 6px', border: '1px solid var(--rn-clr-border)', borderRadius: '4px', backgroundColor: 'var(--rn-clr-background-primary)', color: 'var(--rn-clr-content-primary)', fontFamily: 'monospace' }}
+            />
+            <button onClick={handleProbeCardOwnership} disabled={isProbingCardOwner} style={{ ...smallBtnStyle, cursor: isProbingCardOwner ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+              {isProbingCardOwner ? 'Probing…' : 'Probe Card'}
+            </button>
+          </div>
+        </div>
+
+        {/* Delete cloze card records whose markup is gone from their Rem. */}
+        <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Purge orphaned cloze cards on a Rem</div>
+          <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)', marginBottom: '6px' }}>
+            Deletes ONLY cloze card records whose cloze id is absent from the Rem's current text AND which have no{' '}
+            <code>nextRepetitionTime</code>. Forward/backward records and anything still scheduled or still clozed are
+            kept and listed with a reason. <strong>Card deletion cannot be undone</strong> — the backup file must be
+            saved before the delete button unlocks.
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              value={orphanRemIdInput}
+              onChange={(e) => setOrphanRemIdInput(e.target.value)}
+              placeholder="remId"
+              style={{ flex: 1, fontSize: '11px', padding: '3px 6px', border: '1px solid var(--rn-clr-border)', borderRadius: '4px', backgroundColor: 'var(--rn-clr-background-primary)', color: 'var(--rn-clr-content-primary)', fontFamily: 'monospace' }}
+            />
+            <button onClick={handleAnalyzeOrphanCards} disabled={!!orphanBusy} style={{ ...smallBtnStyle, cursor: orphanBusy ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+              {orphanBusy === 'Analyzing…' ? 'Analyzing…' : 'Analyze'}
+            </button>
+          </div>
+          {orphanBusy && orphanBusy !== 'Analyzing…' && (
+            <div style={{ marginTop: '6px', fontSize: '11px', fontWeight: 600 }}>{orphanBusy}</div>
+          )}
+          {orphanAnalysis && (
+            <div style={{ marginTop: '8px', padding: '8px', borderRadius: '4px', border: '1px solid var(--rn-clr-border)', backgroundColor: 'var(--rn-clr-background-secondary)', fontSize: '11px', lineHeight: 1.6 }}>
+              <div><strong>{orphanAnalysis.remText}</strong></div>
+              <div>
+                {orphanAnalysis.totalCards.toLocaleString()} card record(s) ·{' '}
+                {orphanAnalysis.surfacedCards} surfaced ·{' '}
+                {orphanAnalysis.remClozeIds.length} cloze id(s) in the text
+              </div>
+              <div style={{ marginTop: '4px' }}>
+                Deletable:{' '}
+                <strong style={{ color: orphanAnalysis.deletable.length > 0 ? '#ef4444' : 'inherit' }}>
+                  {orphanAnalysis.deletable.length.toLocaleString()}
+                </strong>
+              </div>
+              {(Object.keys(orphanAnalysis.keptByReason) as KeepReason[])
+                .filter((r) => orphanAnalysis.keptByReason[r] > 0)
+                .map((r) => (
+                  <div key={r} style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                    kept {orphanAnalysis.keptByReason[r]} — {KEEP_REASON_LABELS[r]}
+                  </div>
+                ))}
+              {orphanAnalysis.deletableDirectionless.length > 0 && (
+                <label
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', marginTop: '6px', cursor: 'pointer' }}
+                  title="The Rem has no back side, so RemNote cannot generate a forward or backward card for it whatever the practice direction says. These records correspond to nothing — but they may carry a lot of history, so they are opt-in."
+                >
+                  <input
+                    type="checkbox"
+                    checked={orphanIncludeDirectionless}
+                    onChange={(e) => setOrphanIncludeDirectionless(e.target.checked)}
+                    style={{ marginTop: '2px', cursor: 'pointer' }}
+                  />
+                  <span>
+                    Also delete <strong>{orphanAnalysis.deletableDirectionless.length}</strong>{' '}
+                    forward/backward record(s) — this Rem has <strong>no back side</strong>, so neither
+                    direction can be generated.
+                  </span>
+                </label>
+              )}
+              {(orphanAnalysis.deletable.length > 0 || orphanAnalysis.deletableDirectionless.length > 0) && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px' }}>
+                  <button onClick={handleBackupOrphanCards} disabled={!!orphanBusy} style={{ ...smallBtnStyle, cursor: orphanBusy ? 'wait' : 'pointer' }}>
+                    {orphanBackedUp ? '✓ Backup saved' : '1. Save backup JSON'}
+                  </button>
+                  <button
+                    onClick={handleDeleteOrphanCards}
+                    disabled={
+                      !!orphanBusy ||
+                      !orphanBackedUp ||
+                      orphanAnalysis.deletable.length +
+                        (orphanIncludeDirectionless
+                          ? orphanAnalysis.deletableDirectionless.length
+                          : 0) ===
+                        0
+                    }
+                    title={orphanBackedUp ? '' : 'Save the backup first'}
+                    style={{
+                      ...smallBtnStyle,
+                      cursor: orphanBusy || !orphanBackedUp ? 'not-allowed' : 'pointer',
+                      opacity: orphanBackedUp ? 1 : 0.5,
+                      backgroundColor: 'var(--rn-clr-background-warning)',
+                      color: 'var(--rn-clr-content-warning)',
+                      border: '1px solid var(--rn-clr-border-warning)',
+                    }}
+                  >
+                    2. Delete{' '}
+                    {(
+                      orphanAnalysis.deletable.length +
+                      (orphanIncludeDirectionless ? orphanAnalysis.deletableDirectionless.length : 0)
+                    ).toLocaleString()}{' '}
+                    card(s)
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* KB-wide sweep for cloze cards whose markup is gone. */}
+        <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Sweep the KB for markup-gone cloze cards</div>
+          <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)', marginBottom: '6px' }}>
+            Finds every unscheduled cloze card whose cloze id is no longer in its Rem's text, and splits them by what
+            history would be lost. Cards with <strong>real graded practice</strong> are reported but never offered for
+            deletion — a reworded Rem, or one cloze split into several, loses its markup while keeping history worth
+            preserving.
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button onClick={handleScanMarkupGone} disabled={!!markupBusy} style={{ ...smallBtnStyle, cursor: markupBusy ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+              {markupBusy ? 'Working…' : 'Scan KB'}
+            </button>
+            {markupBusy && <span style={{ fontSize: '11px', fontWeight: 600 }}>{markupBusy}</span>}
+          </div>
+          {markupScan && (
+            <div style={{ marginTop: '8px', padding: '8px', borderRadius: '4px', border: '1px solid var(--rn-clr-border)', backgroundColor: 'var(--rn-clr-background-secondary)', fontSize: '11px', lineHeight: 1.6 }}>
+              <div style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                {markupScan.candidates.toLocaleString()} unscheduled cloze card(s) examined ·{' '}
+                {markupScan.remsRead.toLocaleString()} Rem(s) read ·{' '}
+                {markupScan.markupPresent.toLocaleString()} still have their markup
+                {markupScan.remUnreadable > 0 && ` · ${markupScan.remUnreadable} unreadable Rem(s)`}
+              </div>
+              <div style={{ marginTop: '4px' }}>
+                No history at all:{' '}
+                <strong style={{ color: markupScan.untouched.length > 0 ? '#ef4444' : 'inherit' }}>
+                  {markupScan.untouched.length.toLocaleString()}
+                </strong>
+              </div>
+              <div>
+                Entries but never graded:{' '}
+                <strong>{markupScan.touched.length.toLocaleString()}</strong>
+              </div>
+              <div style={{ color: '#16a34a' }}>
+                Kept — real graded practice: <strong>{markupScan.gradedCount.toLocaleString()}</strong>{' '}
+                card(s) holding {markupScan.gradedReps.toLocaleString()} rep(s)
+              </div>
+              {markupScan.touched.length > 0 && (
+                <label
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', marginTop: '6px', cursor: 'pointer' }}
+                  title='These carry history entries — skips, resets, views — but no grade. RemNote shows them as "Times practiced N / Last practiced Never".'
+                >
+                  <input
+                    type="checkbox"
+                    checked={markupIncludeTouched}
+                    onChange={(e) => setMarkupIncludeTouched(e.target.checked)}
+                    style={{ marginTop: '2px', cursor: 'pointer' }}
+                  />
+                  <span>
+                    Also delete the <strong>{markupScan.touched.length.toLocaleString()}</strong> never-graded card(s)
+                    — they hold entries (skips / resets / views) but no grade.
+                  </span>
+                </label>
+              )}
+              {(markupScan.untouched.length > 0 || markupScan.touched.length > 0) && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px' }}>
+                  <button onClick={handleBackupMarkupGone} disabled={!!markupBusy} style={{ ...smallBtnStyle, cursor: markupBusy ? 'wait' : 'pointer' }}>
+                    {markupBackedUp ? '✓ Backup saved' : '1. Save backup JSON'}
+                  </button>
+                  <button
+                    onClick={handleDeleteMarkupGone}
+                    disabled={
+                      !!markupBusy ||
+                      !markupBackedUp ||
+                      markupScan.untouched.length + (markupIncludeTouched ? markupScan.touched.length : 0) === 0
+                    }
+                    title={markupBackedUp ? '' : 'Save the backup first'}
+                    style={{
+                      ...smallBtnStyle,
+                      cursor: markupBusy || !markupBackedUp ? 'not-allowed' : 'pointer',
+                      opacity: markupBackedUp ? 1 : 0.5,
+                      backgroundColor: 'var(--rn-clr-background-warning)',
+                      color: 'var(--rn-clr-content-warning)',
+                      border: '1px solid var(--rn-clr-border-warning)',
+                    }}
+                  >
+                    2. Delete{' '}
+                    {(
+                      markupScan.untouched.length + (markupIncludeTouched ? markupScan.touched.length : 0)
+                    ).toLocaleString()}{' '}
+                    card(s)
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Locate the rem named in a "Diff for <remId> is too large to sync" error. */}
         <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>

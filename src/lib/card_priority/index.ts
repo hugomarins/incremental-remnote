@@ -126,6 +126,13 @@ export async function getCardPriority(
   // Infinity and therefore never satisfies the <= now check. This implicitly excludes
   // disabled cards from due counts and, consequently, from Priority Review Documents
   // and the due-card-priority cache — without any explicit disabled-card filter.
+  //
+  // It does NOT cover paused decks: pausing keeps a card's nextRepetitionTime
+  // intact (measured — see CARD_STATE_REFERENCE.md), so the arithmetic alone
+  // would count those cards as due. What saves this path is its source: `cards`
+  // comes from `rem.getCards()`, which returns [] for a rem under a paused deck.
+  // Paths fed by `card.getAll()` get no such protection and must consult
+  // lib/paused_decks.ts — see buildInfoFromStore in ./cache.ts.
   const dueCards = cards.filter((card) => (card.nextRepetitionTime ?? Infinity) <= now).length;
   const dueCardsOverdue = cards.filter((card) => (card.nextRepetitionTime ?? Infinity) <= startOfToday).length;
   // Per-card nextRep, captured here so the Weighted Shield of Cards can be
@@ -632,10 +639,12 @@ export async function recalculateTreeInheritanceBatch(
   // finishes; the loop below then falls back to per-rem rem.getCards(). That
   // under-reports rems whose cards are all disabled or in a paused deck, and the
   // error direction is the safe one: fewer rems are tagged, never more, so it
-  // cannot recreate the rogue-tag bug the guard below exists to prevent. Such
-  // rems are excluded from due counts anyway (getCardPriority maps a null
-  // nextRepetitionTime to Infinity), so they reach neither the shield nor a
-  // Priority Review Document — a stale tag on them changes nothing visible.
+  // cannot recreate the rogue-tag bug the guard below exists to prevent.
+  // Disabled cards are excluded from due counts anyway (getCardPriority maps a
+  // null nextRepetitionTime to Infinity). Paused-deck cards are NOT — they keep
+  // a real nextRepetitionTime — so they are excluded only where the paused-deck
+  // scan has been applied (./cache.ts). A stale tag on either changes nothing
+  // visible.
   const cacheLoaded = await plugin.storage.getSession<boolean>('card_priority_cache_fully_loaded');
   const cachedInfos = cacheLoaded
     ? (await plugin.storage.getSession<CardPriorityInfo[]>(allCardPriorityInfoKey)) || []

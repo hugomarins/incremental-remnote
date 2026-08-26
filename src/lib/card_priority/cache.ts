@@ -6,6 +6,7 @@ import {
   calculateCardRemPercentilesFromCards,
 } from './types';
 import { getRawCardPriorityString } from './slot_access';
+import { getPausedRemIds } from '../paused_decks';
 import { getCardPriority, calculateNewPriority, setCardPriority } from './index';
 import {
   writeCardPriorityCache,
@@ -377,17 +378,35 @@ const WARM_SELF_CHECK_SAMPLE = 200;
  * the single card.getAll() the build already does. Only priority and source ever
  * needed a slot read, and those are what the blob holds.
  *
- * Kept deliberately in step with getCardPriority's arithmetic — the `?? Infinity`
- * on nextRepetitionTime is what implicitly excludes disabled cards from due
- * counts, and diverging here would give warm and cold builds different due counts.
+ * Kept deliberately in step with getCardPriority's arithmetic. Two suppressions
+ * have to be handled differently, and conflating them was a real bug:
+ *  - DISABLED cards have `nextRepetitionTime === null`, so `?? Infinity` drops
+ *    them from due counts on its own.
+ *  - Cards under a PAUSED deck keep a real nextRepetitionTime (measured), so
+ *    arithmetic alone counts them as due. The cold path reads `rem.getCards()`,
+ *    which returns [] for a paused rem and therefore excludes them; this warm
+ *    path reads `card.getAll()`, which does not. `isPaused` restores the match.
  */
 function buildInfoFromStore(
   remId: RemId,
   stored: { priority: number; source: PrioritySource },
-  cards: Card[]
+  cards: Card[],
+  isPaused: boolean
 ): CardPriorityInfo {
   const now = Date.now();
   const startOfToday = dayjs().startOf('day').valueOf();
+  if (isPaused) {
+    return {
+      remId,
+      priority: stored.priority,
+      source: stored.source,
+      lastUpdated: 0,
+      cardCount: cards.length,
+      dueCards: 0,
+      dueCardsOverdue: 0,
+      cardsNextRep: cards.map((c) => c.nextRepetitionTime ?? null),
+    };
+  }
   return {
     remId,
     priority: stored.priority,
@@ -494,9 +513,21 @@ async function tryWarmPhase1(
     }
   }
 
+  // One read: rem ids suppressed by a paused deck, from the last scan (see
+  // lib/paused_decks.ts). Null when no scan has ever run, in which case nothing
+  // is treated as paused and the counts behave exactly as they did before.
+  const pausedRemIds = await getPausedRemIds(plugin);
+
   const infos: CardPriorityInfo[] = [];
   for (const rem of reusable) {
-    infos.push(buildInfoFromStore(rem._id, store.byRem.get(rem._id)!, cardsByRem.get(rem._id) || []));
+    infos.push(
+      buildInfoFromStore(
+        rem._id,
+        store.byRem.get(rem._id)!,
+        cardsByRem.get(rem._id) || [],
+        pausedRemIds ? pausedRemIds.has(rem._id) : false
+      )
+    );
   }
 
   const batchSize = 100;

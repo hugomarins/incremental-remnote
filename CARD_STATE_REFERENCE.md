@@ -1,0 +1,270 @@
+# Card state reference — disabled, paused, and not-generated cards
+
+Engineering reference. Established by measurement (debug widget → **Probe Card Enablement**)
+against a live and a test KB in August 2026. Written because every one of these states looks
+identical through the obvious API, and guessing between them produced wrong conclusions twice.
+
+## The core trap
+
+`plugin.card.getAll()` and `rem.getCards()` do **not** return the same thing.
+
+| Source | Returns |
+| --- | --- |
+| `plugin.card.getAll()` | Every card **record** in the KB, including every disabled one. |
+| `rem.getCards()` | Only the cards the Rem currently **surfaces** — disabled cards are dropped. |
+
+So `rem.getCards().length === 0` means *"nothing is surfaced right now"*. It does **not** mean
+the Rem has no cards, and it is **not** evidence that a card record is junk. A Rem whose cards
+were all switched off looks exactly like a Rem whose cloze markup was deleted.
+
+The scheduler-side marker is `nextRepetitionTime`:
+
+- a card RemNote will never surface has **`nextRepetitionTime === null/undefined`**;
+- everything that consumes due-ness (the queue, the Priority Review Document, the Weighted
+  Shield) filters on `(nextRepetitionTime ?? Infinity) <= now`, so those cards are invisible to
+  all of them — correctly;
+- the internal `nextTime` (as opposed to `activeNextTime`, which is what `nextRepetitionTime`
+  maps to) is **not exposed** by the SDK. The `Card` object carries only `_id, remId, type,
+  createdAt, repetitionHistory, nextRepetitionTime, timesWrongInRow, lastRepetitionTime`. There
+  is no "disabled" flag on a card, and no way to read the pre-disable due date.
+
+Repetition history **survives** disabling. A card with 3 reps that gets switched off keeps its 3
+reps and loses only its next time.
+
+## The states
+
+| State | Set by the user via | Detect with |
+| --- | --- | --- |
+| **Paused deck** | Deck powerup → Status = "Paused" on an ancestor | see **Paused decks** below — this one does NOT null `nextRepetitionTime` |
+| **Disabled by ancestor** | "Disable Descendant Cards" on an ancestor | walk ancestors: `hasPowerup(BuiltInPowerupCodes.DisableCards)` (code `"u"`) |
+| **Disabled on the Rem** | flashcard menu → "Enable Cards" off | `rem.getEnablePractice() === false` (or the Rem's own `DisableCards` powerup) |
+| **Table row / cell** | nothing — RemNote ships tables this way | `rem.isTable()` on the Rem or any ancestor; reports `enablePractice === false` like a deliberate switch-off |
+| **Direction disabled** | flashcard menu → Flashcard Direction, **or** disabling a forward/backward card in the queue | `rem.getPracticeDirection()` no longer includes the card's direction |
+| **Single cloze disabled** | queue → disable this card (cloze) | *no Rem-level trace* — see below |
+| **Markup removed** | editing the cloze or back side away | *no Rem-level trace* — see below |
+
+### Rem-level states are cheap to detect
+
+`getEnablePractice()`, `getPracticeDirection()` and the two ancestor powerups cover everything
+that silences a whole Rem or subtree. Check them first: they explain every card on the Rem at
+once.
+
+### Direction cards and cloze cards behave differently
+
+Disabling a **forward/backward** card in the queue does **not** stay on the card — it rewrites
+the Rem's practice direction. A bidirectional Rem whose backward card is switched off reports:
+
+```
+enablePractice=true, practiceDirection=forward   ← was 'both'
+  unQmbZtxdCwPelFtX  forward   inGetCards=true   nextRep=2030-02-28  reps=8
+  qqmpC7wbuIuGqWKS6  backward  inGetCards=false  nextRep=(null)      reps=1
+```
+
+Measured before/after on a single forward-only Rem, which pins the mechanism exactly:
+
+```
+before:  practiceDirection=forward   1 card surfaced   nextRep=2028-10-24  reps=7
+after:   practiceDirection=none      0 cards surfaced  nextRep=(null)      reps=7
+```
+
+`enablePractice` stayed `true` through both — the Rem's Enable-Cards flag is a *different*
+action, which is why it is tested separately and first.
+
+So direction cards ARE detectable at Rem level: compare the card's direction against
+`getPracticeDirection()` (`'both'` covers both; `'none'` covers neither). The way back is
+`setPracticeDirection`, not a per-card action.
+
+**Corollary:** `getPracticeDirection() === 'none'` on a Rem that still has a back side is the
+fingerprint of a direction card disabled from the queue, not of a setting anyone chose. Treat a
+KB's `'none'` Rems as disabled cards to review, not as configuration.
+
+Cloze cards are **not** governed by the practice direction — a Rem with direction `'none'` still
+generates its clozes — so the direction test must be scoped to forward/backward cards only.
+
+### The two per-card cloze states are the hard part
+
+Disabling **one cloze** in the queue leaves the Rem untouched:
+
+```
+enablePractice=true, practiceDirection=forward, DisableCards on this rem: false
+cards: 2 in the card table, 1 surfaced by rem.getCards()
+  2GAquyN8FdNYsnVZn  cloze:48545702581399686  inGetCards=false  nextRep=(null)  reps=3
+  VHi7KlI4Bk2b224xH  cloze:0592505950758665   inGetCards=true   nextRep=2027-03-14  reps=4
+```
+
+Nothing at Rem level distinguishes that from a Rem whose cloze was deleted — in both cases the
+card sits in `card.getAll()`, is absent from `rem.getCards()`, and has a null next time. (This
+is the one state with no Rem-level trace at all; directions, per above, do leave one.)
+
+**The discriminator is the markup itself.** Cloze markup lives in the Rem's rich text as `cId`
+on the text elements (also `blocks[].cId` for image clozes, `clozeOrder`, `latexClozes`), and a
+cloze card's `type.clozeId` names the cloze it belongs to:
+
+- cloze id **still in the Rem's text** ⇒ the markup exists, so the card was **individually
+  disabled**;
+- cloze id **absent** ⇒ the cloze was **edited away**;
+- forward / backward card: substitute "does the Rem still have a back side" (`rem.backText`).
+
+Verified in both directions on the same card: with the cloze present the probe reports
+`markupStillPresent=true`, and after deleting that cloze from the Rem it reports
+`markupStillPresent=false` while the card record and its 3 reps persist.
+
+`collectClozeIds()` and `markupStillPresent()` in
+[`src/lib/card_analytics_export.ts`](src/lib/card_analytics_export.ts) implement this.
+
+## Paused decks are a SECOND axis, orthogonal to `nextRepetitionTime`
+
+Every other state on this page ends with `nextRepetitionTime === null`. Pausing does not.
+Measured on a live KB — cards under a paused deck keep real due dates:
+
+```
+HxHyRkjx7tVHvkKqw  backward  due        next=2025-05-28
+m3597IcQIcp0ziq5B  cloze     due        next=2026-01-30
+m3597IcQIcp0ziq5B  cloze     scheduled  next=2026-10-16
+```
+
+RemNote applies the pause in the **queue** (the document badge reads "0 Due"), not in the card
+records. So anything that decides due-ness by arithmetic over `card.getAll()` counts a paused
+deck's whole subtree as due. This is why the Priority Review Document carries its own paused
+filter, and it is a live divergence between the two card-priority build paths:
+
+| Path | Card source | Paused cards |
+| --- | --- | --- |
+| cold (`getCardPriority`) | `rem.getCards()` | excluded — returns `[]` for a paused rem |
+| warm (`buildInfoFromStore`) | `card.getAll()` | counted as due until the paused scan is applied |
+
+**Detection is top-down.** Walking up from every card-owning Rem is not viable (a 72k-card KB
+has ~45k distinct card-owning Rems). `lib/paused_decks.ts` finds the paused decks once, then
+takes `getDescendants()` on each — one call per deck — and caches the suppressed id set in
+session *and* local storage, so startup paths can apply it without paying for a scan.
+
+Finding the decks needs a scan because built-in powerup membership is not enumerable: it walks
+`plugin.rem.getAll()`, prefilters on the synchronous `children` field (a deck has children), and
+probes the survivors with `hasPowerup`.
+
+**"No scan has run" must never be reported as "nothing is paused."** `getPausedRemIds` returns
+`null` in that case, and the analytics tab says so in words rather than showing a confident 0.
+
+## Tables look exactly like a deliberate switch-off
+
+A table's rows and cells are Rems under the table Rem, and RemNote creates them with cards
+disabled. They therefore report `getEnablePractice() === false` — indistinguishable from a card
+the user turned off on purpose, and there can be a great many of them.
+
+`rem.isTable()` separates the two, checked on the Rem itself **and on its ancestors** (a cell's
+table is two hops up, through the row). `classifyUnscheduled` splits the result into
+`cards-disabled-table` (structural, nothing to investigate) and `cards-disabled-rem` (a decision
+someone made, and the only one of the two worth a user's attention).
+
+## Signals that do NOT work
+
+- **`rem.getCards().length`** as an existence test — it is a "currently surfaced" filter. Both
+  directions of the comparison against `card.getAll()` are meaningless on their own.
+- **`getPracticeDirection()`** as a *Rem-level* disabled signal. A Rem with
+  `enablePractice=false` still reports `'forward'`. RemNote's UI shows "Flashcard Direction:
+  None" for such a Rem as a display collapse, not because the stored direction changed. Check
+  `getEnablePractice()` for that. The direction IS authoritative for whether a given
+  forward/backward card is generated — just not for whether the Rem is enabled at all.
+- **Card `createdAt` vs Rem `createdAt`** as evidence of anything. A card record can predate its
+  own Rem; that does not make it an orphan.
+- **`taggedRem()` on built-in powerups** — membership is not enumerable for RemNote built-ins;
+  probe with `hasPowerup` from the Rem's side instead.
+
+## Classification order
+
+Implemented as `classifyUnscheduled()` in `src/lib/card_analytics_export.ts`. Order matters —
+Rem-wide causes first, because they explain every card on the Rem at once:
+
+1. `rem-missing` — the Rem no longer resolves
+2. `paused-document` — nearest Deck ancestor is Paused
+3. `cards-disabled-ancestor` — an ancestor carries Disable Descendant Cards
+4. `cards-disabled-rem` — `getEnablePractice() === false`, or the Rem's own tag
+5. `direction-disabled` — forward/backward card whose direction is not in
+   `getPracticeDirection()` (covers `'none'`). Never applied to cloze cards.
+6. `card-disabled-individually` — markup still present ⇒ this one card was switched off
+7. `markup-removed` — the cloze id / back side is gone
+8. `not-surfaced-unknown` — none of the above could decide it
+
+The ancestor walk must **fold bottom-up**: memoize per node the facts of the chain *from that
+node upward*, or a tag found near the leaf leaks onto the ancestors above it, and a cache hit
+higher up erases a tag already found below it. Nearest Deck wins for pause (an active sub-deck
+under a paused one is not paused); Disable-Cards ORs upward.
+
+## Two populations: ranking vs practice
+
+Suppressed cards are not one population but two, and they must be treated differently:
+
+| | population | used for |
+| --- | --- | --- |
+| **Ranking** | active + paused | percentile, decile membership, relative priority, band colours, the Weighted Shield's universe |
+| **Practice** | active only | Due, Done%, %New, %Stale, FSRS D/R/S averages |
+
+**Paused cards stay in the ranking.** Pausing defers a card; it does not demote it — the
+priority value already carries importance. Excluding them would shift every other card's
+percentile the moment a deck is paused and shift it back on unpause, so priority would drift as
+a side effect of a scheduling decision. They also keep a real `nextRepetitionTime`, which is
+what makes them mechanically distinguishable here.
+
+**Unscheduled cards leave the ranking.** A disabled card, a table row, a direction that is off,
+a cloze whose markup is gone — none of these is deferred; they are not cards the user intends
+to practise at all. Nothing is waiting to come back, and leaving them in lets them push real
+cards across percentile boundaries.
+
+The filter is `cardsNextRep === null`, already carried on every `CardPriorityInfo`, so no new
+data is needed. It is applied in one place — `expandCardInfosToCards`
+(`lib/card_priority/types.ts`) — which by its own doc comment feeds the Weighted Shield, the
+standard Priority Shield, the badge `kbPercentile` and the Priority Review Document.
+
+Two places need the same rule applied separately, because they do not go through that function:
+
+- `lib/priority_bands.ts` samples one priority per *Rem*. A Rem whose cards are ALL unscheduled
+  is skipped; one with at least one schedulable card still counts once, keeping the pool
+  rem-weighted rather than silently switching it to card-weighted.
+- `computeCardAnalyticsBreakdown` sizes its deciles by the ranked population, while still
+  *reporting* unscheduled cards in whichever bucket their priority falls into — bucket size is
+  defined by ranked cards, bucket contents still account for everything.
+
+One trap when applying the filter: the stale-cache fallback in `expandCardInfosToCards` used to
+synthesize non-due cards with `nextRepetitionTime: null`. Under this rule that would have
+deleted them from the ranking entirely. They now get a far-future sentinel instead.
+
+## Consequences for the analytics
+
+Unscheduled cards are card records that exist but can never be practised. They must not sit in
+the denominator of anything describing practice:
+
+- `Done% = (active − due) / active`, not `(cards − due) / cards` — otherwise a bucket reports
+  100% done while holding hundreds of unpractisable cards;
+- `%New` counts only **active** new cards (what you could still learn); unscheduled new cards
+  are reported separately under `Unsched`;
+- FSRS `D / R / S` averages exclude them — an unpractisable card's retrievability decays toward
+  zero and would drag the bucket down for no actionable reason;
+- `Items` still counts every record, so nothing is hidden.
+
+Throughput and Outcome columns are untouched: those reps genuinely happened, and disabling a
+card does not un-practise it.
+
+## How to investigate a specific card
+
+1. Focus the Rem, open the debug widget, hit **Probe Card Enablement**. It prints
+   `enablePractice`, `practiceDirection`, the Rem's cloze ids, the whole ancestor chain with its
+   flags, and per card `inGetCards` / `nextRepetitionTime` / `reps` / `markupStillPresent` /
+   `wouldClassifyAs`.
+2. For KB-wide work use **Export cards** in Card Priority × Memory Analytics: one CSV row per
+   card with `unscheduledCause`, `remEnablePractice`, `remDisableCardsOwn`,
+   `remDisableCardsAncestor`, `remDisablingAncestorId`, `clozeId`, `markupStillPresent`, plus a
+   summary file with the bucket × cause matrix.
+
+## Re-enabling
+
+- Rem-level: `rem.setEnablePractice(true)`.
+- Direction card: `rem.setPracticeDirection(...)` — this is what brings back a forward/backward
+  card disabled from the queue. The pre-disable direction is not stored anywhere, but it can be
+  reconstructed from the card records that exist: a backward card record proves backward was
+  once enabled, so a Rem holding both records wants `'both'`, one holding only a forward record
+  wants `'forward'`. Re-enabling makes the card due immediately.
+- Ancestor-level: remove the Disable Descendant Cards powerup from the ancestor — **this flips
+  the entire subtree at once**, so it needs an explicit confirmation and a count of what it will
+  affect.
+- Single cloze card: no SDK write is known for re-enabling one card; it is done in the queue UI.
+- Note that re-enabling in bulk makes every affected card due immediately.
