@@ -2275,6 +2275,7 @@ function Debug() {
         `   cards: ${report.cardsViaGetAll} in the card table, ${report.cardsViaGetCards} surfaced by rem.getCards()\n` +
         `   DisableCards on this rem: ${report.disableCardsOwn}\n` +
         `   cloze ids in the rem text: ${report.clozeIds.length ? report.clozeIds.join(', ') : '(none)'}, hasBackText=${report.hasBackText}\n` +
+        `   isTable=${report.isTableOwn}, inTable=${report.inTable}\n` +
         `   raw card fields: ${report.rawCardKeys.join(', ')}\n` +
         `   disabling ancestor: ${disablingAncestor ? `${disablingAncestor.remId} — ${disablingAncestor.text}` : 'none'}\n` +
         `   paused deck ancestor: ${pausedAncestor ? `${pausedAncestor.remId} — ${pausedAncestor.text}` : 'none'}`

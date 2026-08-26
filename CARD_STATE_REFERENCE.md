@@ -38,6 +38,7 @@ reps and loses only its next time.
 | **Paused deck** | Deck powerup → Status = "Paused" on an ancestor | see **Paused decks** below — this one does NOT null `nextRepetitionTime` |
 | **Disabled by ancestor** | "Disable Descendant Cards" on an ancestor | walk ancestors: `hasPowerup(BuiltInPowerupCodes.DisableCards)` (code `"u"`) |
 | **Disabled on the Rem** | flashcard menu → "Enable Cards" off | `rem.getEnablePractice() === false` (or the Rem's own `DisableCards` powerup) |
+| **Table row / cell** | nothing — RemNote ships tables this way | `rem.isTable()` on the Rem or any ancestor; reports `enablePractice === false` like a deliberate switch-off |
 | **Direction disabled** | flashcard menu → Flashcard Direction, **or** disabling a forward/backward card in the queue | `rem.getPracticeDirection()` no longer includes the card's direction |
 | **Single cloze disabled** | queue → disable this card (cloze) | *no Rem-level trace* — see below |
 | **Markup removed** | editing the cloze or back side away | *no Rem-level trace* — see below |
@@ -143,6 +144,17 @@ probes the survivors with `hasPowerup`.
 
 **"No scan has run" must never be reported as "nothing is paused."** `getPausedRemIds` returns
 `null` in that case, and the analytics tab says so in words rather than showing a confident 0.
+
+## Tables look exactly like a deliberate switch-off
+
+A table's rows and cells are Rems under the table Rem, and RemNote creates them with cards
+disabled. They therefore report `getEnablePractice() === false` — indistinguishable from a card
+the user turned off on purpose, and there can be a great many of them.
+
+`rem.isTable()` separates the two, checked on the Rem itself **and on its ancestors** (a cell's
+table is two hops up, through the row). `classifyUnscheduled` splits the result into
+`cards-disabled-table` (structural, nothing to investigate) and `cards-disabled-rem` (a decision
+someone made, and the only one of the two worth a user's attention).
 
 ## Signals that do NOT work
 
