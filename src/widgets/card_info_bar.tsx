@@ -24,6 +24,7 @@ import {
   CardPriorityInfo,
   QueueSessionCache,
   expandCardInfosToCards,
+  isPerCardDue,
   getCardPriority,
 } from '../lib/card_priority';
 import { getPendingCacheUpdate } from '../lib/card_priority/cache';
@@ -464,8 +465,8 @@ export function CardInfoBar() {
   // card of this rem is due → the rem is due".
   const seenCardSet = useMemo(() => new Set(seenCardIds), [seenCardIds]);
   const weightedIsDuePredicate = useCallback(
-    (item: { remId: string; nextRepetitionTime?: number | null }) => {
-      const due = (item.nextRepetitionTime ?? Infinity) <= Date.now();
+    (item: { remId: string; nextRepetitionTime?: number | null; paused?: boolean }) => {
+      const due = isPerCardDue(item, Date.now());
       // Same "current rem still counts as due" override as before so the
       // value doesn't tick up the moment you grade the card you're seeing.
       return due && (!seenCardSet.has(item.remId) || item.remId === rem?._id);

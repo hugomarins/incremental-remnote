@@ -4,6 +4,7 @@ import * as _ from 'remeda';
 import { calculateVolumeBasedPercentile, calculateWeightedShield } from './utils';
 import { IncrementalRem } from './incremental_rem';
 import { CardPriorityInfo, expandCardInfosToCards } from './card_priority';
+import { isPerCardDue } from './card_priority/types';
 import {
   allCardPriorityInfoKey,
   allIncrementalRemKey,
@@ -593,8 +594,9 @@ export async function computeMonthlyShieldCatchUp(
   let dueCount = 0;
   for (const item of perCard) {
     if (item.priority > monthlyBest) continue;
-    const t = item.nextRepetitionTime;
-    if (t == null || t > now) continue;
+    // Same predicate as every other shield surface: a paused deck's cards keep
+    // a real next time that RemNote will never act on.
+    if (!isPerCardDue(item, now)) continue;
     if (seen.has(item.remId)) continue;
     dueCount++;
   }

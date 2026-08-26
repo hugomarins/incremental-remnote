@@ -48,7 +48,7 @@ import {
 import { resolvePowerupSlotDiagnostic } from '../lib/powerup_slot_compat';
 import { dumpRawPowerupSlots } from '../lib/raw_slot_dump';
 import { togglePdfHighlightBorders } from '../lib/ui_helpers';
-import { CardPriorityInfo, expandCardInfosToCards } from '../lib/card_priority/types';
+import { CardPriorityInfo, expandCardInfosToCards, isPerCardDue } from '../lib/card_priority/types';
 import { IncrementalRem as IncrementalRemType } from '../lib/incremental_rem/types';
 import { buildDocumentScope } from '../lib/scope_helpers';
 import { initIncrementalRem } from './powerups';
@@ -2623,8 +2623,12 @@ export async function registerCommands(plugin: ReactRNPlugin) {
         // computed over cards (matching the Card Priority × Memory Analytics
         // tab) instead of over rems-with-cards.
         const nowMs = Date.now();
-        const perCardDuePredicate = (item: { remId: string; nextRepetitionTime?: number | null }) =>
-          (item.nextRepetitionTime ?? Infinity) <= nowMs && !seenCardSet.has(item.remId);
+        const perCardDuePredicate = (item: {
+          remId: string;
+          nextRepetitionTime?: number | null;
+          paused?: boolean;
+        }) =>
+          isPerCardDue(item, nowMs) && !seenCardSet.has(item.remId);
 
         const allCardItems = expandCardInfosToCards(allCardInfos);
         const docCardItems = scope

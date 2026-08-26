@@ -33,6 +33,7 @@ import {
   autoAssignCardPriority,
   calculateCardRemPercentilesFromCards,
   expandCardInfosToCards,
+  isPerCardDue,
   getCardPriority,
   setCardPriority,
   PrioritySource,
@@ -523,8 +524,12 @@ export function registerQueueEnterListener(
       // × Memory Analytics tab.
       const seenCardIdsSet = new Set(seenCardIds_ws);
       const nowMs_ws = Date.now();
-      const perCardDue = (item: { remId: string; nextRepetitionTime?: number | null }) =>
-        (item.nextRepetitionTime ?? Infinity) <= nowMs_ws && !seenCardIdsSet.has(item.remId);
+      const perCardDue = (item: {
+        remId: string;
+        nextRepetitionTime?: number | null;
+        paused?: boolean;
+      }) =>
+        isPerCardDue(item, nowMs_ws) && !seenCardIdsSet.has(item.remId);
 
       if (allCardInfos.length > 0) {
         const allCardItems = expandCardInfosToCards(allCardInfos);
