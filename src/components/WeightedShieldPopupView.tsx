@@ -4,6 +4,7 @@ import { WeightedShieldBreakdown } from '../lib/utils';
 import { currentSubQueueIdKey } from '../lib/consts';
 import { getMonthlyBestAbsolutePriorityShield } from '../lib/shield_history';
 import { CardMemoryAnalyticsView } from './CardMemoryAnalyticsView';
+import { SuppressedCardsView } from './SuppressedCardsView';
 import { FSRSCalibrationView } from './FSRSCalibrationView';
 import { OddsUniverse, SelectionOddsPanel } from './SelectionOddsPanel';
 
@@ -416,7 +417,7 @@ function BreakdownSection({
   );
 }
 
-type TabId = 'shield' | 'cardMemory' | 'fsrsCalibration';
+type TabId = 'shield' | 'cardMemory' | 'suppressed' | 'fsrsCalibration';
 
 export function WeightedShieldPopup() {
   const plugin = usePlugin();
@@ -540,6 +541,9 @@ export function WeightedShieldPopup() {
           <button type="button" role="tab" aria-selected={tab === 'cardMemory'} style={tabBtnStyle(tab === 'cardMemory')} onClick={() => setTab('cardMemory')}>
             🃏 Card Priority × Memory Analytics
           </button>
+          <button type="button" role="tab" aria-selected={tab === 'suppressed'} style={tabBtnStyle(tab === 'suppressed')} onClick={() => setTab('suppressed')}>
+            🚫 Suppressed Cards
+          </button>
           <button type="button" role="tab" aria-selected={tab === 'fsrsCalibration'} style={tabBtnStyle(tab === 'fsrsCalibration')} onClick={() => setTab('fsrsCalibration')}>
             🎯 FSRS Calibration
           </button>
@@ -548,6 +552,8 @@ export function WeightedShieldPopup() {
 
       {showTabs && tab === 'cardMemory' ? (
         <CardMemoryAnalyticsView />
+      ) : showTabs && tab === 'suppressed' ? (
+        <SuppressedCardsView />
       ) : showTabs && tab === 'fsrsCalibration' ? (
         <FSRSCalibrationView />
       ) : (

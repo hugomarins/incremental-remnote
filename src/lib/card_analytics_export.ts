@@ -56,6 +56,32 @@ export function collectClozeIds(richText: any): Set<string> {
 }
 
 /**
+ * The visible text inside each cloze in a rich text. Cloze markup lives on the
+ * text elements themselves (`cId`), so the cloze's own words are that element's
+ * `text`. Used to show a Rem's clozes when the user is deciding whether to
+ * re-enable it — the front/back pair alone often doesn't say what was clozed.
+ */
+export function collectClozeTexts(richText: any): string[] {
+  const out: string[] = [];
+  const visit = (node: any, depth: number) => {
+    if (!node || depth > 12) return;
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child, depth + 1);
+      return;
+    }
+    if (typeof node !== 'object') return;
+    const hasCloze = typeof node.cId === 'string' || Array.isArray(node.cId);
+    if (hasCloze && typeof node.text === 'string' && node.text.trim()) {
+      out.push(node.text.trim());
+    }
+    if (Array.isArray(node.blocks)) visit(node.blocks, depth + 1);
+    if (Array.isArray(node.text)) visit(node.text, depth + 1);
+  };
+  visit(richText, 0);
+  return out;
+}
+
+/**
  * Does the Rem still define the markup this card was generated from?
  *
  * - cloze card: its cloze id must still appear in the Rem's text.
@@ -123,6 +149,10 @@ export interface RemContext {
   clozeIds: string[];
   /** Whether the Rem still has a back side (what a forward/backward card needs). */
   hasBackText: boolean;
+  /** Rendered back side, for showing the Rem as `front → back`. */
+  backText: string;
+  /** The visible words inside each cloze the Rem currently defines. */
+  clozeTexts: string[];
   /** The Rem is itself a table. */
   isTableOwn: boolean;
   /** The Rem is a row or cell inside a table. */
@@ -523,6 +553,8 @@ export async function resolveAnomalyRemContext(
     disablingAncestorId: null,
     clozeIds: [],
     hasBackText: false,
+    backText: '',
+    clozeTexts: [],
     isTableOwn: false,
     inTable: false,
     cardsViaGetCards: null,
@@ -565,6 +597,11 @@ export async function resolveAnomalyRemContext(
           disablingAncestorId: ancestors.disablingAncestorId,
           clozeIds: Array.from(collectClozeIds(rem.text)),
           hasBackText: Array.isArray(rem.backText) && rem.backText.length > 0,
+          backText:
+            Array.isArray(rem.backText) && rem.backText.length > 0
+              ? await safeRemTextToString(plugin, rem.backText)
+              : '',
+          clozeTexts: collectClozeTexts(rem.text),
           isTableOwn: !!isTableOwn,
           inTable: ancestors.inTable,
           cardsViaGetCards: cards ? cards.length : null,
@@ -902,6 +939,8 @@ export async function probeRemCardEnablement(
     disablingAncestorId: ancestors.find((a) => a.disableCards)?.remId ?? null,
     clozeIds,
     hasBackText,
+    backText: '',
+    clozeTexts: [],
     isTableOwn,
     inTable: ancestors.some((a) => a.isTable),
     cardsViaGetCards: viaGetCards.length,
@@ -1069,4 +1108,112 @@ export async function probeCardOwnership(
     markupPresentOnGetRem,
     ancestors,
   };
+}
+
+
+// --- Suppression report: counts PLUS the Rems behind them ------------------
+//
+// `summarizeRows` answers "how many, and why". A user who wants to act on a
+// cause needs "which Rems" — deduplicated, because one Rem can own several
+// suppressed cards and re-enabling is a per-Rem action.
+
+export interface SuppressedRemEntry {
+  remId: string;
+  /** Rendered front text. */
+  text: string;
+  /** Rendered back side, or '' — shown as `front → back`. */
+  backText: string;
+  /** The words inside this Rem's clozes, if any. */
+  clozeTexts: string[];
+  priority: number;
+  bucket: string;
+  cause: UnscheduledCause;
+  /** How many of this Rem's cards are suppressed for this cause. */
+  cards: number;
+  /** How many of those have never been graded. */
+  newCards: number;
+  /** Whether the Rem is a table or sits in one — context for the user. */
+  inTable: boolean;
+}
+
+export interface SuppressionReport {
+  summary: ExportSummary;
+  /** One entry per (bucket, cause, Rem). */
+  entries: SuppressedRemEntry[];
+  computedAt: number;
+  pausedScanApplied: boolean;
+}
+
+export function buildSuppressionReport(
+  rows: CardAnalyticsRow[],
+  context: Map<string, RemContext>,
+  pausedScanApplied: boolean,
+): SuppressionReport {
+  const summary = summarizeRows(rows, context, pausedScanApplied);
+  const rollups = new Map<string, number>();
+  for (const r of rows) rollups.set(r.remId, (rollups.get(r.remId) ?? 0) + 1);
+
+  const byKey = new Map<string, SuppressedRemEntry>();
+  for (const r of rows) {
+    if (r.scheduleState !== 'unscheduled' && !r.inPausedDeck) continue;
+    const ctx = context.get(r.remId);
+    const cause = classifyUnscheduled(ctx, r);
+    const key = `${r.bucket}|${cause}|${r.remId}`;
+    let entry = byKey.get(key);
+    if (!entry) {
+      entry = {
+        remId: r.remId,
+        text: ctx?.text ?? '(unresolved)',
+        backText: ctx?.backText ?? '',
+        clozeTexts: ctx?.clozeTexts ?? [],
+        priority: r.priority,
+        bucket: r.bucket,
+        cause,
+        cards: 0,
+        newCards: 0,
+        inTable: !!(ctx && (ctx.isTableOwn || ctx.inTable)),
+      };
+      byKey.set(key, entry);
+    }
+    entry.cards++;
+    if (r.isNew) entry.newCards++;
+  }
+
+  return {
+    summary,
+    entries: Array.from(byKey.values()).sort((a, b) => a.priority - b.priority),
+    computedAt: Date.now(),
+    pausedScanApplied,
+  };
+}
+
+/**
+ * Turn practice back on for a set of Rems. Sequential — writes do not overlap
+ * on the plugin bridge — and reported per Rem so a partial failure is visible
+ * rather than silently folded into a success count.
+ */
+export async function reEnableRems(
+  plugin: RNPlugin,
+  remIds: string[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ enabled: number; failed: string[] }> {
+  const failed: string[] = [];
+  let enabled = 0;
+  for (let i = 0; i < remIds.length; i++) {
+    try {
+      const rem = await plugin.rem.findOne(remIds[i]);
+      if (!rem) {
+        failed.push(remIds[i]);
+      } else {
+        await rem.setEnablePractice(true);
+        enabled++;
+      }
+    } catch (e) {
+      console.error('[reEnableRems] failed for', remIds[i], e);
+      failed.push(remIds[i]);
+    }
+    if ((i + 1) % 10 === 0) onProgress?.(i + 1, remIds.length);
+  }
+  onProgress?.(remIds.length, remIds.length);
+  return { enabled, failed };
 }

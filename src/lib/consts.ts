@@ -198,6 +198,10 @@ export const cardAnalyticsLastPeriodKey = 'card-analytics-last-period';
  *  suppress their whole subtree without touching any card's nextRepetitionTime,
  *  so they have to be discovered once and reused. */
 export const pausedDeckScanKey = 'paused-deck-scan';
+
+/** Session cache for the Suppressed Cards tab's report (see
+ *  lib/card_analytics_export.ts → buildSuppressionReport). */
+export const suppressionReportKey = 'suppression-report';
 export const fsrsCalibrationLastPeriodKey = 'fsrs-calibration-last-period';
 export const studyDashboardLastPeriodKey = 'study-dashboard-last-period';
 /**
