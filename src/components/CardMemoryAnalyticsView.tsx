@@ -1102,9 +1102,11 @@ function ProgressDisplay({ progress, label }: { progress: ProgressInfo; label?: 
  */
 function ExportDiagnosisPanel({
   summary,
+  summaryText,
   onDismiss,
 }: {
   summary: ExportSummary;
+  summaryText: string | null;
   onDismiss: () => void;
 }) {
   const cell: React.CSSProperties = { padding: '3px 8px', textAlign: 'right' };
@@ -1122,6 +1124,35 @@ function ExportDiagnosisPanel({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong>Export diagnosis — where the “New but not Due” cards are</strong>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {summaryText && (
+            <button
+              type="button"
+              onClick={() =>
+                downloadText(
+                  summaryText,
+                  `card-analytics-summary-${new Date()
+                    .toISOString()
+                    .slice(0, 19)
+                    .replace(/[:T]/g, '-')}.txt`,
+                  'text/plain',
+                )
+              }
+              title="Save this diagnosis as a .txt file. Separate from the CSV because the host blocks a second automatic download."
+              style={{
+                padding: '2px 8px',
+                fontSize: '10.5px',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: '1px solid var(--rn-clr-background-tertiary)',
+                background: 'var(--rn-clr-background-primary)',
+                color: 'var(--rn-clr-content-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              ⤓ Summary .txt
+            </button>
+          )}
         <button
           type="button"
           onClick={onDismiss}
@@ -1135,6 +1166,7 @@ function ExportDiagnosisPanel({
         >
           ✕
         </button>
+        </div>
       </div>
       <div style={{ margin: '6px 0 8px', color: 'var(--rn-clr-content-secondary)', lineHeight: 1.5 }}>
         Of {summary.dueCards.toLocaleString()} cards due by date,{' '}
@@ -1246,6 +1278,11 @@ export function CardMemoryAnalyticsView() {
   // Export: the diagnosis of the last run (null until the user exports once),
   // and a label so the shared progress bar can say which phase is running.
   const [exportSummary, setExportSummary] = React.useState<ExportSummary | null>(null);
+  // The summary text is kept so it can be saved on its own click. Firing two
+  // automatic downloads in a row trips the host's "multiple downloads" block —
+  // the second one is silently dropped, and the permission prompt never renders
+  // inside a plugin iframe. One gesture, one file.
+  const [exportSummaryText, setExportSummaryText] = React.useState<string | null>(null);
   const [phaseLabel, setPhaseLabel] = React.useState<string | null>(null);
   // Paused-deck scan: a per-session fact, not a per-export one. Null means it
   // has never run, which is NOT the same as "no decks are paused" — the table
@@ -1354,13 +1391,11 @@ export function CardMemoryAnalyticsView() {
       const meta = `period=${period}, ignorePreReset=${ignorePreReset}, ${rows.length} cards`;
       const summaryText = summaryToText(summary, meta);
       console.log(`[CardMemoryAnalytics] export\n${summaryText}`);
-      // Two downloads fired back-to-back from a plugin iframe: the browser
-      // coalesces them and one silently never lands. Space them out, and put
-      // the big per-card CSV first so it is the one that is never at risk.
-      setPhaseLabel('Writing files…');
+      // Only the CSV downloads here — this click is its user gesture. The
+      // summary is rendered in the panel below and saved by its own button.
+      setPhaseLabel('Writing the CSV…');
       downloadText(rowsToCsv(rows, context), `card-analytics-cards-${stamp}.csv`);
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      downloadText(summaryText, `card-analytics-summary-${stamp}.txt`, 'text/plain');
+      setExportSummaryText(summaryText);
 
       await plugin.storage.setSession(cardAnalyticsCacheKey, breakdown);
       setCache(breakdown);
@@ -1536,6 +1571,7 @@ export function CardMemoryAnalyticsView() {
           {exportSummary && (
             <ExportDiagnosisPanel
               summary={exportSummary}
+              summaryText={exportSummaryText}
               onDismiss={() => setExportSummary(null)}
             />
           )}
