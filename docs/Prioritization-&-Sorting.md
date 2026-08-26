@@ -540,7 +540,7 @@ The **Weighted Shield value** (⚖️ %) shown in the shield header is precisely
 
 When both Incremental Rems and Cards groups are present, the wide popup exposes a second tab — **Card Priority × Memory Analytics** — that replays FSRS over every card in your knowledge base and aggregates per priority-percentile bucket. Each bucket holds an equal number of cards (deciles by inherited Rem priority, so a Rem with multiple cards contributes one entry per card), plus a consolidated **All KB** row at the bottom for comparison.
 
-![Card Priority × Memory Analytics](assets/weighted-shield-memory-analytics.png){ width="1000" }
+![Card Priority × Memory Analytics](assets/weighted-shield-memory-analytics-2.png){ width="1000" }
 
 20 columns are organized into four groups, with hover tooltips explaining each one:
 
@@ -569,6 +569,8 @@ Results are session-cached so reopening the popup in the same session is instant
 #### Suppressed cards { #suppressed-cards }
 
 Some cards exist in your knowledge base but can never come up in the queue. The **🚫 Suppressed Cards** tab of the wide popup counts them, splits them by *why*, and lets you act on the one cause that is a simple mistake.
+
+![The Suppressed Cards tab: 15,966 of 70,484 card records suppressed, broken down by cause and by priority bucket](assets/supressed-cards.png){ width="1000" }
 
 Press **Compute** and the tab reports a bucket × cause matrix — the same deciles as the analytics table, with one column per reason:
 

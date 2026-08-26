@@ -10,7 +10,11 @@ Cards can sit in your knowledge base unable to ever come up: disabled on the Rem
 
 A new **🚫 Suppressed Cards** tab breaks them down by bucket and cause, and lets you re-enable in bulk the ones that were switched off by mistake — each Rem shown as `front → back` with its breadcrumb, an **IncRem** badge where practice is meant to be off, and a **✓ checked** mark that syncs across devices so a long list can be worked through over several sittings.
 
+![The Suppressed Cards tab, with every cause counted per priority bucket](assets/supressed-cards.png){ width="900" }
+
 The analytics table gained `Unsched` and `Paused` columns, and `Done`, `%New`, `%Stale` and the FSRS averages now divide by `Active` — the cards you can actually practise.
+
+![Card Priority × Memory Analytics](assets/weighted-shield-memory-analytics-2.png){ width="1000" }
 
 📖 [Suppressed cards](Prioritization-&-Sorting.md#suppressed-cards)
 

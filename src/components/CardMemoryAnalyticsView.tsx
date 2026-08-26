@@ -289,10 +289,26 @@ function BucketRow({
   return (
     <tr style={trStyle}>
       {/* Identity */}
-      <td style={{ ...cellStyle, textAlign: 'left', fontWeight: isOverall || isSubset ? 700 : 500 }}>
+      {/* width:1% keeps these two shrink-to-fit, so the leftover width goes to
+          the numeric columns instead of padding out the bucket label. */}
+      <td
+        style={{
+          ...cellStyle,
+          textAlign: 'left',
+          width: '1%',
+          fontWeight: isOverall || isSubset ? 700 : 500,
+        }}
+      >
         {b.label}
       </td>
-      <td style={{ ...cellStyle, textAlign: 'center', color: 'var(--rn-clr-content-tertiary)' }}>
+      <td
+        style={{
+          ...cellStyle,
+          textAlign: 'center',
+          width: '1%',
+          color: 'var(--rn-clr-content-tertiary)',
+        }}
+      >
         {b.priorityRange}
       </td>
       {/* Population */}
@@ -442,8 +458,16 @@ function AnalyticsTable({ breakdown }: { breakdown: CardAnalyticsBreakdown }) {
           </tr>
           {/* Column header row */}
           <tr style={{ borderBottom: '2px solid var(--rn-clr-background-tertiary)' }}>
-            <th style={{ ...headerCellStyle, textAlign: 'left' }} title={COL_TOOLTIPS.bucket}>Bucket</th>
-            <th style={{ ...headerCellStyle, textAlign: 'center' }} title={COL_TOOLTIPS.absPrio}>
+            <th
+              style={{ ...headerCellStyle, textAlign: 'left', width: '1%' }}
+              title={COL_TOOLTIPS.bucket}
+            >
+              Bucket
+            </th>
+            <th
+              style={{ ...headerCellStyle, textAlign: 'center', width: '1%' }}
+              title={COL_TOOLTIPS.absPrio}
+            >
               Abs.Prio
             </th>
             <th style={headerCellStyle} title={COL_TOOLTIPS.items}>
