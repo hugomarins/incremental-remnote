@@ -72,17 +72,22 @@ export interface PerCardShieldItem {
 /**
  * The one due predicate for per-card shield items.
  *
- * Two different reasons a card is not due, and only one of them shows in the
- * timestamp: an unscheduled card has no `nextRepetitionTime` at all, while a
- * card in a paused deck keeps a real one that RemNote will never act on. Every
- * shield, badge and breakdown has to apply both, so the rule lives here rather
- * than being re-typed at each call site.
+ * A card in a paused deck IS due when its date has passed. Pausing defers the
+ * work; it does not cancel it, and it does not un-forget the card. Suppressing
+ * due-ness here would mean pausing a backlog-heavy deck instantly improved
+ * every statistic that counts it — the shield, its history, the percentiles —
+ * and unpausing would undo the improvement, so a metric meant to be tracked
+ * over time would move for a reason that has nothing to do with studying.
+ * Measured on a live KB: unpausing one deck moved the Cards shield 42.2% →
+ * 39.7% and the top bucket's weight share 24.4% → 22.9%.
+ *
+ * Only `nextRepetitionTime === null` takes a card out — an unscheduled card is
+ * not deferred work, it is not work at all.
  */
 export function isPerCardDue(
   item: Pick<PerCardShieldItem, 'nextRepetitionTime' | 'paused'>,
   now: number,
 ): boolean {
-  if (item.paused) return false;
   return (item.nextRepetitionTime ?? Infinity) <= now;
 }
 

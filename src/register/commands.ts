@@ -2637,9 +2637,9 @@ export async function registerCommands(plugin: ReactRNPlugin) {
         groups.push({
           title: 'Cards',
           itemLabel: 'Cards',
-          kb: computeWeightedShieldBreakdown(allCardItems, perCardDuePredicate, { isRankOnly: (i: { paused?: boolean }) => !!i.paused }),
+          kb: computeWeightedShieldBreakdown(allCardItems, perCardDuePredicate),
           doc: docCardItems.length > 0
-            ? computeWeightedShieldBreakdown(docCardItems, perCardDuePredicate, { isRankOnly: (i: { paused?: boolean }) => !!i.paused })
+            ? computeWeightedShieldBreakdown(docCardItems, perCardDuePredicate)
             : null,
         });
       }

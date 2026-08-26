@@ -154,17 +154,17 @@ const COL_TOOLTIPS = {
   unsched:
     'Cards with NO nextRepetitionTime: disabled on the card, on the Rem, or by an ancestor / paused deck — plus cards whose cloze or back side no longer exists.\nRemNote never surfaces these, so they cannot be due and are excluded from every column to the right.\nUse “Export cards” to see them one by one with the cause of each.',
   paused:
-    'Cards inside a paused deck. Pausing does NOT clear nextRepetitionTime — these keep a real due date and would otherwise be counted as due — but RemNote refuses to serve them.\nRequires the paused-deck scan; without it this reads 0 because nothing was looked at, and those cards inflate Due instead.',
+    'Cards inside a paused deck. They keep a real due date and still count as Due, New and Stale — pausing defers work, it does not cancel it. Shown so you can see how much of a bucket is deferred rather than outstanding.\nRequires the paused-deck scan; without it this reads 0 because nothing was looked at.',
   active:
-    'Items − Unsched − Paused: the cards that can actually be practised. This is the denominator for Done, %New and %Stale.',
+    'Items − Unsched − Paused: what the queue could serve today. Reported for context — it is NOT the denominator, because a bucket must not look more finished just because a deck was paused.',
   due:
-    'Cards whose nextRepetitionTime is in the past — RemNote would schedule them now. Unscheduled cards can never be due.',
+    'Cards whose nextRepetitionTime is in the past. Includes cards in a paused deck, whose dates have genuinely passed even though the queue will not serve them until you unpause. Unscheduled cards can never be due.',
   done:
-    '% of the ACTIVE cards already processed (not due) = (active − due) / active. Unscheduled cards are not counted as done — they were never practicable.',
+    '% already processed (not due) = (counted − due) / counted, where counted = Items − Unsched. Unscheduled cards are not counted as done — they were never practicable. Paused cards ARE counted: their work is deferred, not finished.',
   pctNew:
-    '% of the ACTIVE cards never graded (no Again/Hard/Good/Easy in their effective history) — i.e. what you could still learn. New cards that are unscheduled are excluded; they are counted under Unsched. Always-current.',
+    '% of the counted cards never graded (no Again/Hard/Good/Easy in their effective history) — i.e. what you could still learn. New cards that are unscheduled are excluded; they are counted under Unsched. Always-current.',
   pctStale:
-    '% of the ACTIVE cards overdue by more than 2× their last scheduled interval — i.e., now > lastRepDate + 2 × (nextRepDate − lastRepDate). High values suggest the schedule has drifted past usefulness. Always-current.',
+    '% of the counted cards overdue by more than 2× their last scheduled interval — i.e., now > lastRepDate + 2 × (nextRepDate − lastRepDate). High values suggest the schedule has drifted past usefulness. Always-current.',
   reps:
     'Total gradeable reps (Again / Hard / Good / Easy) in the period. Avg per card in parentheses. Period-filtered.',
   time:
@@ -1714,14 +1714,16 @@ export function CardMemoryAnalyticsView() {
             and Practiced Queues conventions.{' '}
             <strong>Always-current</strong> (KB state, unaffected by period):{' '}
             <em>Items, Unsched, Paused, Active, Due, Done, %New, %Stale, D, R, S</em>.{' '}
-            <strong>Items</strong> counts every card record; <strong>Unsched</strong> counts
+            <strong>Items</strong> counts every card record. <strong>Unsched</strong> counts
             those with no <code>nextRepetitionTime</code> — disabled on the card, on the Rem or
-            by an ancestor, or whose cloze / back side no longer exists;{' '}
-            <strong>Paused</strong> counts those under a paused deck, which keep a real due date
-            but are never served. Neither can be practised, so{' '}
-            <strong>Active = Items − Unsched − Paused</strong> is the denominator for{' '}
-            <em>Done, %New, %Stale</em> and for the FSRS state — a card that cannot be practised
-            is not “done”, and is not a new card you could learn. Use{' '}
+            by an ancestor, or whose cloze / back side no longer exists. Those are not deferred
+            work but no work at all, so they are the one thing left out: everything to the
+            right divides by <strong>Items − Unsched</strong>. <strong>Paused</strong> counts
+            cards under a paused deck; they still count as Due, New and Stale, because pausing
+            defers work rather than cancelling it — otherwise pausing a deck would read as
+            progress, and the shield and its history would jump for a reason that has nothing
+            to do with studying. <strong>Active</strong> is what the queue could serve today,
+            reported for context rather than used as a denominator. Use{' '}
             <strong>Export cards</strong> for the cause behind each one. <strong>Cost</strong> is
             expressed in <em>minutes per year (min/y)</em>: lifetime per-card coverage when
             period = All; otherwise annualized as <em>time-in-period / period-length</em>{' '}

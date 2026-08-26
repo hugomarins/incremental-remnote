@@ -162,28 +162,9 @@ export function calculateVolumeBasedPercentile<T extends { priority: number }>(
  * @param isDuePredicate Returns true if the item is due and unreviewed.
  * @returns Weighted completion percentage (0–100), or 100 if no items / no due items.
  */
-/**
- * Items that take part in the RANKING but not in the workload.
- *
- * A paused deck's cards are the case this exists for. They must keep their
- * place in the sorted population — pausing defers a card, it does not demote
- * it, and dropping them would shift every other item's percentile the moment a
- * deck is paused — but they must not add weight to the shield's total, or
- * pausing a deck would raise your shield for free, and a big paused deck would
- * park a permanent block of "already processed" weight in the denominator.
- *
- * With them excluded from the totals, the shield answers the question it is
- * meant to: *of the work I can actually do, how much have I done?* — and
- * finishing every practicable card reaches 100%.
- */
-export interface ShieldPopulationOptions<T> {
-  isRankOnly?: (item: T) => boolean;
-}
-
 export function calculateWeightedShield<T extends { priority: number; remId: string }>(
   allItems: T[],
-  isDuePredicate: (item: T) => boolean,
-  opts?: ShieldPopulationOptions<T>
+  isDuePredicate: (item: T) => boolean
 ): number {
   if (!allItems || allItems.length === 0) return 100;
 
@@ -209,9 +190,6 @@ export function calculateWeightedShield<T extends { priority: number; remId: str
   for (let idx = 0; idx < n; idx++) {
     const item = sorted[idx];
     const p = ((idx + 1) / n) * 100;
-    // Rank-only items (a paused deck's cards) set everyone else's percentile
-    // but are not workload themselves — see ShieldPopulationOptions.
-    if (opts?.isRankOnly?.(item)) continue;
     const weight = Math.exp(-k * p / 100);
     totalWeight += weight;
 
@@ -287,8 +265,7 @@ export interface WeightedShieldBreakdown {
  */
 export function computeWeightedShieldBreakdown<T extends { priority: number; remId: string }>(
   allItems: T[],
-  isDuePredicate: (item: T) => boolean,
-  opts?: ShieldPopulationOptions<T>
+  isDuePredicate: (item: T) => boolean
 ): WeightedShieldBreakdown {
   const k = 2.3026;
 
@@ -317,7 +294,6 @@ export function computeWeightedShieldBreakdown<T extends { priority: number; rem
   for (let idx = 0; idx < n; idx++) {
     const item = sorted[idx];
     const p = ((idx + 1) / n) * 100;
-    if (opts?.isRankOnly?.(item)) continue;
     const weight = Math.exp(-k * p / 100);
     const bucketIdx = Math.min(Math.floor(p / 10), 9); // 0-9
     const isDue = isDuePredicate(item);
@@ -339,12 +315,10 @@ export function computeWeightedShieldBreakdown<T extends { priority: number; rem
   }
 
   // Slim, ordered snapshot for the interactive subset-stats slider in the popup.
-  const sortedItems = sorted
-    .filter((item) => !opts?.isRankOnly?.(item))
-    .map((item) => ({
-      priority: item.priority,
-      isDue: dueByItem.get(item) ?? false,
-    }));
+  const sortedItems = sorted.map((item) => ({
+    priority: item.priority,
+    isDue: dueByItem.get(item) ?? false,
+  }));
 
   const shieldValue = totalWeight > 0
     ? Math.round(((totalWeight - dueWeight) / totalWeight) * 1000) / 10

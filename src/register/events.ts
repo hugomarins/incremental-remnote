@@ -533,7 +533,7 @@ export function registerQueueEnterListener(
 
       if (allCardInfos.length > 0) {
         const allCardItems = expandCardInfosToCards(allCardInfos);
-        sessionCache.weightedShieldCardKB = calculateWeightedShield(allCardItems, perCardDue, { isRankOnly: (i: { paused?: boolean }) => !!i.paused });
+        sessionCache.weightedShieldCardKB = calculateWeightedShield(allCardItems, perCardDue);
       }
 
       // Card Doc weighted shield
@@ -543,7 +543,7 @@ export function registerQueueEnterListener(
           allCardInfos.filter((info) => scopeSet.has(info.remId))
         );
         if (docCardItems.length > 0) {
-          sessionCache.weightedShieldCardDoc = calculateWeightedShield(docCardItems, perCardDue, { isRankOnly: (i: { paused?: boolean }) => !!i.paused });
+          sessionCache.weightedShieldCardDoc = calculateWeightedShield(docCardItems, perCardDue);
         }
       }
 

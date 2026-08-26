@@ -190,43 +190,58 @@ node upward*, or a tag found near the leaf leaks onto the ancestors above it, an
 higher up erases a tag already found below it. Nearest Deck wins for pause (an active sub-deck
 under a paused one is not paused); Disable-Cards ORs upward.
 
-## Two populations: ranking vs practice
+## One population: deferred work still counts
 
-Suppressed cards are not one population but two, and they must be treated differently:
+Suppressed cards are not one kind of thing, and the split that matters is **deferred vs. not
+work at all**:
 
-| | population | used for |
+| | in the statistics? |
+| --- | --- |
+| **Paused deck** | **YES** — counts as Due, New, Stale, in the FSRS averages, in the shield's weight, and in the percentile ranking |
+| **Unscheduled** (disabled card / Rem / ancestor, table row, markup removed, direction off) | **NO** — excluded from everything |
+
+**Pausing must not change any number.** Pausing defers work; it does not cancel it, and it does
+not un-forget the card — its retrievability decays exactly the same. If paused cards were left
+out, pausing a backlog-heavy deck would instantly improve the shield, the percentiles and every
+bucket statistic, and unpausing would undo the improvement. The plugin keeps a **Priority Shield
+History**, so that is not a cosmetic problem: it puts steps into a time series for a reason that
+has nothing to do with studying.
+
+Measured on a live KB — unpausing one deck (6,617 Rems) with everything else unchanged:
+
+| | paused | unpaused |
 | --- | --- | --- |
-| **Ranking** | active + paused | percentile, decile membership, relative priority, band colours, the Weighted Shield's universe |
-| **Practice** | active only | Due, Done%, %New, %Stale, FSRS D/R/S averages |
+| Cards shield | 42.2% | 39.7% |
+| top bucket weight share | 24.4% | 22.9% |
+| threshold Rel %ile | 15.5% | 12.6% |
 
-**Paused cards stay in the ranking.** Pausing defers a card; it does not demote it — the
-priority value already carries importance. Excluding them would shift every other card's
-percentile the moment a deck is paused and shift it back on unpause, so priority would drift as
-a side effect of a scheduling decision. They also keep a real `nextRepetitionTime`, which is
-what makes them mechanically distinguishable here.
+Processed weight barely moved (10,435.94 → 10,438.28) — no work had been done. Only the
+denominator changed, because the deck had been excluded from it.
 
-**Unscheduled cards leave the ranking.** A disabled card, a table row, a direction that is off,
-a cloze whose markup is gone — none of these is deferred; they are not cards the user intends
-to practise at all. Nothing is waiting to come back, and leaving them in lets them push real
-cards across percentile boundaries.
+**Unscheduled cards leave everything.** A disabled card, a table row, a cloze whose markup is
+gone — nothing is waiting to come back, so they are neither work nor ranking material. The
+filter is `cardsNextRep === null`, already carried on every `CardPriorityInfo`.
 
-The filter is `cardsNextRep === null`, already carried on every `CardPriorityInfo`, so no new
-data is needed. It is applied in one place — `expandCardInfosToCards`
-(`lib/card_priority/types.ts`) — which by its own doc comment feeds the Weighted Shield, the
-standard Priority Shield, the badge `kbPercentile` and the Priority Review Document.
+**The two mechanisms are complementary, and users have both.** "Pause deck" says *later*;
+**Disable Descendant Cards** says *not at all*. Because the second exists and is excluded from
+everything, pausing can safely keep meaning "still counts". A user who wants a document out of
+their statistics has an honest way to say so.
 
-Two places need the same rule applied separately, because they do not go through that function:
+Applied in one place — `expandCardInfosToCards` (`lib/card_priority/types.ts`) — which feeds the
+Weighted Shield, the standard Priority Shield, the badge `kbPercentile` and the Priority Review
+Document. `isPerCardDue` in the same file is the single due predicate. Two more places need the
+rule separately: `lib/priority_bands.ts` (skips a Rem only when ALL its cards are unscheduled,
+keeping the pool rem-weighted) and `computeCardAnalyticsBreakdown` (deciles sized by the same
+population).
 
-- `lib/priority_bands.ts` samples one priority per *Rem*. A Rem whose cards are ALL unscheduled
-  is skipped; one with at least one schedulable card still counts once, keeping the pool
-  rem-weighted rather than silently switching it to card-weighted.
-- `computeCardAnalyticsBreakdown` sizes its deciles by the ranked population, while still
-  *reporting* unscheduled cards in whichever bucket their priority falls into — bucket size is
-  defined by ranked cards, bucket contents still account for everything.
+Two traps found while implementing this:
 
-One trap when applying the filter: the stale-cache fallback in `expandCardInfosToCards` used to
-synthesize non-due cards with `nextRepetitionTime: null`. Under this rule that would have
-deleted them from the ranking entirely. They now get a far-future sentinel instead.
+- the stale-cache fallback in `expandCardInfosToCards` synthesized non-due cards with
+  `nextRepetitionTime: null`, which under this rule would have deleted them from the population.
+  They now get a far-future sentinel.
+- `computeWeightedShieldBreakdown` stored percentiles in a `Map` keyed by `remId`, so every card
+  of a multi-card Rem inherited the last one's rank, weight and bucket. That is why the shield's
+  buckets disagreed with the analytics deciles. Percentile is now per item, by index.
 
 ## Consequences for the analytics
 

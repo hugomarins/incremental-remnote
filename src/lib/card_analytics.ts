@@ -448,14 +448,19 @@ function accumulate(acc: AccData, stats: PerCardStats, priority: number) {
   if (stats.isPaused) acc.paused++;
   else if (stats.isUnscheduled) acc.unscheduled++;
 
-  // Due-ness is reported for what RemNote would actually serve, so suppressed
-  // cards are excluded even though they carry a real nextRepetitionTime.
-  if (stats.isDue && !stats.isPaused) acc.due++;
+  // Paused cards count as due, new and stale exactly like any other card.
+  // Pausing defers work; it does not cancel it, and it does not un-forget the
+  // card. Excluding them would mean pausing a backlog-heavy deck instantly
+  // improved every statistic here — and unpausing undid the improvement — so
+  // these numbers would move for reasons that have nothing to do with studying.
+  // Only UNSCHEDULED cards are left out, and they are left out of the
+  // denominator too: those are not deferred work, they are not work at all.
+  if (stats.isDue) acc.due++;
   if (stats.isNew) {
-    if (stats.isUnscheduled || stats.isPaused) acc.newUnscheduled++;
+    if (stats.isUnscheduled) acc.newUnscheduled++;
     else acc.newCount++;
   }
-  if (stats.isStale && !stats.isPaused) acc.staleCount++;
+  if (stats.isStale) acc.staleCount++;
 
   acc.totGradeableReps += stats.gradeableReps;
   acc.totTimeMs += stats.totalTimeMs;
@@ -475,16 +480,10 @@ function accumulate(acc: AccData, stats: PerCardStats, priority: number) {
   acc.sumGrade += stats.sumGrade;
   acc.gradeCount += stats.gradeCount;
 
-  // FSRS state describes what you are currently practising, so unscheduled
-  // cards are left out — an unpractisable card's retrievability decays toward
-  // zero and would drag the bucket's R down for no actionable reason.
-  if (
-    !stats.isUnscheduled &&
-    !stats.isPaused &&
-    stats.d !== null &&
-    stats.s !== null &&
-    stats.rToday !== null
-  ) {
+  // FSRS state covers everything still in the workload, paused decks included:
+  // their retrievability really is decaying, and hiding that would make a
+  // parked deck look healthier than it is. Only unscheduled cards are left out.
+  if (!stats.isUnscheduled && stats.d !== null && stats.s !== null && stats.rToday !== null) {
     acc.sumD += stats.d;
     acc.sumS += stats.s;
     acc.sumRtoday += stats.rToday;
@@ -498,13 +497,17 @@ function finalize(acc: AccData, label: string): CardBucketStats {
     cards > 0 && Number.isFinite(acc.minPriority) && Number.isFinite(acc.maxPriority)
       ? `${acc.minPriority}-${acc.maxPriority}`
       : '—';
-  // Every practice-shaped percentage is measured against the cards that can
-  // actually be practised. Counting unscheduled cards as "done" was reporting
-  // 100% for buckets holding hundreds of cards no queue will ever show.
-  const active = cards - acc.unscheduled - acc.paused;
-  const donePct = active > 0 ? ((active - acc.due) / active) * 100 : 100;
-  const newPct = active > 0 ? (acc.newCount / active) * 100 : 0;
-  const stalePct = active > 0 ? (acc.staleCount / active) * 100 : 0;
+  // Denominator = the cards still in the workload: everything except the
+  // unscheduled ones. Counting unscheduled cards as "done" reported 100% for
+  // buckets holding hundreds of cards no queue will ever show; counting paused
+  // ones out would make pausing a deck look like progress.
+  const counted = cards - acc.unscheduled;
+  // Reported separately: what the queue could serve today. Not a denominator —
+  // see the note above.
+  const active = counted - acc.paused;
+  const donePct = counted > 0 ? ((counted - acc.due) / counted) * 100 : 100;
+  const newPct = counted > 0 ? (acc.newCount / counted) * 100 : 0;
+  const stalePct = counted > 0 ? (acc.staleCount / counted) * 100 : 0;
   const avgReps = cards > 0 ? acc.totGradeableReps / cards : 0;
   const avgTimeMs = cards > 0 ? acc.totTimeMs / cards : 0;
   const cpm = acc.totTimeMs > 0 ? acc.totGradeableReps / (acc.totTimeMs / 60000) : 0;
