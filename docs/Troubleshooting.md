@@ -696,3 +696,35 @@ Please get in touch, via the [plugin's issue tracker](https://github.com/bjsi/in
 - **the numbers differ in shape from the ones above** — a different slot id, or a Rem where a *manual* priority disagrees with what is displayed.
 
 The diagnostic tools were built for exactly this, and the more knowledge bases they are run against, the more precisely the remaining cases can be described to RemNote.
+
+
+## 🃏 Why can't this card be practised?
+
+A card record can exist while RemNote refuses to serve it, and the states that cause this look identical through the obvious API. `rem.getCards()` hides **disabled** cards, so a Rem returning zero cards proves nothing on its own — it may hold plenty. These tools, in the **Debug** widget, tell the states apart. All of them are read-only unless stated.
+
+### Probe Card Enablement
+
+Focus a Rem and press it. Prints every signal that decides whether its cards can be practised: `enablePractice`, the practice direction, the Rem's cloze ids, whether it is or sits inside a table, the whole ancestor chain with each ancestor's *Disable Descendant Cards* and Deck status, and per card `inGetCards` / `nextRepetitionTime` / reps / whether its markup is still present.
+
+Two results are worth knowing in advance:
+
+*   **`enablePractice=false` with `practiceDirection=forward`** is normal. RemNote's UI shows *Flashcard Direction: None* for a Rem with practice off, but the stored direction is untouched — so the direction never proves a card is disabled.
+*   **`inTable=true`** means the Rem is a table row or cell. Those ship with cards off and are not an oversight.
+
+### Card ownership probe
+
+Paste a card id. Compares the `remId` field the plugin groups by against the SDK's own `card.getRem()`, and reports whether the card's cloze markup lives on either Rem. Use it when a Rem seems to own cards that make no sense for it.
+
+### Purge orphaned cloze cards on a Rem
+
+**Deletes data.** For one Rem, selects only cloze cards whose cloze id is absent from the Rem's current text *and* which have no `nextRepetitionTime`. Everything else is kept and listed with a reason. Forward/backward records are a separate, opt-in selection, offered only when the Rem has **no back side** — with one, a disabled direction explains the record and it is left alone.
+
+### Sweep the KB for markup-gone cloze cards
+
+**Deletes data.** The same idea across the whole knowledge base, split by what history would be lost:
+
+*   **Kept — real graded practice**: reported with the number of reps at stake, never deletable here. A reworded Rem, or one cloze split into several, loses its markup while keeping history worth preserving. Grades are counted over the *full lifetime* history, ignoring any RESET — so a card RemNote labels *New* because it was reset is still protected.
+*   **No history at all**: nothing to lose. The default selection.
+*   **Entries but never graded**: skips, resets and views only — RemNote shows these as *Times practiced N / Last practiced Never*. Opt-in.
+
+Both deletion tools require the backup JSON — full repetition histories of everything queued for deletion — to be saved before the delete button unlocks. Card deletion cannot be undone from the plugin.
