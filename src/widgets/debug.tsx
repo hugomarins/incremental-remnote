@@ -49,8 +49,10 @@ import {
   OrphanCardAnalysis,
   KEEP_REASON_LABELS,
   KeepReason,
+  MarkupGoneScan,
   analyzeOrphanCards,
   deleteCards,
+  scanMarkupGoneCards,
 } from '../lib/orphan_card_cleanup';
 import {
   readCardPriorityStoreMeta,
@@ -577,6 +579,12 @@ function Debug() {
   // Forward/backward records are a separate judgement from the cloze rule, so
   // they are opted into explicitly rather than folded into the same count.
   const [orphanIncludeDirectionless, setOrphanIncludeDirectionless] = useState(false);
+  const [markupScan, setMarkupScan] = useState<MarkupGoneScan | null>(null);
+  const [markupBusy, setMarkupBusy] = useState<string | null>(null);
+  const [markupBackedUp, setMarkupBackedUp] = useState(false);
+  // History entries with no grade among them (skips, resets, views) are a
+  // judgement call, so they are opted into rather than swept up by default.
+  const [markupIncludeTouched, setMarkupIncludeTouched] = useState(false);
   const [globalInflationPreview, setGlobalInflationPreview] = useState<null | {
     cutoffMs: number;
     scannedRems: number;
@@ -2417,6 +2425,75 @@ function Debug() {
       await plugin.app.toast(`Delete failed: ${e?.message || String(e)}`);
     } finally {
       setOrphanBusy(null);
+    }
+  };
+
+  const handleScanMarkupGone = async () => {
+    setMarkupBusy('Scanning…');
+    setMarkupScan(null);
+    setMarkupBackedUp(false);
+    setMarkupIncludeTouched(false);
+    try {
+      const scan = await scanMarkupGoneCards(plugin, (done, total, phase) =>
+        setMarkupBusy(total ? `${phase} ${done.toLocaleString()} / ${total.toLocaleString()}` : phase)
+      );
+      setMarkupScan(scan);
+      await plugin.app.toast(
+        `${scan.untouched.length} card(s) with no history, ${scan.touched.length} never-graded, ` +
+          `${scan.gradedCount} kept (real practice). See console.`
+      );
+    } catch (e: any) {
+      console.error('[markup-gone scan] failed', e);
+      await plugin.app.toast(`Scan failed: ${e?.message || String(e)}`);
+    } finally {
+      setMarkupBusy(null);
+    }
+  };
+
+  const handleBackupMarkupGone = () => {
+    if (!markupScan) return;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      untouched: markupScan.untouched,
+      touched: markupScan.touched,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `markup-gone-cards-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setMarkupBackedUp(true);
+  };
+
+  const handleDeleteMarkupGone = async () => {
+    if (!markupScan || !markupBackedUp) return;
+    const ids = [
+      ...markupScan.untouched.map((c) => c.cardId),
+      ...(markupIncludeTouched ? markupScan.touched.map((c) => c.cardId) : []),
+    ];
+    if (ids.length === 0) return;
+    setMarkupBusy(`Deleting 0 / ${ids.length}…`);
+    try {
+      const res = await deleteCards(plugin, ids, (done, total) =>
+        setMarkupBusy(`Deleting ${done} / ${total}…`)
+      );
+      await plugin.app.toast(
+        `Deleted ${res.deleted} card(s)` + (res.failed ? `, ${res.failed} failed` : '') +
+          ` in ${(res.elapsedMs / 1000).toFixed(1)}s.`
+      );
+      setMarkupScan(null);
+      setMarkupBackedUp(false);
+      setMarkupIncludeTouched(false);
+    } catch (e: any) {
+      console.error('[markup-gone delete] failed', e);
+      await plugin.app.toast(`Delete failed: ${e?.message || String(e)}`);
+    } finally {
+      setMarkupBusy(null);
     }
   };
 
@@ -5571,6 +5648,94 @@ function Debug() {
                     {(
                       orphanAnalysis.deletable.length +
                       (orphanIncludeDirectionless ? orphanAnalysis.deletableDirectionless.length : 0)
+                    ).toLocaleString()}{' '}
+                    card(s)
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* KB-wide sweep for cloze cards whose markup is gone. */}
+        <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Sweep the KB for markup-gone cloze cards</div>
+          <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)', marginBottom: '6px' }}>
+            Finds every unscheduled cloze card whose cloze id is no longer in its Rem's text, and splits them by what
+            history would be lost. Cards with <strong>real graded practice</strong> are reported but never offered for
+            deletion — a reworded Rem, or one cloze split into several, loses its markup while keeping history worth
+            preserving.
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button onClick={handleScanMarkupGone} disabled={!!markupBusy} style={{ ...smallBtnStyle, cursor: markupBusy ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+              {markupBusy ? 'Working…' : 'Scan KB'}
+            </button>
+            {markupBusy && <span style={{ fontSize: '11px', fontWeight: 600 }}>{markupBusy}</span>}
+          </div>
+          {markupScan && (
+            <div style={{ marginTop: '8px', padding: '8px', borderRadius: '4px', border: '1px solid var(--rn-clr-border)', backgroundColor: 'var(--rn-clr-background-secondary)', fontSize: '11px', lineHeight: 1.6 }}>
+              <div style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                {markupScan.candidates.toLocaleString()} unscheduled cloze card(s) examined ·{' '}
+                {markupScan.remsRead.toLocaleString()} Rem(s) read ·{' '}
+                {markupScan.markupPresent.toLocaleString()} still have their markup
+                {markupScan.remUnreadable > 0 && ` · ${markupScan.remUnreadable} unreadable Rem(s)`}
+              </div>
+              <div style={{ marginTop: '4px' }}>
+                No history at all:{' '}
+                <strong style={{ color: markupScan.untouched.length > 0 ? '#ef4444' : 'inherit' }}>
+                  {markupScan.untouched.length.toLocaleString()}
+                </strong>
+              </div>
+              <div>
+                Entries but never graded:{' '}
+                <strong>{markupScan.touched.length.toLocaleString()}</strong>
+              </div>
+              <div style={{ color: '#16a34a' }}>
+                Kept — real graded practice: <strong>{markupScan.gradedCount.toLocaleString()}</strong>{' '}
+                card(s) holding {markupScan.gradedReps.toLocaleString()} rep(s)
+              </div>
+              {markupScan.touched.length > 0 && (
+                <label
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', marginTop: '6px', cursor: 'pointer' }}
+                  title='These carry history entries — skips, resets, views — but no grade. RemNote shows them as "Times practiced N / Last practiced Never".'
+                >
+                  <input
+                    type="checkbox"
+                    checked={markupIncludeTouched}
+                    onChange={(e) => setMarkupIncludeTouched(e.target.checked)}
+                    style={{ marginTop: '2px', cursor: 'pointer' }}
+                  />
+                  <span>
+                    Also delete the <strong>{markupScan.touched.length.toLocaleString()}</strong> never-graded card(s)
+                    — they hold entries (skips / resets / views) but no grade.
+                  </span>
+                </label>
+              )}
+              {(markupScan.untouched.length > 0 || markupScan.touched.length > 0) && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px' }}>
+                  <button onClick={handleBackupMarkupGone} disabled={!!markupBusy} style={{ ...smallBtnStyle, cursor: markupBusy ? 'wait' : 'pointer' }}>
+                    {markupBackedUp ? '✓ Backup saved' : '1. Save backup JSON'}
+                  </button>
+                  <button
+                    onClick={handleDeleteMarkupGone}
+                    disabled={
+                      !!markupBusy ||
+                      !markupBackedUp ||
+                      markupScan.untouched.length + (markupIncludeTouched ? markupScan.touched.length : 0) === 0
+                    }
+                    title={markupBackedUp ? '' : 'Save the backup first'}
+                    style={{
+                      ...smallBtnStyle,
+                      cursor: markupBusy || !markupBackedUp ? 'not-allowed' : 'pointer',
+                      opacity: markupBackedUp ? 1 : 0.5,
+                      backgroundColor: 'var(--rn-clr-background-warning)',
+                      color: 'var(--rn-clr-content-warning)',
+                      border: '1px solid var(--rn-clr-border-warning)',
+                    }}
+                  >
+                    2. Delete{' '}
+                    {(
+                      markupScan.untouched.length + (markupIncludeTouched ? markupScan.touched.length : 0)
                     ).toLocaleString()}{' '}
                     card(s)
                   </button>

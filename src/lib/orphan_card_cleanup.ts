@@ -29,7 +29,7 @@
  * the user a backup file BEFORE anything is removed.
  */
 
-import { RNPlugin } from '@remnote/plugin-sdk';
+import { QueueInteractionScore, RNPlugin } from '@remnote/plugin-sdk';
 import { collectClozeIds } from './card_analytics_export';
 import { SuppressionLease } from './operation_suppression';
 import { safeRemTextToString } from './pdfUtils';
@@ -230,4 +230,160 @@ export async function deleteCards(
       `${(result.elapsedMs / 1000).toFixed(1)}s`,
   );
   return result;
+}
+
+
+// --- KB-wide sweep: cloze cards whose markup is gone ----------------------
+//
+// The per-Rem tool above is for one known Rem. This one sweeps the whole KB for
+// the same `markup-removed` state, and splits the result by how much history is
+// at stake — because that is the whole decision:
+//
+//   · GRADED    — real practice happened. A reworded Rem or a cloze split into
+//                 several loses its markup but keeps history worth preserving.
+//                 Never offered for deletion.
+//   · TOUCHED   — history entries exist but none is a grade (skips, resets,
+//                 views). "Times practiced 6 / Last practiced Never" in
+//                 RemNote's UI. Offered separately, opt-in.
+//   · UNTOUCHED — no history entries at all. Nothing is lost.
+//
+// Only cloze cards with no `nextRepetitionTime` can be in this state, and that
+// filter runs before any Rem is read, which is what keeps the sweep affordable:
+// a few hundred Rem reads instead of one per card-owning Rem in the KB.
+
+function isGradeable(score: QueueInteractionScore): boolean {
+  return (
+    score === QueueInteractionScore.AGAIN ||
+    score === QueueInteractionScore.HARD ||
+    score === QueueInteractionScore.GOOD ||
+    score === QueueInteractionScore.EASY
+  );
+}
+
+export interface MarkupGoneCard {
+  cardId: string;
+  remId: string;
+  clozeId: string;
+  remText: string;
+  historyEntries: number;
+  gradedReps: number;
+  createdAt: number | null;
+  repetitionHistory: unknown[];
+}
+
+export interface MarkupGoneScan {
+  /** Cloze cards with no next time — everything that could possibly qualify. */
+  candidates: number;
+  /** Rems actually read (one per distinct owner of a candidate). */
+  remsRead: number;
+  /** Markup gone, no history entries at all — safe to delete. */
+  untouched: MarkupGoneCard[];
+  /** Markup gone, has entries but was never graded — opt-in. */
+  touched: MarkupGoneCard[];
+  /** Markup gone but really practised. Reported only; never deletable here. */
+  gradedCount: number;
+  gradedReps: number;
+  /** Candidates whose Rem still holds their cloze — not markup-gone at all. */
+  markupPresent: number;
+  /** Candidates whose Rem could not be read. */
+  remUnreadable: number;
+  elapsedMs: number;
+}
+
+export async function scanMarkupGoneCards(
+  plugin: RNPlugin,
+  onProgress?: (done: number, total: number, phase: string) => void,
+): Promise<MarkupGoneScan> {
+  const t0 = Date.now();
+  onProgress?.(0, 0, 'Loading cards…');
+  const allCards = (await plugin.card.getAll()) || [];
+
+  // Cheap filter first: only an unscheduled CLOZE card can be markup-gone.
+  const candidates = (allCards as any[]).filter(
+    (c) =>
+      (c.nextRepetitionTime === null || c.nextRepetitionTime === undefined) &&
+      c.type &&
+      typeof c.type === 'object' &&
+      'clozeId' in c.type,
+  );
+
+  const scan: MarkupGoneScan = {
+    candidates: candidates.length,
+    remsRead: 0,
+    untouched: [],
+    touched: [],
+    gradedCount: 0,
+    gradedReps: 0,
+    markupPresent: 0,
+    remUnreadable: 0,
+    elapsedMs: 0,
+  };
+
+  // remId -> { clozeIds, text } | null when the Rem could not be read.
+  const remCache = new Map<string, { clozeIds: Set<string>; text: string } | null>();
+
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    let info = remCache.get(c.remId);
+    if (info === undefined) {
+      try {
+        const rem = await plugin.rem.findOne(c.remId);
+        info = rem
+          ? { clozeIds: collectClozeIds(rem.text), text: await safeRemTextToString(plugin, rem.text) }
+          : null;
+      } catch {
+        info = null;
+      }
+      remCache.set(c.remId, info);
+      scan.remsRead++;
+    }
+
+    if (!info) {
+      scan.remUnreadable++;
+      continue;
+    }
+
+    const clozeId = String(c.type.clozeId);
+    if (info.clozeIds.has(clozeId)) {
+      scan.markupPresent++;
+      continue;
+    }
+
+    const history: any[] = c.repetitionHistory ?? [];
+    const gradedReps = history.filter((h) => isGradeable(h?.score)).length;
+    if (gradedReps > 0) {
+      scan.gradedCount++;
+      scan.gradedReps += gradedReps;
+      continue;
+    }
+
+    const record: MarkupGoneCard = {
+      cardId: c._id,
+      remId: c.remId,
+      clozeId,
+      remText: info.text,
+      historyEntries: history.length,
+      gradedReps,
+      createdAt: c.createdAt ?? null,
+      repetitionHistory: history,
+    };
+    if (history.length === 0) scan.untouched.push(record);
+    else scan.touched.push(record);
+
+    if ((i + 1) % 200 === 0) {
+      onProgress?.(i + 1, candidates.length, 'Checking cloze markup…');
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  onProgress?.(candidates.length, candidates.length, 'Done');
+  scan.elapsedMs = Date.now() - t0;
+  console.log(
+    `[MarkupGoneScan] ${scan.candidates} candidate(s), ${scan.remsRead} rem(s) read · ` +
+      `untouched ${scan.untouched.length}, touched ${scan.touched.length}, ` +
+      `graded (kept) ${scan.gradedCount} holding ${scan.gradedReps} reps · ` +
+      `markup still present ${scan.markupPresent}, unreadable rems ${scan.remUnreadable} · ` +
+      `${(scan.elapsedMs / 1000).toFixed(1)}s`,
+  );
+  return scan;
 }
