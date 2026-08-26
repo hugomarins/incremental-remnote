@@ -19,6 +19,7 @@
 import { RNPlugin, BuiltInPowerupCodes } from '@remnote/plugin-sdk';
 import { CardAnalyticsRow } from './card_analytics';
 import { safeRemTextToString } from './pdfUtils';
+import { powerupCode as INCREMENTAL_POWERUP_CODE } from './consts';
 
 /**
  * Collect every cloze id present in a Rem's rich text. Cloze markup is carried
@@ -1216,4 +1217,74 @@ export async function reEnableRems(
   }
   onProgress?.(remIds.length, remIds.length);
   return { enabled, failed };
+}
+
+
+// --- Verified Rems (synced) ----------------------------------------------
+//
+// Marking a Rem "checked" is a judgement the user makes once and should not
+// have to repeat on another device, so it lives in SYNCED storage rather than
+// session or local. It stores nothing but Rem ids — a few thousand of them sit
+// far inside the per-key limit (see the synced-key budget helpers), and the
+// actionable `cards-disabled-rem` set is a couple of hundred.
+
+import { verifiedSuppressedRemsKey } from './consts';
+
+export async function getVerifiedRems(plugin: RNPlugin): Promise<Set<string>> {
+  try {
+    const stored = await plugin.storage.getSynced<string[]>(verifiedSuppressedRemsKey);
+    return new Set(Array.isArray(stored) ? stored : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Add or remove one Rem from the verified set. Returns the updated set. */
+export async function setRemVerified(
+  plugin: RNPlugin,
+  remId: string,
+  verified: boolean,
+): Promise<Set<string>> {
+  const current = await getVerifiedRems(plugin);
+  if (verified) current.add(remId);
+  else current.delete(remId);
+  await plugin.storage.setSynced(verifiedSuppressedRemsKey, Array.from(current));
+  return current;
+}
+
+/** Bulk variant — one write for a whole selection. */
+export async function setManyRemsVerified(
+  plugin: RNPlugin,
+  remIds: string[],
+  verified: boolean,
+): Promise<Set<string>> {
+  const current = await getVerifiedRems(plugin);
+  for (const id of remIds) {
+    if (verified) current.add(id);
+    else current.delete(id);
+  }
+  await plugin.storage.setSynced(verifiedSuppressedRemsKey, Array.from(current));
+  return current;
+}
+
+/**
+ * Is this Rem part of an Incremental Rem — itself, its parent or grandparent?
+ *
+ * An IncRem that has already been formulated into a card is expected to sit
+ * with practice switched off until the user decides it is ready, so those Rems
+ * are not oversights and should be visibly distinguishable from the ones that
+ * are. Two hops up because the card is often on a child of the IncRem.
+ */
+export async function isIncRemNearby(plugin: RNPlugin, rem: any): Promise<boolean> {
+  try {
+    if (await rem.hasPowerup(INCREMENTAL_POWERUP_CODE)) return true;
+    const parent = await rem.getParentRem();
+    if (!parent) return false;
+    if (await parent.hasPowerup(INCREMENTAL_POWERUP_CODE)) return true;
+    const grandparent = await parent.getParentRem();
+    if (!grandparent) return false;
+    return await grandparent.hasPowerup(INCREMENTAL_POWERUP_CODE);
+  } catch {
+    return false;
+  }
 }

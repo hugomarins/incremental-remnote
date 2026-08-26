@@ -202,6 +202,12 @@ export const pausedDeckScanKey = 'paused-deck-scan';
 /** Session cache for the Suppressed Cards tab's report (see
  *  lib/card_analytics_export.ts → buildSuppressionReport). */
 export const suppressionReportKey = 'suppression-report';
+
+/** SYNCED: Rem ids the user has reviewed in the Suppressed Cards tab and marked
+ *  as checked, so the judgement survives a restart and reaches other devices.
+ *  Ids only — the actionable set is a couple of hundred, far inside the
+ *  per-key budget. */
+export const verifiedSuppressedRemsKey = 'verified-suppressed-rems';
 export const fsrsCalibrationLastPeriodKey = 'fsrs-calibration-last-period';
 export const studyDashboardLastPeriodKey = 'study-dashboard-last-period';
 /**

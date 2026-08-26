@@ -28,8 +28,12 @@ import {
   UNSCHEDULED_CAUSE_SHORT,
   UnscheduledCause,
   buildSuppressionReport,
+  getVerifiedRems,
+  isIncRemNearby,
   reEnableRems,
   resolveAnomalyRemContext,
+  setManyRemsVerified,
+  setRemVerified,
 } from '../lib/card_analytics_export';
 import { CardPriorityInfo } from '../lib/card_priority/types';
 import {
@@ -100,13 +104,13 @@ function RemPicker({
    * round trip.
    */
   const [detail, setDetail] = React.useState<
-    Map<string, { breadcrumb: string; backRich: unknown }>
+    Map<string, { breadcrumb: string; backRich: unknown; isIncRem: boolean }>
   >(new Map());
 
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
-      const out = new Map<string, { breadcrumb: string; backRich: unknown }>();
+      const out = new Map<string, { breadcrumb: string; backRich: unknown; isIncRem: boolean }>();
       for (const e of entries) {
         if (cancelled) return;
         try {
@@ -114,9 +118,10 @@ function RemPicker({
           out.set(e.remId, {
             breadcrumb: rem ? await buildAncestorBreadcrumb(plugin, rem) : '',
             backRich: rem?.backText ?? null,
+            isIncRem: rem ? await isIncRemNearby(plugin, rem) : false,
           });
         } catch {
-          out.set(e.remId, { breadcrumb: '', backRich: null });
+          out.set(e.remId, { breadcrumb: '', backRich: null, isIncRem: false });
         }
         // Publish incrementally so a long list fills in as it resolves.
         if (out.size % 15 === 0 && !cancelled) setDetail(new Map(out));
@@ -128,9 +133,23 @@ function RemPicker({
     };
   }, [entries, plugin]);
 
-  const allSelected = entries.length > 0 && selected.size === entries.length;
+  const [verified, setVerified] = React.useState<Set<string>>(new Set());
+  const [hideVerified, setHideVerified] = React.useState(false);
+
+  React.useEffect(() => {
+    getVerifiedRems(plugin).then(setVerified).catch(() => {});
+  }, [plugin]);
+
+  const visible = hideVerified ? entries.filter((e) => !verified.has(e.remId)) : entries;
+
+  const toggleVerified = async (remId: string) => {
+    const next = await setRemVerified(plugin, remId, !verified.has(remId));
+    setVerified(next);
+  };
+
+  const allSelected = visible.length > 0 && visible.every((e) => selected.has(e.remId));
   const toggleAll = () =>
-    setSelected(allSelected ? new Set() : new Set(entries.map((e) => e.remId)));
+    setSelected(allSelected ? new Set() : new Set(visible.map((e) => e.remId)));
   const toggleOne = (remId: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -180,8 +199,8 @@ function RemPicker({
           <div>
             <div style={{ fontWeight: 700, fontSize: '13px' }}>{title}</div>
             <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)' }}>
-              {entries.length.toLocaleString()} Rem(s) · re-enabling makes their cards due
-              immediately
+              {visible.length.toLocaleString()} of {entries.length.toLocaleString()} Rem(s) ·
+              re-enabling makes their cards due immediately
             </div>
           </div>
           <button
@@ -212,11 +231,46 @@ function RemPicker({
           }}
         >
           <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ cursor: 'pointer' }} />
-          Select all ({entries.length.toLocaleString()})
+          Select all ({visible.length.toLocaleString()})
+          <span style={{ flex: 1 }} />
+          <span
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 400 }}
+            onClick={(ev) => ev.preventDefault()}
+          >
+            <input
+              type="checkbox"
+              checked={hideVerified}
+              onChange={(ev) => setHideVerified(ev.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            Hide checked ({entries.filter((e) => verified.has(e.remId)).length.toLocaleString()})
+          </span>
+          {selected.size > 0 && (
+            <button
+              type="button"
+              onClick={async (ev) => {
+                ev.preventDefault();
+                const next = await setManyRemsVerified(plugin, Array.from(selected), true);
+                setVerified(next);
+              }}
+              style={{
+                padding: '2px 8px',
+                fontSize: '10.5px',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: '1px solid var(--rn-clr-background-tertiary)',
+                background: 'var(--rn-clr-background-primary)',
+                color: 'var(--rn-clr-content-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              ✓ Mark {selected.size} checked
+            </button>
+          )}
         </label>
 
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {entries.map((e) => (
+          {visible.map((e) => (
             <label
               key={e.remId}
               style={{
@@ -292,10 +346,69 @@ function RemPicker({
                     clozes: {e.clozeTexts.map((c) => `{{${c}}}`).join(' · ')}
                   </div>
                 )}
-                <div style={{ color: 'var(--rn-clr-content-tertiary)', fontSize: '10.5px' }}>
-                  priority {e.priority} · {e.cards} card(s)
-                  {e.newCards > 0 && `, ${e.newCards} never practised`}
-                  {e.inTable && ' · in a table'}
+                <div
+                  style={{
+                    color: 'var(--rn-clr-content-tertiary)',
+                    fontSize: '10.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span>
+                    priority {e.priority} · {e.cards} card(s)
+                    {e.newCards > 0 && `, ${e.newCards} never practised`}
+                    {e.inTable && ' · in a table'}
+                  </span>
+                  {detail.get(e.remId)?.isIncRem && (
+                    <span
+                      title="This Rem, its parent or its grandparent is an Incremental Rem — practice is expected to stay off until you decide the card is ready."
+                      style={{
+                        padding: '0 5px',
+                        borderRadius: '3px',
+                        border: '1px solid #16a34a',
+                        color: '#16a34a',
+                        fontWeight: 700,
+                      }}
+                    >
+                      📚 IncRem
+                    </span>
+                  )}
+                  {verified.has(e.remId) && (
+                    <span
+                      style={{
+                        padding: '0 5px',
+                        borderRadius: '3px',
+                        border: '1px solid #0ea5e9',
+                        color: '#0ea5e9',
+                        fontWeight: 700,
+                      }}
+                    >
+                      ✓ checked
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(ev) => {
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      toggleVerified(e.remId);
+                    }}
+                    title="Mark this Rem as reviewed. Saved to synced storage, so it follows you across devices."
+                    style={{
+                      padding: '0 6px',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      borderRadius: '3px',
+                      border: '1px solid var(--rn-clr-background-tertiary)',
+                      background: 'transparent',
+                      color: 'var(--rn-clr-content-secondary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {verified.has(e.remId) ? 'uncheck' : '✓ check'}
+                  </button>
                 </div>
               </div>
             </label>
