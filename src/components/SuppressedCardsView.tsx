@@ -409,6 +409,35 @@ function RemPicker({
                   </button>
                 </div>
               </div>
+              {/*
+                Opens a fresh RemNote instance in a browser tab rather than
+                navigating this pane: `plugin.window.openRem` would tear down the
+                popup, and the point of this list is to work through it without
+                losing your place.
+              */}
+              <button
+                type="button"
+                onClick={(ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  openRemInBrowserTab(plugin, e.remId);
+                }}
+                title="Open this Rem in a new browser tab (keeps this list open)"
+                style={{
+                  flexShrink: 0,
+                  alignSelf: 'flex-start',
+                  padding: '1px 7px',
+                  fontSize: '13px',
+                  lineHeight: 1.4,
+                  borderRadius: '4px',
+                  border: '1px solid var(--rn-clr-background-tertiary)',
+                  background: 'var(--rn-clr-background-primary)',
+                  color: 'var(--rn-clr-content-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                ↗
+              </button>
             </label>
           ))}
         </div>
