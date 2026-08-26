@@ -924,7 +924,16 @@ export async function probeCardOwnership(
   const card: any = await plugin.card.findOne(cardId);
   if (!card) return null;
 
-  const resolvedRem: any = await card.getRem().catch(() => null);
+  // `card.getRem()` can hand back a Rem object without its methods attached
+  // (measured: `getParentRem is not a function`), so it is used only for its
+  // `_id` — the identity question this probe exists to answer. Anything that
+  // needs behaviour is re-fetched through `plugin.rem.findOne`, which always
+  // returns a fully wired RemObject.
+  const resolvedRaw: any = await card.getRem().catch(() => null);
+  const resolvedId: string | null = resolvedRaw?._id ?? null;
+  const resolvedRem: any = resolvedId
+    ? await plugin.rem.findOne(resolvedId).catch(() => null)
+    : null;
   const fieldRem: any = await plugin.rem.findOne(card.remId).catch(() => null);
 
   const cardType =
@@ -938,14 +947,20 @@ export async function probeCardOwnership(
 
   const fieldClozeIds = fieldRem ? Array.from(collectClozeIds(fieldRem.text)) : [];
   const fieldHasBack = !!(fieldRem && Array.isArray(fieldRem.backText) && fieldRem.backText.length);
-  const agrees = !!resolvedRem && resolvedRem._id === card.remId;
+  const agrees = resolvedId === card.remId;
 
   const ancestors: CardOwnershipProbe['ancestors'] = [];
-  let cursor = resolvedRem ? await resolvedRem.getParentRem() : null;
+  let cursor =
+    resolvedRem && typeof resolvedRem.getParentRem === 'function'
+      ? await resolvedRem.getParentRem().catch(() => null)
+      : null;
   let hops = 0;
   while (cursor && hops < 24) {
     ancestors.push({ remId: cursor._id, text: await safeRemTextToString(plugin, cursor.text) });
-    cursor = await cursor.getParentRem();
+    cursor =
+      typeof cursor.getParentRem === 'function'
+        ? await cursor.getParentRem().catch(() => null)
+        : null;
     hops++;
   }
 
@@ -968,7 +983,7 @@ export async function probeCardOwnership(
   return {
     cardId,
     remIdField: card.remId,
-    getRemId: resolvedRem?._id ?? null,
+    getRemId: resolvedId,
     agrees,
     cardType,
     clozeId,

@@ -46,6 +46,13 @@ import {
 import { probeLocalPerKeyLimit, LocalLimitReport } from '../lib/local_storage_probe';
 import { probeRemCardEnablement, probeCardOwnership } from '../lib/card_analytics_export';
 import {
+  OrphanCardAnalysis,
+  KEEP_REASON_LABELS,
+  KeepReason,
+  analyzeOrphanCards,
+  deleteCards,
+} from '../lib/orphan_card_cleanup';
+import {
   readCardPriorityStoreMeta,
   clearPersistedCardPriorities,
   CARD_PRIORITY_STORE_VERSION,
@@ -563,6 +570,10 @@ function Debug() {
   const [globalScanProgress, setGlobalScanProgress] = useState<string>('');
   const [cardOwnerIdInput, setCardOwnerIdInput] = useState<string>('');
   const [isProbingCardOwner, setIsProbingCardOwner] = useState(false);
+  const [orphanRemIdInput, setOrphanRemIdInput] = useState<string>('');
+  const [orphanAnalysis, setOrphanAnalysis] = useState<OrphanCardAnalysis | null>(null);
+  const [orphanBusy, setOrphanBusy] = useState<string | null>(null);
+  const [orphanBackedUp, setOrphanBackedUp] = useState(false);
   const [globalInflationPreview, setGlobalInflationPreview] = useState<null | {
     cutoffMs: number;
     scannedRems: number;
@@ -2314,6 +2325,88 @@ function Debug() {
       await plugin.app.toast(`Probe failed: ${e?.message || String(e)}`);
     } finally {
       setIsProbingCardOwner(false);
+    }
+  };
+
+  /**
+   * Step 1 of the orphaned-cloze cleanup: analyze and back up. Deleting cards is
+   * not undoable, so the delete button stays locked until the backup file has
+   * actually been written.
+   */
+  const handleAnalyzeOrphanCards = async () => {
+    const remId = orphanRemIdInput.trim();
+    if (!remId) return;
+    setOrphanBusy('Analyzing…');
+    setOrphanAnalysis(null);
+    setOrphanBackedUp(false);
+    try {
+      const analysis = await analyzeOrphanCards(plugin, remId);
+      if (!analysis) {
+        await plugin.app.toast('Rem not found.');
+        return;
+      }
+      setOrphanAnalysis(analysis);
+      console.log(
+        `🧹 Orphan card analysis for ${analysis.remId} — ${analysis.remText}\n` +
+          `   ${analysis.totalCards} card record(s), ${analysis.surfacedCards} surfaced by rem.getCards()\n` +
+          `   cloze ids in the rem text: ${analysis.remClozeIds.length}\n` +
+          `   DELETABLE (cloze markup gone AND unscheduled): ${analysis.deletable.length}\n` +
+          `   kept: ${JSON.stringify(analysis.keptByReason)}`
+      );
+      console.table(analysis.kept.slice(0, 50));
+    } catch (e: any) {
+      console.error('[orphan cleanup] analyze failed', e);
+      await plugin.app.toast(`Analyze failed: ${e?.message || String(e)}`);
+    } finally {
+      setOrphanBusy(null);
+    }
+  };
+
+  const handleBackupOrphanCards = () => {
+    if (!orphanAnalysis) return;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const payload = {
+      remId: orphanAnalysis.remId,
+      remText: orphanAnalysis.remText,
+      exportedAt: new Date().toISOString(),
+      cards: orphanAnalysis.backup,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orphan-cards-backup-${orphanAnalysis.remId}-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setOrphanBackedUp(true);
+  };
+
+  /** Step 2: delete exactly the analyzed list. Never recomputed here — what the
+   *  user was shown is what gets deleted. */
+  const handleDeleteOrphanCards = async () => {
+    if (!orphanAnalysis || !orphanBackedUp) return;
+    const n = orphanAnalysis.deletable.length;
+    if (n === 0) return;
+    setOrphanBusy(`Deleting 0 / ${n}…`);
+    try {
+      const res = await deleteCards(plugin, orphanAnalysis.deletable, (done, total) =>
+        setOrphanBusy(`Deleting ${done} / ${total}…`)
+      );
+      await plugin.app.toast(
+        `Deleted ${res.deleted} card(s)` + (res.failed ? `, ${res.failed} failed` : '') +
+          ` in ${(res.elapsedMs / 1000).toFixed(1)}s.`
+      );
+      // Re-analyze so the panel reflects reality rather than the pre-delete list.
+      const after = await analyzeOrphanCards(plugin, orphanAnalysis.remId);
+      setOrphanAnalysis(after);
+      setOrphanBackedUp(false);
+    } catch (e: any) {
+      console.error('[orphan cleanup] delete failed', e);
+      await plugin.app.toast(`Delete failed: ${e?.message || String(e)}`);
+    } finally {
+      setOrphanBusy(null);
     }
   };
 
@@ -5374,6 +5467,76 @@ function Debug() {
               {isProbingCardOwner ? 'Probing…' : 'Probe Card'}
             </button>
           </div>
+        </div>
+
+        {/* Delete cloze card records whose markup is gone from their Rem. */}
+        <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Purge orphaned cloze cards on a Rem</div>
+          <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)', marginBottom: '6px' }}>
+            Deletes ONLY cloze card records whose cloze id is absent from the Rem's current text AND which have no{' '}
+            <code>nextRepetitionTime</code>. Forward/backward records and anything still scheduled or still clozed are
+            kept and listed with a reason. <strong>Card deletion cannot be undone</strong> — the backup file must be
+            saved before the delete button unlocks.
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <input
+              value={orphanRemIdInput}
+              onChange={(e) => setOrphanRemIdInput(e.target.value)}
+              placeholder="remId"
+              style={{ flex: 1, fontSize: '11px', padding: '3px 6px', border: '1px solid var(--rn-clr-border)', borderRadius: '4px', backgroundColor: 'var(--rn-clr-background-primary)', color: 'var(--rn-clr-content-primary)', fontFamily: 'monospace' }}
+            />
+            <button onClick={handleAnalyzeOrphanCards} disabled={!!orphanBusy} style={{ ...smallBtnStyle, cursor: orphanBusy ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+              {orphanBusy === 'Analyzing…' ? 'Analyzing…' : 'Analyze'}
+            </button>
+          </div>
+          {orphanBusy && orphanBusy !== 'Analyzing…' && (
+            <div style={{ marginTop: '6px', fontSize: '11px', fontWeight: 600 }}>{orphanBusy}</div>
+          )}
+          {orphanAnalysis && (
+            <div style={{ marginTop: '8px', padding: '8px', borderRadius: '4px', border: '1px solid var(--rn-clr-border)', backgroundColor: 'var(--rn-clr-background-secondary)', fontSize: '11px', lineHeight: 1.6 }}>
+              <div><strong>{orphanAnalysis.remText}</strong></div>
+              <div>
+                {orphanAnalysis.totalCards.toLocaleString()} card record(s) ·{' '}
+                {orphanAnalysis.surfacedCards} surfaced ·{' '}
+                {orphanAnalysis.remClozeIds.length} cloze id(s) in the text
+              </div>
+              <div style={{ marginTop: '4px' }}>
+                Deletable:{' '}
+                <strong style={{ color: orphanAnalysis.deletable.length > 0 ? '#ef4444' : 'inherit' }}>
+                  {orphanAnalysis.deletable.length.toLocaleString()}
+                </strong>
+              </div>
+              {(Object.keys(orphanAnalysis.keptByReason) as KeepReason[])
+                .filter((r) => orphanAnalysis.keptByReason[r] > 0)
+                .map((r) => (
+                  <div key={r} style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                    kept {orphanAnalysis.keptByReason[r]} — {KEEP_REASON_LABELS[r]}
+                  </div>
+                ))}
+              {orphanAnalysis.deletable.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '8px' }}>
+                  <button onClick={handleBackupOrphanCards} disabled={!!orphanBusy} style={{ ...smallBtnStyle, cursor: orphanBusy ? 'wait' : 'pointer' }}>
+                    {orphanBackedUp ? '✓ Backup saved' : '1. Save backup JSON'}
+                  </button>
+                  <button
+                    onClick={handleDeleteOrphanCards}
+                    disabled={!!orphanBusy || !orphanBackedUp}
+                    title={orphanBackedUp ? '' : 'Save the backup first'}
+                    style={{
+                      ...smallBtnStyle,
+                      cursor: orphanBusy || !orphanBackedUp ? 'not-allowed' : 'pointer',
+                      opacity: orphanBackedUp ? 1 : 0.5,
+                      backgroundColor: 'var(--rn-clr-background-warning)',
+                      color: 'var(--rn-clr-content-warning)',
+                      border: '1px solid var(--rn-clr-border-warning)',
+                    }}
+                  >
+                    2. Delete {orphanAnalysis.deletable.length.toLocaleString()} card(s)
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Locate the rem named in a "Diff for <remId> is too large to sync" error. */}
