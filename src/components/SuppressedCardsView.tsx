@@ -40,6 +40,7 @@ import {
 } from '../lib/consts';
 import { parseWeightsString } from '../lib/fsrs';
 import { getPausedRemIds } from '../lib/paused_decks';
+import { buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { resolvePeriod } from '../lib/period';
 import { getIESetting } from '../lib/settings';
 import { formatTimeAgo } from '../lib/utils';
@@ -78,16 +79,44 @@ function RemPicker({
   entries,
   title,
   busy,
+  plugin,
   onClose,
   onReEnable,
 }: {
   entries: SuppressedRemEntry[];
   title: string;
   busy: string | null;
+  plugin: any;
   onClose: () => void;
   onReEnable: (remIds: string[]) => void;
 }) {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  // Breadcrumbs are resolved here rather than during the KB-wide compute: one
+  // ancestor walk per Rem is cheap for the few hundred Rems in a picker and
+  // ruinous for the thousands the report covers.
+  const [breadcrumbs, setBreadcrumbs] = React.useState<Map<string, string>>(new Map());
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const out = new Map<string, string>();
+      for (const e of entries) {
+        if (cancelled) return;
+        try {
+          const rem = await plugin.rem.findOne(e.remId);
+          out.set(e.remId, rem ? await buildAncestorBreadcrumb(plugin, rem) : '');
+        } catch {
+          out.set(e.remId, '');
+        }
+        // Publish incrementally so a long list fills in as it resolves.
+        if (out.size % 15 === 0 && !cancelled) setBreadcrumbs(new Map(out));
+      }
+      if (!cancelled) setBreadcrumbs(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [entries, plugin]);
 
   const allSelected = entries.length > 0 && selected.size === entries.length;
   const toggleAll = () =>
@@ -208,6 +237,25 @@ function RemPicker({
                     </>
                   )}
                 </div>
+                {breadcrumbs.get(e.remId) ? (
+                  <div
+                    style={{
+                      fontSize: '10px',
+                      color: 'var(--rn-clr-content-tertiary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {breadcrumbs.get(e.remId)}
+                  </div>
+                ) : (
+                  !breadcrumbs.has(e.remId) && (
+                    <div style={{ fontSize: '10px', color: 'var(--rn-clr-content-tertiary)' }}>
+                      loading path…
+                    </div>
+                  )
+                )}
                 {e.clozeTexts.length > 0 && (
                   <div style={{ color: 'var(--rn-clr-content-tertiary)', fontSize: '10.5px' }}>
                     clozes: {e.clozeTexts.map((c) => `{{${c}}}`).join(' · ')}
@@ -587,6 +635,7 @@ export function SuppressedCardsView() {
           entries={drillEntries}
           title={`${UNSCHEDULED_CAUSE_LABELS[drill.cause]} · bucket ${drill.bucket}`}
           busy={busy}
+          plugin={plugin}
           onClose={() => setDrill(null)}
           onReEnable={handleReEnable}
         />

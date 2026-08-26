@@ -1,6 +1,6 @@
 import { renderWidget, usePlugin, useRunAsync, WidgetLocation, RemType, SelectionType, RICH_TEXT_FORMATTING } from '@remnote/plugin-sdk';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { resolveRemTextForBreadcrumb } from '../lib/richTextRemRefs';
+import { resolveRemTextForBreadcrumb, buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { sanitizeRichTextForSetText } from '../lib/richTextSanitize';
 
 // ---------------------------------------------------------------------------
@@ -300,31 +300,10 @@ function ReferenceFinder() {
   }, []);
 
   // Build a breadcrumb so the user can tell which document a rem lives in
-  // (mirrors RemNote's reference-search breadcrumb). Shows the root plus the 3
-  // closest ancestors, collapsing any middle gap with "…".
+  // (mirrors RemNote's reference-search breadcrumb). Shared with the Suppressed
+  // Cards picker — see lib/richTextRemRefs.
   const buildBreadcrumb = useCallback(
-    async (rem: any): Promise<string> => {
-      const names: string[] = [];
-      try {
-        let cur = await rem.getParentRem();
-        let depth = 0;
-        // Walk all the way to the root (cap guards against cycles/very deep trees).
-        while (cur && depth < 20) {
-          const raw = (await resolveRemTextForBreadcrumb(plugin, cur.text)).trim();
-          const t = raw === 'Untitled' ? '' : raw; // treat empty ancestors as skippable
-          if (t) names.push(t.length > 24 ? t.slice(0, 24) + '…' : t);
-          cur = await cur.getParentRem();
-          depth++;
-        }
-      } catch { /* ignore */ }
-      if (names.length === 0) return '';
-      const topDown = names.reverse(); // root … parent (closest to the rem)
-      // Up to 4 levels fit without a gap (root + 3 closest covers everything).
-      if (topDown.length <= 4) return topDown.join(' / ');
-      const root = topDown[0];
-      const closest3 = topDown.slice(-3); // great-grandparent, grandparent, parent
-      return `${root} / … / ${closest3.join(' / ')}`;
-    },
+    async (rem: any): Promise<string> => buildAncestorBreadcrumb(plugin, rem),
     [plugin]
   );
 
