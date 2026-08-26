@@ -17,6 +17,7 @@ import {
 } from '../lib/card_analytics';
 import {
   ExportSummary,
+  UNSCHEDULED_CAUSE_SHORT,
   downloadText,
   resolveAnomalyRemContext,
   rowsToCsv,
@@ -1172,16 +1173,20 @@ function ExportDiagnosisPanel({
         Of {summary.dueCards.toLocaleString()} cards due by date,{' '}
         <strong>{summary.dueServable.toLocaleString()}</strong> can actually be served —{' '}
         {summary.duePaused.toLocaleString()} sit inside a paused deck with real due dates the
-        queue ignores.{' '}
+        queue ignores. Counting <em>every</em> card record,{' '}
         <strong>{summary.newNotDue.toLocaleString()}</strong> of{' '}
-        {summary.newCards.toLocaleString()} New cards are not Due —{' '}
+        {summary.newCards.toLocaleString()} New cards are not Due:{' '}
         <strong>{summary.newUnscheduled.toLocaleString()}</strong> have no{' '}
-        <code>nextRepetitionTime</code> (unscheduled — invisible to the queue and to the
-        Priority Review Document), <strong>{summary.newScheduledAhead.toLocaleString()}</strong>{' '}
-        are scheduled into the future. {summary.newWithSomeHistory.toLocaleString()} of them
-        have history entries that were never graded (skipped / reset).{' '}
-        {summary.reviewedUnscheduled.toLocaleString()} already-reviewed cards are
-        unscheduled too.
+        <code>nextRepetitionTime</code> and{' '}
+        {summary.newScheduledAhead.toLocaleString()} are scheduled into the future —{' '}
+        {summary.newWithSomeHistory.toLocaleString()} of them carry history entries that were
+        never graded (skipped / reset). {summary.reviewedUnscheduled.toLocaleString()}{' '}
+        already-reviewed cards are unscheduled too.
+        <div style={{ marginTop: '4px', color: 'var(--rn-clr-content-tertiary)' }}>
+          These totals span the whole population, suppressed cards included — that is the point
+          of this panel. The table below the panel counts only what can be practised, so its
+          Unsched/%New will not match these figures and is not meant to.
+        </div>
       </div>
       {summary.causes.length > 0 && (
         <div style={{ margin: '0 0 10px', lineHeight: 1.6 }}>
@@ -1200,45 +1205,88 @@ function ExportDiagnosisPanel({
           ))}
         </div>
       )}
+      {/*
+        Per-bucket CAUSE matrix — deliberately NOT a second copy of the main
+        table's population columns. Those live below and are scoped to what can
+        be practised; repeating them here with suppressed cards counted in made
+        the two tables disagree at a glance (a bucket showing 108 "unscheduled"
+        above 201 below, because one figure counted only New ones). This table
+        answers the one question the main table cannot: WHICH suppression is
+        responsible, bucket by bucket.
+      */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr>
               <th style={{ ...head, textAlign: 'left' }}>BUCKET</th>
               <th style={head}>CARDS</th>
-              <th style={head}>NEW</th>
-              <th style={head}>PAUSED</th>
-              <th style={head}>DUE (SERVABLE)</th>
-              <th style={head}>NEW &amp; NOT DUE</th>
-              <th style={head}>UNSCHEDULED</th>
-              <th style={head}>SCHEDULED AHEAD</th>
+              <th style={head}>SUPPRESSED</th>
+              {summary.causes.map((c) => (
+                <th key={c.cause} style={head} title={c.label}>
+                  {UNSCHEDULED_CAUSE_SHORT[c.cause].toUpperCase()}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {summary.perBucket.map((b) => (
-              <tr key={b.bucket} style={{ borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
-                <td style={{ ...cell, textAlign: 'left' }}>{b.bucket}</td>
-                <td style={cell}>{b.cards.toLocaleString()}</td>
-                <td style={cell}>{b.newCards.toLocaleString()}</td>
-                <td style={{ ...cell, color: b.paused > 0 ? '#0ea5e9' : undefined }}>
-                  {b.paused.toLocaleString()}
+            {summary.perBucket.map((b) => {
+              const suppressed = summary.causes.reduce(
+                (sum, c) => sum + (b.causeCounts[c.cause] ?? 0),
+                0,
+              );
+              return (
+                <tr key={b.bucket} style={{ borderTop: '1px solid var(--rn-clr-background-tertiary)' }}>
+                  <td style={{ ...cell, textAlign: 'left' }}>{b.bucket}</td>
+                  <td style={{ ...cell, color: 'var(--rn-clr-content-tertiary)' }}>
+                    {b.cards.toLocaleString()}
+                  </td>
+                  <td style={{ ...cell, fontWeight: 700 }}>
+                    {suppressed.toLocaleString()}
+                    {b.cards > 0 && (
+                      <span style={{ color: 'var(--rn-clr-content-tertiary)', fontWeight: 400 }}>
+                        {' '}
+                        ({((suppressed / b.cards) * 100).toFixed(0)}%)
+                      </span>
+                    )}
+                  </td>
+                  {summary.causes.map((c) => {
+                    const n = b.causeCounts[c.cause] ?? 0;
+                    return (
+                      <td
+                        key={c.cause}
+                        style={{
+                          ...cell,
+                          color:
+                            n === 0
+                              ? 'var(--rn-clr-content-tertiary)'
+                              : c.cause === 'paused-document'
+                                ? '#0ea5e9'
+                                : c.cause === 'cards-disabled-table'
+                                  ? 'var(--rn-clr-content-secondary)'
+                                  : '#a855f7',
+                        }}
+                      >
+                        {n === 0 ? '·' : n.toLocaleString()}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+            <tr style={{ borderTop: '2px solid var(--rn-clr-background-tertiary)', fontWeight: 700 }}>
+              <td style={{ ...cell, textAlign: 'left' }}>TOTAL</td>
+              <td style={{ ...cell, color: 'var(--rn-clr-content-tertiary)' }}>
+                {summary.totalCards.toLocaleString()}
+              </td>
+              <td style={cell}>
+                {(summary.unscheduledTotal + summary.pausedTotal).toLocaleString()}
+              </td>
+              {summary.causes.map((c) => (
+                <td key={c.cause} style={cell}>
+                  {c.cards.toLocaleString()}
                 </td>
-                <td style={cell}>
-                  {b.dueServable.toLocaleString()}
-                  {b.duePaused > 0 && (
-                    <span style={{ color: 'var(--rn-clr-content-tertiary)' }}>
-                      {' '}
-                      (+{b.duePaused.toLocaleString()} paused)
-                    </span>
-                  )}
-                </td>
-                <td style={{ ...cell, fontWeight: 700 }}>{b.newNotDue.toLocaleString()}</td>
-                <td style={{ ...cell, color: b.newUnscheduled > 0 ? '#ef4444' : undefined }}>
-                  {b.newUnscheduled.toLocaleString()}
-                </td>
-                <td style={cell}>{b.newScheduledAhead.toLocaleString()}</td>
-              </tr>
-            ))}
+              ))}
+            </tr>
           </tbody>
         </table>
       </div>
