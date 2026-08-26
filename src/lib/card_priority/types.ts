@@ -37,7 +37,10 @@ export interface CardPriorityInfo {
   kbPercentile?: number;
   /**
    * Per-card nextRepetitionTime, length === cardCount, order arbitrary but stable.
-   * `null` for disabled/never-scheduled cards (their `nextRepetitionTime` was null).
+   * `null` for unscheduled cards (their `nextRepetitionTime` was null: disabled,
+   * table rows, markup-removed…). `expandCardInfosToCards` drops those from the
+   * per-card universe — they are not cards the user intends to practise. Cards
+   * in a paused deck keep a real value here and are deliberately retained.
    * Used to expand the rem's CardPriorityInfo into per-card items for the Weighted
    * Shield of Cards so that buckets are formed by cards (not by rems-with-cards),
    * matching the Card Priority × Memory Analytics tab.
@@ -164,12 +167,32 @@ function upperBoundIdx(arr: number[], target: number): number {
   return lo;
 }
 
+/**
+ * A timestamp far enough ahead that nothing treats it as due. Used by the
+ * stale-cache fallback below for cards known to exist but not to be due — they
+ * must NOT be emitted as `null`, which now means "RemNote will never schedule
+ * this card" and would drop them from the ranking population entirely.
+ */
+const NOT_DUE_SENTINEL = 8_640_000_000_000; // ≈ year 2243
+
 export function expandCardInfosToCards(infos: CardPriorityInfo[]): PerCardShieldItem[] {
   const out: PerCardShieldItem[] = [];
   for (const info of infos) {
     if (!info || info.cardCount === 0) continue;
     if (info.cardsNextRep && info.cardsNextRep.length > 0) {
       for (const nextRep of info.cardsNextRep) {
+        // `null` here means unscheduled: disabled on the card or the Rem, an
+        // ancestor's Disable Descendant Cards, a table row, or a cloze whose
+        // markup is gone. Those are not cards the user intends to practise, so
+        // they take no part in the priority ranking — leaving them in would let
+        // them push real cards across percentile boundaries.
+        //
+        // Cards in a PAUSED deck are deliberately NOT excluded: pausing defers
+        // a card, it does not demote it, and it keeps a real nextRepetitionTime.
+        // Dropping them would make every other card's percentile shift when a
+        // deck is paused and shift back when it is unpaused — priority drifting
+        // as a side effect of a scheduling decision. See CARD_STATE_REFERENCE.md.
+        if (nextRep === null || nextRep === undefined) continue;
         out.push({ priority: info.priority, remId: info.remId, nextRepetitionTime: nextRep });
       }
     } else {
@@ -182,7 +205,7 @@ export function expandCardInfosToCards(infos: CardPriorityInfo[]): PerCardShield
         out.push({
           priority: info.priority,
           remId: info.remId,
-          nextRepetitionTime: i < dueCount ? 0 : null,
+          nextRepetitionTime: i < dueCount ? 0 : NOT_DUE_SENTINEL,
         });
       }
     }

@@ -705,6 +705,28 @@ export async function computeCardAnalyticsBreakdown(
   validCards.sort((a, b) => (remPriority.get(a.remId)! - remPriority.get(b.remId)!));
 
   const N = validCards.length;
+  /**
+   * Population that DEFINES the deciles. Unscheduled cards are excluded: a
+   * disabled card, a table row or a cloze whose markup is gone is not something
+   * the user intends to practise, and leaving them in lets them push real cards
+   * across percentile boundaries.
+   *
+   * Cards in a PAUSED deck stay in. Pausing defers a card, it does not demote
+   * it — excluding them would shift every other card's percentile when a deck is
+   * paused and shift it back when unpaused, so priority would drift as a side
+   * effect of a scheduling decision. They keep a real nextRepetitionTime, which
+   * is exactly what distinguishes them here.
+   *
+   * Unscheduled cards are still REPORTED in every bucket (the Unsched column);
+   * they are placed by where their priority falls among the ranked cards, so a
+   * bucket still accounts for all of its cards. Only bucket SIZE is defined by
+   * the ranked population.
+   */
+  const isUnscheduledCard = (c: any) =>
+    c.nextRepetitionTime === null || c.nextRepetitionTime === undefined;
+  const rankedTotal = validCards.reduce((n, c) => (isUnscheduledCard(c) ? n : n + 1), 0);
+  const rankDenominator = rankedTotal > 0 ? rankedTotal : N;
+  let rankedSeen = 0;
   const bucketAccs: AccData[] = Array.from({ length: 10 }, makeAcc);
   const overallAcc = makeAcc();
   // Per-absolute-priority accumulators (priority 0..100, inclusive). Used to
@@ -720,8 +742,13 @@ export async function computeCardAnalyticsBreakdown(
   for (let i = 0; i < N; i++) {
     const card = validCards[i];
     const priority = remPriority.get(card.remId)!;
-    // 1-based index percentile so the last card lands at 100% → bucket index 9.
-    const percentile = ((i + 1) / N) * 100;
+    // 1-based index percentile over the RANKED population. An unscheduled card
+    // takes the percentile of the ranked cards it sits between (the array is
+    // sorted by priority, so `rankedSeen` is its lower-bound rank) — it is
+    // placed by its priority without being allowed to shift anyone else's.
+    const cardIsUnscheduled = isUnscheduledCard(card);
+    if (!cardIsUnscheduled) rankedSeen++;
+    const percentile = Math.min((Math.max(rankedSeen, 1) / rankDenominator) * 100, 100);
     const bIdx = Math.min(Math.floor(percentile / 10), 9);
     // Clamp priority into [0, 100] for the by-priority bucket index.
     const pIdx = Math.max(0, Math.min(100, Math.round(priority)));
