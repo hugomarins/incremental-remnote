@@ -512,3 +512,27 @@ export function clearQueueUI(plugin: ReactRNPlugin): void {
   plugin.app.registerCSS(queueCounterId, '');
   plugin.app.registerCSS(hideIncEverythingId, '');
 }
+
+
+/**
+ * Fill colour for a "% processed / % done" bar.
+ *
+ * The old rule turned green only at EXACTLY 100%, so a bucket at 99.8% — every
+ * card but one — was painted the same amber as a bucket at 50%. Nobody reads a
+ * bar that precisely; the colour is meant to answer "am I on top of this?", and
+ * at 99.8% the answer is yes. Green therefore starts at 95%, with a lime step
+ * so "nearly there" still reads differently from "done".
+ *
+ * Shared by the Weighted Shield breakdown and the Card Priority × Memory
+ * Analytics table so the same percentage never gets two different colours.
+ */
+export function doneBarColor(pct: number): string {
+  if (!Number.isFinite(pct)) return '#ef4444';
+  if (pct >= 95) return '#22c55e';
+  if (pct >= 80) return '#84cc16';
+  if (pct >= 50) return '#eab308';
+  return '#ef4444';
+}
+
+/** A bar this close to full should have both ends rounded. */
+export const isBarFull = (pct: number): boolean => pct >= 99.5;

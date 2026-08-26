@@ -1,4 +1,5 @@
 import { usePlugin } from '@remnote/plugin-sdk';
+import { doneBarColor, isBarFull } from '../lib/ui_helpers';
 import React from 'react';
 import { WeightedShieldBreakdown } from '../lib/utils';
 import { currentSubQueueIdKey } from '../lib/consts';
@@ -260,12 +261,8 @@ function MiniBar({ processedPct }: { processedPct: number }) {
       <div style={{
         width: `${processedPct}%`,
         height: '100%',
-        borderRadius: processedPct >= 100 ? '4px' : '4px 0 0 4px',
-        background: processedPct >= 100
-          ? '#22c55e'
-          : processedPct >= 50
-            ? '#eab308'
-            : '#ef4444',
+        borderRadius: isBarFull(processedPct) ? '4px' : '4px 0 0 4px',
+        background: doneBarColor(processedPct),
         transition: 'width 0.3s ease',
       }} />
     </div>

@@ -42,6 +42,7 @@ import {
 import { Period, resolvePeriod, parseDateInput, formatDateForDisplay } from '../lib/period';
 import { formatTimeAgo } from '../lib/utils';
 import { getIESetting } from '../lib/settings';
+import { doneBarColor } from '../lib/ui_helpers';
 
 // --- Formatting helpers ---------------------------------------------------
 
@@ -286,12 +287,7 @@ function BucketRow({
           style={{
             width: `${Math.max(0, Math.min(100, b.donePct))}%`,
             height: '100%',
-            background:
-              b.donePct >= 100
-                ? '#22c55e'
-                : b.donePct >= 50
-                  ? '#eab308'
-                  : '#ef4444',
+            background: doneBarColor(b.donePct),
           }}
         />
       </div>
