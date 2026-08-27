@@ -2,7 +2,7 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
-## v1.0.59 - August 27th, 2026
+## v1.0.60 - August 27th, 2026
 
 ### ✨ New - pins into a PDF area highlight are ringed yellow
 
