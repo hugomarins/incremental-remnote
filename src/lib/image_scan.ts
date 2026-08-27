@@ -331,46 +331,28 @@ export const remIsImageOnly = (rem: PluginRem): boolean => {
  * Confirms an image-only rem really is a clipping from a source document rather
  * than a bare figure pasted into your own notes.
  *
- * Two signals, because neither is guaranteed. The powerup test is authoritative
- * where it applies — RemNote models both highlight kinds with the single
- * PDFHighlight/HTMLHighlight powerup, there being no area-specific code. The
- * structural fallback covers the case where an area highlight turns out not to
- * carry it: the rem then sits under a `Page N` node (PDFPageNumber) inside the
- * PDF's managed "Highlights" container, which is the same signal Repair PDF uses
- * to find that container.
+ * The powerup test is the whole test. RemNote models both highlight kinds with a
+ * single PDFHighlight / HTMLHighlight powerup — there is no area-specific code —
+ * and an area highlight carries it just as a text highlight does. That was the
+ * one thing this could not be sure of when it was written, so it also walked to
+ * the parent to look for a `Page N` node (PDFPageNumber) inside the PDF's
+ * managed "Highlights" container. A DOM inspection settled it: an area
+ * highlight's container renders `data-rem-tags="pdfareahighlight pdf-highlight"`,
+ * the second of which is RemNote's own. The structural fallback was therefore
+ * unreachable in practice and is gone, along with the extra read it cost every
+ * image-only rem that was NOT a highlight.
  *
  * Reads only, ~0.5ms each against ~74ms for a write, and only image-only rems
- * ever reach here. `parentIsPage` is memoised because area highlights cluster
- * many-to-one under the same page node.
+ * ever reach here.
  */
-async function confirmAreaHighlight(
-  plugin: RNPlugin,
-  rem: PluginRem,
-  parentIsPage: Map<RemId, boolean>
-): Promise<boolean> {
+async function confirmAreaHighlight(plugin: RNPlugin, rem: PluginRem): Promise<boolean> {
   try {
     if (await rem.hasPowerup(BuiltInPowerupCodes.PDFHighlight)) return true;
-    if (await rem.hasPowerup(BuiltInPowerupCodes.HTMLHighlight)) return true;
+    return await rem.hasPowerup(BuiltInPowerupCodes.HTMLHighlight);
   } catch (e) {
     console.warn('[ImageScan] highlight powerup probe failed for', rem._id, e);
+    return false;
   }
-
-  // `parent` is a plain field on the rem, so reaching the page node costs one
-  // lookup rather than a walk.
-  const parentId = rem.parent;
-  if (!parentId) return false;
-  const cached = parentIsPage.get(parentId);
-  if (cached !== undefined) return cached;
-
-  let isPage = false;
-  try {
-    const parent = await plugin.rem.findOne(parentId);
-    isPage = !!parent && (await parent.hasPowerup(BuiltInPowerupCodes.PDFPageNumber));
-  } catch (e) {
-    console.warn('[ImageScan] page-parent probe failed for', rem._id, e);
-  }
-  parentIsPage.set(parentId, isPage);
-  return isPage;
 }
 
 /**
@@ -536,7 +518,6 @@ export async function scanAndTagImages(
     // yields.
     if (areaCandidates.length > 0) {
       const tProbe = now();
-      const parentIsPage = new Map<RemId, boolean>();
       for (let i = 0; i < areaCandidates.length; i++) {
         if (i > 0 && i % PROGRESS_EVERY === 0) {
           onProgress?.(
@@ -547,7 +528,7 @@ export async function scanAndTagImages(
         }
         const { rem, isTagged } = areaCandidates[i];
         timing.probeCount++;
-        if (await confirmAreaHighlight(plugin, rem, parentIsPage)) {
+        if (await confirmAreaHighlight(plugin, rem)) {
           result.areaHighlights++;
           pending.push({ rem, code: pdfAreaHighlightPowerupCode, add: true });
           // Exclusive: shed HasImage if an earlier run (or an earlier version of

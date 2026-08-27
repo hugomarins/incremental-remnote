@@ -14,7 +14,7 @@ Adding a figure to an ordinary text highlight keeps the **blue** ring: what mark
 
 #### Technical explanation
 
-The tempting CSS test — `hasimage` **and** `pdf-highlight` — is wrong for a text highlight someone dropped a figure into, and RemNote has no area-specific powerup (a single `PDFHighlight` covers both kinds). The real discriminator is that the Rem's text is the image *alone*, which no selector can see, so the scan decides it: a free synchronous check beside the existing one, then one bridge **read** per image-only Rem to confirm it is a clipping — `PDFHighlight`/`HTMLHighlight`, falling back to a `PDFPageNumber` parent, the same signal Repair PDF uses to find the Highlights container.
+The tempting CSS test — `hasimage` **and** `pdf-highlight` — is wrong for a text highlight someone dropped a figure into, and RemNote has no area-specific powerup (a single `PDFHighlight` covers both kinds, as `data-rem-tags="pdfareahighlight pdf-highlight"` on an area highlight confirms). The real discriminator is that the Rem's text is the image *alone*, which no selector can see, so the scan decides it: a free synchronous check beside the existing one, then one bridge **read** per image-only Rem to confirm it is a clipping.
 
 The two tags are kept mutually exclusive because RemNote collapses two or more tags into a **"N tags" chip** that cannot be hidden without also hiding the user's own tags.
 
