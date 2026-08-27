@@ -268,9 +268,9 @@ export function ImageScanPopup() {
                 <span className="font-semibold">#{hasImagePowerupName}</span>. Rems inside the
                 scanned scope that carry the tag but no longer hold an image lose it. A highlight
                 holding <span className="font-semibold">only</span> a clipped image — a PDF area
-                highlight — also gets{' '}
-                <span className="font-semibold">#{pdfAreaHighlightPowerupName}</span>, which rings
-                its reference pins yellow.
+                highlight — gets{' '}
+                <span className="font-semibold">#{pdfAreaHighlightPowerupName}</span> instead, which
+                rings its reference pins yellow.
               </>
             )}
           </div>
@@ -409,7 +409,7 @@ export function ImageScanPopup() {
               ➖ <span className="font-bold">{result.untagged}</span> cleared (no image any more)
             </div>
             {(result.areaHighlights > 0 || result.areaUntagged > 0) && (
-              <div title="A highlight whose text is the clipped image alone — no caption, no prose. Its reference pins are ringed yellow instead of blue.">
+              <div title={`A highlight whose text is the clipped image alone — no caption, no prose. These carry #${pdfAreaHighlightPowerupName} INSTEAD of #${hasImagePowerupName}, never both, and their reference pins are ringed yellow rather than blue.`}>
                 ✂️ <span className="font-bold">{result.areaHighlights}</span> PDF area
                 highlight{result.areaHighlights === 1 ? '' : 's'}
                 {result.areaTagged > 0 && <> (+{result.areaTagged} newly marked)</>}

@@ -2,6 +2,24 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.59 - August 27th, 2026
+
+### ✨ New - pins into a PDF area highlight are ringed yellow
+
+An **area highlight** — where you clipped a region of the page instead of selecting its text, so RemNote stored the image in place of the text — now rings its reference pins **yellow**, against **blue** for a figure in your own notes. A link back into the source document reads differently from a link to your own material.
+
+![Two pins on a document title: the left ringed yellow for a PDF area highlight, the right ringed blue for a Rem holding an image](assets/pin-with-image-and-pdfareahighlight.png){ width="800" }
+
+Adding a figure to an ordinary text highlight keeps the **blue** ring: what marks an area highlight is holding the image and *nothing else*. The scan records it as **`PdfAreaHighlight`**, applied **instead of** `HasImage` rather than alongside it — so filter one tag for your own figures and the other for clippings.
+
+#### Technical explanation
+
+The tempting CSS test — `hasimage` **and** `pdf-highlight` — is wrong for a text highlight someone dropped a figure into, and RemNote has no area-specific powerup (a single `PDFHighlight` covers both kinds). The real discriminator is that the Rem's text is the image *alone*, which no selector can see, so the scan decides it: a free synchronous check beside the existing one, then one bridge **read** per image-only Rem to confirm it is a clipping — `PDFHighlight`/`HTMLHighlight`, falling back to a `PDFPageNumber` parent, the same signal Repair PDF uses to find the Highlights container.
+
+The two tags are kept mutually exclusive because RemNote collapses two or more tags into a **"N tags" chip** that cannot be hidden without also hiding the user's own tags.
+
+📖 [Pins that lead to an image are ringed](Utilities.md#pins-that-lead-to-an-image-are-ringed)
+
 ## v1.0.58 - August 26th, 2026
 
 ### ✨ New - find the cards your queue can never show you
@@ -377,15 +395,11 @@ A **pin whose target holds an image** gets a blue ring after the scan mentioned 
 
 ![A pin to a Rem holding an image, ringed in blue, next to a pin carrying the orange priority-band marker](assets/pin-with-image-ringed.png){ width="800" }
 
-Pins into a **PDF area highlight** — a highlight holding **only** a clipped image, no caption — are ringed **yellow** instead, so a link into the source reads differently from a link to a figure in your own notes. Adding a figure to an ordinary text highlight keeps the blue ring.
-
 #### Technical explanation
 
 `data-rem-tags` on a reference container describes the **referenced** Rem, not the host — so `[data-rem-reference-pin="true"][data-rem-tags~="hasimage"]` reads as "this pin points at a Rem holding an image". The pin attribute alone would ring every pin in the knowledge base and therefore say nothing.
 
 Colours come from RemNote's `--rn-clr-border-accent` / `--rn-clr-border-selected` tokens, so the ring follows light and dark mode without a `.dark` branch.
-
-Area highlights have no powerup of their own — RemNote models both kinds with one `PDFHighlight` — and the obvious CSS test, `hasimage` **and** `pdf-highlight`, is wrong for a text highlight someone dropped a figure into. The real discriminator is that the Rem's text is the image *alone*, which no selector can see, so the scan writes it down as a second tag. Deciding it is free (a synchronous check beside the existing one); confirming the Rem is a clipping rather than a pasted figure costs one bridge **read** per image-only Rem — `PDFHighlight`/`HTMLHighlight`, falling back to a `PDFPageNumber` parent, the same signal Repair PDF uses to find the Highlights container.
 
 📖 [Pins that lead to an image are ringed](Utilities.md#pins-that-lead-to-an-image-are-ringed)
 

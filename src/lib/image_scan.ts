@@ -479,8 +479,9 @@ export async function scanAndTagImages(
     const pending: Array<{ rem: PluginRem; code: string; add: boolean }> = [];
     // Image-only rems not already known to be area highlights. Confirmed in
     // Phase 1.5 rather than here, because confirmation needs the bridge and this
-    // loop must stay synchronous.
-    const areaCandidates: PluginRem[] = [];
+    // loop must stay synchronous. `isTagged` rides along so the confirmation can
+    // settle BOTH tags without re-reading the membership set.
+    const areaCandidates: Array<{ rem: PluginRem; isTagged: boolean }> = [];
     for (let i = 0; i < rems.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) {
         onProgress?.(`Scanning ${i} / ${rems.length} Rems…`, i, rems.length);
@@ -495,21 +496,34 @@ export async function scanAndTagImages(
       const isTagged = alreadyTagged.has(rem._id);
       if (hasImage) result.withImages++;
 
+      // The two tags are MUTUALLY EXCLUSIVE: an area highlight carries
+      // PdfAreaHighlight and not HasImage. Both would be more useful to filter on
+      // — an area highlight does hold an image — but RemNote collapses two or
+      // more tags into a "2 tags" chip that no rule of ours can hide safely, and
+      // that clutter costs more than the second filter is worth on Rems that are
+      // rarely filtered. So each Rem gets exactly one of them, or neither.
+      const wasArea = alreadyArea.has(rem._id);
+
+      if (hasImage && remIsImageOnly(rem)) {
+        // Shape matches an area highlight; only its provenance is still open.
+        if (wasArea) {
+          // Already confirmed on a previous run — no probe. This is what keeps a
+          // re-scan of an unchanged document free of reads as well as writes.
+          result.areaHighlights++;
+          if (isTagged) pending.push({ rem, code: hasImagePowerupCode, add: false });
+        } else {
+          // HasImage is deferred with it: an image-only Rem that turns out NOT to
+          // be a clipping is an ordinary figure and does want HasImage.
+          areaCandidates.push({ rem, isTagged });
+        }
+        continue;
+      }
+
+      // Not image-only, so it cannot be an area highlight — a caption may have
+      // been added since the last run.
+      if (wasArea) pending.push({ rem, code: pdfAreaHighlightPowerupCode, add: false });
       // Already in the right state — no write, which is what keeps a re-run cheap.
       if (hasImage !== isTagged) pending.push({ rem, code: hasImagePowerupCode, add: hasImage });
-
-      // The area-highlight tag rides along on the same walk. Only the image-only
-      // shape is decided here; whether it came from a PDF is decided in Phase 1.5.
-      const wasArea = alreadyArea.has(rem._id);
-      if (hasImage && remIsImageOnly(rem)) {
-        // Already confirmed on a previous run — no probe, no write. This is what
-        // keeps a re-scan of an unchanged document free of reads as well as writes.
-        if (wasArea) result.areaHighlights++;
-        else areaCandidates.push(rem);
-      } else if (wasArea) {
-        // A caption (or any other text) was added since — it is a text highlight now.
-        pending.push({ rem, code: pdfAreaHighlightPowerupCode, add: false });
-      }
     }
     // Clamped: derived by subtraction, so accumulated float error can otherwise
     // print a negative tenth of a second on a run whose walk was ~0.
@@ -531,11 +545,17 @@ export async function scanAndTagImages(
             areaCandidates.length
           );
         }
-        const rem = areaCandidates[i];
+        const { rem, isTagged } = areaCandidates[i];
         timing.probeCount++;
         if (await confirmAreaHighlight(plugin, rem, parentIsPage)) {
           result.areaHighlights++;
           pending.push({ rem, code: pdfAreaHighlightPowerupCode, add: true });
+          // Exclusive: shed HasImage if an earlier run (or an earlier version of
+          // this command) put it there.
+          if (isTagged) pending.push({ rem, code: hasImagePowerupCode, add: false });
+        } else if (!isTagged) {
+          // Image-only but not from a source document — an ordinary figure.
+          pending.push({ rem, code: hasImagePowerupCode, add: true });
         }
       }
       timing.probeMs = now() - tProbe;

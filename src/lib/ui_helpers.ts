@@ -380,7 +380,12 @@ export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
   const slug = hasImagePowerupName.toLowerCase();
   const areaSlug = pdfAreaHighlightPowerupName.toLowerCase();
   const css = `
-    [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i] {
+    /* Both tags get the same ring; only the colour differs. They are MUTUALLY
+       EXCLUSIVE (see lib/image_scan.ts), so an area highlight never carries
+       HasImage — which is why this rule has to list both slugs rather than
+       treating the yellow one as an override on top of the blue. */
+    [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i],
+    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
       border: 1px solid var(--rn-clr-border-accent, #3B82F6);
       border-radius: 4px;
       padding: 0 1px;
@@ -397,16 +402,13 @@ export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
     }
 
     /* PDF/HTML AREA highlights — where RemNote stored a clipped IMAGE instead of
-       the selected text — get a highlighter-yellow ring instead of the blue.
+       the selected text — are ringed highlighter-yellow rather than blue.
 
        Keyed on a tag of its own rather than on "HasImage AND pdf-highlight",
        which looks equivalent and is not: adding a figure to an ordinary TEXT
        highlight satisfies both. What actually distinguishes an area highlight is
-       that its text is the image and nothing else — a property of the rem's rich
-       text, invisible to any selector — so the scan decides it and records it as
-       PdfAreaHighlight. See lib/image_scan.ts.
-
-       Emitted after the blue rules so it wins on equal specificity. */
+       that its text is the image and nothing else — a property of the Rem's rich
+       text, invisible to any selector — so the scan decides it and records it. */
     [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
       border-color: #eab308;
     }
