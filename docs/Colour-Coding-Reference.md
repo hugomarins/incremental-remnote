@@ -49,11 +49,13 @@ A ring around a **pin** says where that pin leads, which matters most inside an 
 
 Yellow means *"leads into a source document"*, blue means *"you will land on an image"*, and an area highlight — being both — carries both. The rings brighten on hover or while the Rem is being edited.
 
-![Two reference pins on a document title, each ringed yellow and blue, with the hover preview confirming the target carries the PdfAreaHighlight tag](assets/ring-pdf-area-highlight.png){ width="800" }
+![Three pins in one document, each labelled: a yellow ring on a pin to a PDF text highlight (its green dotted bottom and right edges carrying the linked highlight's 20s priority band), a blue ring on a pin to a Rem holding an image, and a yellow-and-blue ring on a pin to a PDF area highlight](assets/pin-rings-explanation.png){ width="900" }
 
 **The band edges are not a fourth ring — they are the [priority band](Prioritization-&-Sorting.md#priorities-on-pdf-highlights) of the linked highlight**, the same marker the PDF reader draws, appearing here because a reference container carries the *referenced* Rem's tags. So a pin can say two things at once: where it leads (top and left) and how important that target is (bottom and right).
 
 **Off by default**, via **Enable Pin Reference Colour Rings**. Two of the three states depend on tags that only exist after [Tag Rems With Images](Utilities.md#filter-a-document-by-images) has been run, so the feature is opt-in. With the setting off, pins are left completely unmarked — including the priority-band border the highlight styling would otherwise draw on them.
+
+![Two reference pins on a document title, each ringed yellow and blue, with the hover preview confirming the target carries the PdfAreaHighlight tag](assets/ring-pdf-area-highlight.png){ width="800" }
 
 The two share one box rather than nesting: the **band owns the bottom and right edges**, the ring owns **top and left**. That is why an area highlight's top edge is yellow and its left edge is blue — those are the two that survive when a band is present. The pin's box is also normalised back to square, since the band marker is sized for a passage of running text and would otherwise leave the pin lopsided and larger than its neighbours.
 
