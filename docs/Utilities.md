@@ -631,7 +631,7 @@ The blue ring is drawn in RemNote's **accent** colour — the same one the app u
 
 What identifies one is that the Rem holds an image **and nothing else** — no caption, no prose. That matters, because *adding* a figure to an ordinary text highlight is common, and such a Rem holds an image and is a highlight, yet is not an area highlight; it keeps the blue ring. The scan decides this and records it as **`PdfAreaHighlight`**, since "image and nothing else" is a property of the Rem's text that no filter or stylesheet can inspect on its own.
 
-![Two pins on a document title: the left ringed yellow because its target is a PDF area highlight, the right ringed blue because its target is a Rem holding an image](assets/pin-with-image-and-pdfareahighlight.png){ width="800" }
+![Two reference pins on a document title, each ringed yellow and blue because their target is a PDF area highlight — confirmed by the PdfAreaHighlight tag in the hover preview](assets/ring-pdf-area-highlight.png){ width="800" }
 
 **The two tags are mutually exclusive.** An area highlight carries `PdfAreaHighlight` and *not* `HasImage`; every other Rem holding an image carries `HasImage`. Tagging area highlights with both would make `HasImage` a complete list of every figure, which is tidier to filter — but RemNote collapses two or more tags into a **"N tags" chip** that no rule can hide without also hiding your own tags, and that clutter is not worth a filter you would rarely run on a highlights document. So: filter `HasImage` for figures in your notes, `PdfAreaHighlight` for clippings from a source. `PdfAreaHighlight`'s chip is hidden from the tag bar exactly like `HasImage`'s.
 

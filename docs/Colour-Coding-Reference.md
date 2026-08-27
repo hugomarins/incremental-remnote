@@ -39,18 +39,23 @@ It appears wherever a priority is shown as colour: the **table-cell badges** (`7
 
 A ring around a **pin** says where that pin leads, which matters most inside an extract — the plugin leaves both a reference to the parent Rem *and* a pin to the source highlight.
 
-| Ring | The pin leads to |
+| Ring | Says |
 |---|---|
-| **Blue** (RemNote's accent) | a Rem holding an **image** — a figure in your own notes |
-| **Yellow** `#eab308` | a **text highlight** — the source passage |
-| **Yellow + blue**, alternating edges | a **PDF area highlight** — a clipped figure from the source |
+| **Blue** (RemNote's accent) | leads to a Rem holding an **image** — a figure in your own notes |
+| **Yellow** `#eab308` | leads to a **text highlight** — the source passage |
+| **Yellow + blue**, alternating edges | leads to a **PDF area highlight** — a clipped figure from the source |
+| **Bottom and right edges in a ramp colour** | the target highlight carries a [**priority band**](Prioritization-&-Sorting.md#priorities-on-pdf-highlights) — hue from the ramp above, dashed if you have extracted from it, dotted if it is merely linked |
 | none | an ordinary Rem |
 
 Yellow means *"leads into a source document"*, blue means *"you will land on an image"*, and an area highlight — being both — carries both. The rings brighten on hover or while the Rem is being edited.
 
+![Two reference pins on a document title, each ringed yellow and blue, with the hover preview confirming the target carries the PdfAreaHighlight tag](assets/ring-pdf-area-highlight.png){ width="800" }
+
+**The band edges are not a fourth ring — they are the [priority band](Prioritization-&-Sorting.md#priorities-on-pdf-highlights) of the linked highlight**, the same marker the PDF reader draws, appearing here because a reference container carries the *referenced* Rem's tags. So a pin can say two things at once: where it leads (top and left) and how important that target is (bottom and right).
+
 **Off by default**, via **Enable Pin Reference Colour Rings**. Two of the three states depend on tags that only exist after [Tag Rems With Images](Utilities.md#filter-a-document-by-images) has been run, so the feature is opt-in. With the setting off, pins are left completely unmarked — including the priority-band border the highlight styling would otherwise draw on them.
 
-When a pin *is* ringed and its target also carries a priority band, the two share one box: the **band owns the bottom and right edges**, the ring owns **top and left**. That is why an area highlight's top edge is yellow and its left edge is blue — those are the two that survive.
+The two share one box rather than nesting: the **band owns the bottom and right edges**, the ring owns **top and left**. That is why an area highlight's top edge is yellow and its left edge is blue — those are the two that survive when a band is present. The pin's box is also normalised back to square, since the band marker is sized for a passage of running text and would otherwise leave the pin lopsided and larger than its neighbours.
 
 ---
 
@@ -99,6 +104,6 @@ The Queue Dashboard's **speed** reading has its own red→green scale, either fi
 
 The priority ramp occupies hue **0–240**, which is red through green through blue. Anything that must *not* read as a priority has to sit outside that span or use a different channel:
 
-- **Pin rings** use a fixed accent blue and a fixed yellow, but they are outlines on an 18px icon — never a background fill and never a left border — and they appear on nothing but pins.
+- **Pin rings** use a fixed accent blue and a fixed yellow, but they are a hairline border on an 18px icon — never a background fill and never a left border — and they appear on nothing but pins. Where a pin also carries a band, the two occupy different edges of the same box, so neither has to give way.
 - **Provenance** on highlight markers uses line style, not hue, precisely because hue was already taken.
 - **`#pdfextract` blue and `#incremental` green** are backgrounds behind text, a channel nothing else uses in the editor.

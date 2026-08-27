@@ -8,7 +8,7 @@ This page documents the major changes and improvements for each version of the I
 
 **Yellow** means the pin leads into a **source document**, **blue** means a figure in your own notes, and a **PDF area highlight** — a clipped figure, which is both — carries both colours. An extract holds a reference to its parent *and* a pin to its highlight, so telling them apart at a glance is the point.
 
-![Two pins on a document title: the left ringed yellow for a PDF area highlight, the right ringed blue for a Rem holding an image](assets/pin-with-image-and-pdfareahighlight.png){ width="800" }
+![Two reference pins on a document title, each ringed yellow and blue because their target is a PDF area highlight — confirmed by the PdfAreaHighlight tag in the hover preview](assets/ring-pdf-area-highlight.png){ width="800" }
 
 Adding a figure to an ordinary text highlight keeps its plain **yellow** ring: what marks an area highlight is holding the image and *nothing else*. The scan records it as **`PdfAreaHighlight`**, applied **instead of** `HasImage` rather than alongside it — so filter one tag for your own figures and the other for clippings.
 
