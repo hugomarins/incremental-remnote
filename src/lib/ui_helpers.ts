@@ -409,6 +409,32 @@ export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
       transition: border-color 120ms ease;
     }
 
+    /* Keep the box square when a priority band is also drawn on it.
+
+       registerPdfHighlightCSS (and the band tint built on it) style a highlight
+       as a passage of running text: padding-bottom 2.7px, padding-left 4px and a
+       3px right bar, so the marker clears the descenders and reads down a wrapped
+       paragraph. A reference container inherits those declarations along with the
+       tags, and on an 18px pin the result is a box that is lopsided and visibly
+       larger than the plain pins beside it.
+
+       Only the SIZE is reset — the band's colour and its dashed/dotted style
+       carry the information and are left alone.
+
+       The .rem-reference-container class is what makes this stick: the rules
+       being corrected match at the same specificity as the ring above, and
+       ordering between separate registerCSS calls is not guaranteed (see the note
+       in lib/priority_bands.ts), so equal specificity plus !important would still
+       be a coin toss. The class raises it and settles the matter. */
+    .rem-reference-container[data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i],
+    .rem-reference-container[data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i],
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i],
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i] {
+      padding: 0 1px !important;
+      border-right-width: 1.5px !important;
+      border-bottom-width: 1.5px !important;
+    }
+
     /* Hover and edit-mode on the blue state: step up to the selected-border
        token. RemNote already paints its own light-accent background on a hovered
        reference, so the ring only has to stay legible on top of it. */
