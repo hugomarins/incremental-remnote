@@ -4,19 +4,23 @@ This page documents the major changes and improvements for each version of the I
 
 ## v1.0.60 - August 27th, 2026
 
-### ✨ New - pins into a PDF area highlight are ringed yellow
+### ✨ New - a pin's ring now says where it leads
 
-An **area highlight** — where you clipped a region of the page instead of selecting its text, so RemNote stored the image in place of the text — now rings its reference pins **yellow**, against **blue** for a figure in your own notes. A link back into the source document reads differently from a link to your own material.
+**Yellow** means the pin leads into a **source document**, **blue** means a figure in your own notes, and a **PDF area highlight** — a clipped figure, which is both — carries both colours. An extract holds a reference to its parent *and* a pin to its highlight, so telling them apart at a glance is the point.
 
 ![Two pins on a document title: the left ringed yellow for a PDF area highlight, the right ringed blue for a Rem holding an image](assets/pin-with-image-and-pdfareahighlight.png){ width="800" }
 
-Adding a figure to an ordinary text highlight keeps the **blue** ring: what marks an area highlight is holding the image and *nothing else*. The scan records it as **`PdfAreaHighlight`**, applied **instead of** `HasImage` rather than alongside it — so filter one tag for your own figures and the other for clippings.
+Adding a figure to an ordinary text highlight keeps its plain **yellow** ring: what marks an area highlight is holding the image and *nothing else*. The scan records it as **`PdfAreaHighlight`**, applied **instead of** `HasImage` rather than alongside it — so filter one tag for your own figures and the other for clippings.
 
 #### Technical explanation
 
 The tempting CSS test — `hasimage` **and** `pdf-highlight` — is wrong for a text highlight someone dropped a figure into, and RemNote has no area-specific powerup (a single `PDFHighlight` covers both kinds, as `data-rem-tags="pdfareahighlight pdf-highlight"` on an area highlight confirms). The real discriminator is that the Rem's text is the image *alone*, which no selector can see, so the scan decides it: a free synchronous check beside the existing one, then one bridge **read** per image-only Rem to confirm it is a clipping.
 
 The two tags are kept mutually exclusive because RemNote collapses two or more tags into a **"N tags" chip** that cannot be hidden without also hiding the user's own tags.
+
+The ring shares its box with the priority-band marker rather than nesting outside it. A reference container carries the *referenced* Rem's tags, so on a banded highlight the band rules set `border-bottom` / `border-right` on this same element with `!important`; the ring simply holds the other two edges, giving one box that is half band colour. An `outline` was tried first and is worse — a second concentric box around an already-marked pin, which on an extracted highlight is pure clutter.
+
+An area highlight's colours are per-edge (`border-color: yellow blue yellow blue`) rather than a gradient: `border-image` paints all four edges from one image, is not overridden by the band's `border-color`, and would therefore erase the band marker — losing the edge-sharing the design rests on.
 
 📖 [Pins that lead to an image are ringed](Utilities.md#pins-that-lead-to-an-image-are-ringed)
 

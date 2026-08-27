@@ -380,43 +380,78 @@ export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
   const slug = hasImagePowerupName.toLowerCase();
   const areaSlug = pdfAreaHighlightPowerupName.toLowerCase();
   const css = `
-    /* Both tags get the same ring; only the colour differs. They are MUTUALLY
-       EXCLUSIVE (see lib/image_scan.ts), so an area highlight never carries
-       HasImage — which is why this rule has to list both slugs rather than
-       treating the yellow one as an override on top of the blue. */
+    /* A pin's ring says where it leads:
+         blue           — a Rem holding an image (a figure in your own notes)
+         yellow         — a TEXT highlight: the source passage
+         yellow + blue  — a PDF AREA highlight: a clipped figure from the source
+
+       All three are SOLID, which keeps them clear of the priority-band marker's
+       dotted/dashed vocabulary.
+
+       Drawn as a BORDER, sharing the box with that marker rather than nesting
+       outside it. A reference container carries the REFERENCED rem's tags, so on
+       a pin to a banded highlight the band rules in registerPdfHighlightCSS set
+       border-bottom and border-right on this very element, with !important. That
+       is not a conflict to avoid but a division of labour: their declarations
+       win on the two edges they name, ours hold the other two, and the result is
+       ONE box reading half band-colour, half ring-colour. An outline was tried
+       instead and is worse — it adds a second concentric box around an already
+       marked pin, which on an extracted highlight (the common case in this
+       plugin's flow) is pure clutter. */
     [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i],
-    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
-      border: 1px solid var(--rn-clr-border-accent, #3B82F6);
+    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i],
+    [data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i]:not([data-rem-tags~="${areaSlug}" i]),
+    [data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i]:not([data-rem-tags~="${areaSlug}" i]) {
+      border: 1.5px solid var(--rn-clr-border-accent, #3B82F6);
       border-radius: 4px;
       padding: 0 1px;
       margin: 0 1px;
       transition: border-color 120ms ease;
     }
 
-    /* Hover and edit-mode: step up to the selected-border token. RemNote already
-       paints its own light-accent background on a hovered reference, so the ring
-       only has to stay legible on top of it rather than supply the whole cue. */
+    /* Hover and edit-mode on the blue state: step up to the selected-border
+       token. RemNote already paints its own light-accent background on a hovered
+       reference, so the ring only has to stay legible on top of it. */
     [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i]:hover,
     .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i] {
       border-color: var(--rn-clr-border-selected, #1d4ed8);
     }
 
-    /* PDF/HTML AREA highlights — where RemNote stored a clipped IMAGE instead of
-       the selected text — are ringed highlighter-yellow rather than blue.
-
-       Keyed on a tag of its own rather than on "HasImage AND pdf-highlight",
-       which looks equivalent and is not: adding a figure to an ordinary TEXT
-       highlight satisfies both. What actually distinguishes an area highlight is
-       that its text is the image and nothing else — a property of the Rem's rich
-       text, invisible to any selector — so the scan decides it and records it. */
-    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
+    /* TEXT highlights — the pin opens the source passage. */
+    [data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i]:not([data-rem-tags~="${areaSlug}" i]),
+    [data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i]:not([data-rem-tags~="${areaSlug}" i]) {
       border-color: #eab308;
+    }
+
+    /* AREA highlights are both things at once — a highlight (yellow) AND an
+       image (blue) — so they carry both colours, per edge.
+
+       The order matters: TOP is yellow and LEFT is blue precisely because those
+       are the two edges the band marker leaves alone, so both colours survive on
+       a banded pin. Right and bottom repeat the pair for an unbanded one, giving
+       an alternating box rather than a half-empty ring.
+
+       Per-edge colours rather than a linear-gradient: a gradient needs
+       border-image, which paints all four edges from one image and is NOT
+       overridden by the band's border-color, so it would erase the band marker
+       on bottom/right — losing exactly the edge-sharing this design rests on.
+       It also drops border-radius, and a yellow-to-blue blend across ~1.5px of
+       line reads as muddy green at this size. */
+    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
+      border-color: #eab308 #3B82F6 #eab308 #3B82F6;
+    }
+
+    /* Both yellow states brighten together — this has to gain contrast in dark
+       mode too, where a deeper amber would sink into the background. */
+    [data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i]:not([data-rem-tags~="${areaSlug}" i]):hover,
+    [data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i]:not([data-rem-tags~="${areaSlug}" i]):hover,
+    .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i]:not([data-rem-tags~="${areaSlug}" i]),
+    .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i]:not([data-rem-tags~="${areaSlug}" i]) {
+      border-color: #facc15;
     }
     [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i]:hover,
     .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
-      /* Brighter, not darker: this has to gain contrast in dark mode too, where a
-         deeper amber would sink into the background. */
-      border-color: #facc15;
+      border-color: #facc15 #60a5fa #facc15 #60a5fa;
     }
   `;
   await plugin.app.registerCSS('pin-reference-styling', css);
