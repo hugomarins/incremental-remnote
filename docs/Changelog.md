@@ -22,7 +22,13 @@ The ring shares its box with the priority-band marker rather than nesting outsid
 
 An area highlight's colours are per-edge (`border-color: yellow blue yellow blue`) rather than a gradient: `border-image` paints all four edges from one image, is not overridden by the band's `border-color`, and would therefore erase the band marker — losing the edge-sharing the design rests on.
 
+The rings are **off by default**, behind **Enable Pin Reference Colour Rings** (*Editor Indicators*). Two of the three states depend on tags the scan writes, so a knowledge base that has never run it would otherwise wake up with a marker on every pin. Switching it off also clears the priority-band border that the highlight styling leaks onto pin containers, so "off" means genuinely unmarked.
+
 📖 [Pins that lead to an image are ringed](Utilities.md#pins-that-lead-to-an-image-are-ringed)
+
+### 📚 Docs - one page listing every colour the plugin draws
+
+New **[Colour Coding Reference](Colour-Coding-Reference.md)** under *Essential References*: the priority ramp and what its hues mean, the editor's left borders and highlight backgrounds, the pin rings, the PDF reader's provenance line styles, the queue's emphasis boxes, and the analytics bar thresholds — with a closing note on why none of them collide.
 
 ## v1.0.58 - August 26th, 2026
 

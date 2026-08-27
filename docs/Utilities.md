@@ -615,6 +615,8 @@ A **pin** is drawn with a hairline ring saying where it leads, so you can pick t
 
 Yellow means *"this leads into a source document"* and blue means *"you will land on an image"*, so an area highlight — which is both — carries both colours, one per edge. The rings brighten when you hover one or edit the Rem.
 
+> **Off by default.** Turn on **Enable Pin Reference Colour Rings** (Plugin Settings → *Editor Indicators*) to get them. Two of the three states depend on tags this scan writes, so the feature is opt-in rather than something a knowledge base wakes up wearing. With the setting off, pins are left completely unmarked — including the priority-band border the highlight styling would otherwise draw on them. Every colour the plugin uses is catalogued in the [Colour Coding Reference](Colour-Coding-Reference.md).
+
 This is the second thing the [image scan](#filter-a-document-by-images) buys you, and it needs the scan to have run: the ring keys on the tag, so it appears on a pin only once its target has been tagged, and disappears when a re-scan clears the tag from a Rem whose image is gone.
 
 ![Two pins side by side: the left carries the orange priority-band highlight marker, the right is ringed in blue because its target holds a figure](assets/pin-with-image-ringed.png){ width="800" }

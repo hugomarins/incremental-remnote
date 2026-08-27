@@ -78,6 +78,12 @@ export const hideCardPriorityTagSettingId = 'hideCardPriorityTag';
 export const showLeftBorderForIncRemsSettingId = 'showLeftBorderForIncRems';
 export const showDismissedIndicatorSettingId = 'showDismissedIndicator';
 export const hideDismissedTagSettingId = 'hideDismissedTag';
+// Gates the coloured rings drawn around reference PINS in the editor, and — when
+// off — also suppresses the priority-band marker that the highlight stylesheet
+// leaks onto those same pin containers. Off by default: the rings only carry
+// meaning once "Tag Rems With Images" has been run, and an unasked-for marker on
+// every pin is exactly the clutter this setting exists to opt into.
+export const showPinRingIndicatorsSettingId = 'showPinRingIndicators';
 export const performanceModeId = 'performanceMode';
 export const flashcardResponseTimeLimitId = 'flashcard_response_time_limit';
 export const enableMasteryDrillId = 'enable-mastery-drill';

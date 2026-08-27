@@ -17,6 +17,7 @@ import {
   showPriorityBandsInTablesId,
   hasImagePowerupName,
   pdfAreaHighlightPowerupName,
+  showPinRingIndicatorsSettingId,
 } from './consts';
 import { getIESetting } from './settings';
 
@@ -377,6 +378,32 @@ export async function registerHasImageCSS(plugin: ReactRNPlugin) {
  * `.dark` branch.
  */
 export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
+  // Off by default. The rings only say anything once "Tag Rems With Images" has
+  // run, so drawing them unasked would put a marker on every pin in a knowledge
+  // base that has no idea what it means.
+  if (!(await getIESetting(plugin, showPinRingIndicatorsSettingId))) {
+    // Not merely "emit nothing": the highlight stylesheet draws a band-coloured
+    // border and padding on any element carrying a highlight's tags, and a
+    // reference container carries the REFERENCED rem's tags — so a pin to a
+    // banded highlight is marked whether or not this feature is on. That leak
+    // predates the rings and is what the user is opting into here, so switching
+    // the setting off has to clear it too, or "off" would still show a box.
+    //
+    // Scoped to pins alone: a full [[reference]] to the same highlight keeps its
+    // marker, where the padding was designed for a passage of running text.
+    await plugin.app.registerCSS(
+      'pin-reference-styling',
+      `
+    .rem-reference-container[data-rem-reference-pin="true"],
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"] {
+      border: none !important;
+      padding: 0 !important;
+    }
+  `
+    );
+    return;
+  }
+
   const slug = hasImagePowerupName.toLowerCase();
   const areaSlug = pdfAreaHighlightPowerupName.toLowerCase();
   const css = `

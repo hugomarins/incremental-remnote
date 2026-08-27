@@ -91,6 +91,7 @@ Open the popup with the command **`Incremental RemNote: Settings`** (quick code 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | **Green Left Border for IncRems** | Boolean | `true` | Adds a green left border to IncRems in the editor, making your "extracts" easy to spot. |
+| **Enable Pin Reference Colour Rings** | Boolean | `false` | Rings reference **pins** by where they lead — blue for a Rem holding an image, yellow for a PDF/web text highlight, both colours for a PDF area highlight. Needs [Tag Rems With Images](Utilities.md#filter-a-document-by-images) to have been run for the image states. With this **off**, pins are left unmarked, including the priority-band border the highlight styling would otherwise draw on them. 📖 [Colour Coding Reference](Colour-Coding-Reference.md#reference-pin-rings) |
 | **Yellow Left Border for Dismissed Rems** | Boolean | `true` | Rems dismissed from Incremental learning (via the Dismiss button/command) display a yellow left border to indicate they have been already processed (and preserved history). |
 | **Hide CardPriority Tag in Editor** | Boolean | `true` | Hides the `CardPriority` powerup tag in the editor to reduce visual clutter. Priority can still be set with `Alt+P`. |
 | **Hide Dismissed Tag in Editor** | Boolean | `true` | Hides the `Dismissed` powerup tag in the editor to reduce clutter. |
