@@ -443,6 +443,21 @@ export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
       border-radius: 4px;
       padding: 0 1px;
       margin: 0 1px;
+      /* Centre the box on the line instead of standing it on the baseline.
+
+         RemNote sizes the pin glyph relative to the font (~1.22em) while pinning
+         line-height at 24px, so in a 20px Rem the icon is ALREADY 24.5px — over
+         the line before any ring is drawn. The 1.5px border takes the box to
+         27.5px, and with vertical-align: baseline every one of those 3.5px
+         overflows UPWARD, into the line above.
+
+         Middle splits the same overflow evenly above and below, roughly halving
+         what any one line sees. It does not shrink the box: only an inset
+         box-shadow could do that, and that would cost the per-edge colours the
+         area-highlight ring and the band edge-sharing both depend on. Measured
+         at 16px the box is 22.5px and fits the line with room to spare, which is
+         why this only ever showed up in larger Rems. */
+      vertical-align: middle;
       transition: border-color 120ms ease;
     }
 
