@@ -394,8 +394,18 @@ export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
     await plugin.app.registerCSS(
       'pin-reference-styling',
       `
-    .rem-reference-container[data-rem-reference-pin="true"],
-    [data-test="Rem Reference Container"][data-rem-reference-pin="true"] {
+    /*
+       SPECIFICITY, not just !important. The band marker rules in
+       buildHighlightBandCSS match three attribute selectors — 0,3,0 — and carry
+       !important of their own, so a 0,2,0 rule loses however loudly it shouts.
+       Four qualifiers (0,4,0) settle it outright, which also makes the result
+       independent of stylesheet order — and ordering between separate
+       registerCSS calls is not guaranteed. Every attribute used here is present
+       on a pin container: data-test, data-rem-reference-id, data-rem-tags and
+       data-rem-reference-pin itself.
+    */
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-reference-id][data-rem-tags],
+    .rem-reference-container[data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-reference-id] {
       border: none !important;
       padding: 0 !important;
     }
@@ -448,15 +458,19 @@ export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
        Only the SIZE is reset — the band's colour and its dashed/dotted style
        carry the information and are left alone.
 
-       The .rem-reference-container class is what makes this stick: the rules
-       being corrected match at the same specificity as the ring above, and
-       ordering between separate registerCSS calls is not guaranteed (see the note
-       in lib/priority_bands.ts), so equal specificity plus !important would still
-       be a coin toss. The class raises it and settles the matter. */
-    .rem-reference-container[data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i],
-    .rem-reference-container[data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i],
-    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i],
-    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i] {
+
+       SPECIFICITY, not just !important. The band marker rules in
+       buildHighlightBandCSS match three attribute selectors — 0,3,0 — and carry
+       !important of their own, so a 0,2,0 rule loses however loudly it shouts.
+       Four qualifiers (0,4,0) settle it outright, which also makes the result
+       independent of stylesheet order — and ordering between separate
+       registerCSS calls is not guaranteed. Every attribute used here is present
+       on a pin container: data-test, data-rem-reference-id, data-rem-tags and
+       data-rem-reference-pin itself. */
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-reference-id][data-rem-tags~="pdf-highlight" i],
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-reference-id][data-rem-tags~="html-highlight" i],
+    .rem-reference-container[data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i],
+    .rem-reference-container[data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i] {
       padding: 0 1px !important;
       border-right-width: 1.5px !important;
       border-bottom-width: 1.5px !important;
