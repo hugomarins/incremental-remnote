@@ -16,6 +16,7 @@ import {
   pdfHighlightBordersReloadKey,
   showPriorityBandsInTablesId,
   hasImagePowerupName,
+  pdfAreaHighlightPowerupName,
 } from './consts';
 import { getIESetting } from './settings';
 
@@ -328,6 +329,14 @@ export async function registerHasImageCSS(plugin: ReactRNPlugin) {
     [data-rem-tags~="${slug}" i] [data-test="Tag Bar"] .hierarchy-editor__tag-bar__tag:has(.rem-powerup-icon) {
       display: none;
     }
+
+    /* PdfAreaHighlight is the same kind of bookkeeping and is hidden the same way. */
+    [data-test="Applied Powerup Pill ${pdfAreaHighlightPowerupName}"].hierarchy-editor__tag-bar__tag {
+      display: none;
+    }
+    [data-rem-tags~="${pdfAreaHighlightPowerupName.toLowerCase()}" i] [data-test="Tag Bar"] .hierarchy-editor__tag-bar__tag:has(.rem-powerup-icon) {
+      display: none;
+    }
   `;
   await plugin.app.registerCSS('has-image-tag-hide', css);
 }
@@ -369,6 +378,7 @@ export async function registerHasImageCSS(plugin: ReactRNPlugin) {
  */
 export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
   const slug = hasImagePowerupName.toLowerCase();
+  const areaSlug = pdfAreaHighlightPowerupName.toLowerCase();
   const css = `
     [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i] {
       border: 1px solid var(--rn-clr-border-accent, #3B82F6);
@@ -384,6 +394,27 @@ export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
     [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i]:hover,
     .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i] {
       border-color: var(--rn-clr-border-selected, #1d4ed8);
+    }
+
+    /* PDF/HTML AREA highlights — where RemNote stored a clipped IMAGE instead of
+       the selected text — get a highlighter-yellow ring instead of the blue.
+
+       Keyed on a tag of its own rather than on "HasImage AND pdf-highlight",
+       which looks equivalent and is not: adding a figure to an ordinary TEXT
+       highlight satisfies both. What actually distinguishes an area highlight is
+       that its text is the image and nothing else — a property of the rem's rich
+       text, invisible to any selector — so the scan decides it and records it as
+       PdfAreaHighlight. See lib/image_scan.ts.
+
+       Emitted after the blue rules so it wins on equal specificity. */
+    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
+      border-color: #eab308;
+    }
+    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i]:hover,
+    .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
+      /* Brighter, not darker: this has to gain contrast in dark mode too, where a
+         deeper amber would sink into the background. */
+      border-color: #facc15;
     }
   `;
   await plugin.app.registerCSS('pin-reference-styling', css);

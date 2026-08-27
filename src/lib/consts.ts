@@ -38,6 +38,20 @@ export const hasImagePowerupCode = 'hasImage';
 // stripped — so this name and the `hasimage` slug in the CSS must stay in step.
 export const hasImagePowerupName = 'HasImage';
 
+// Marks a Rem whose text is ONLY an image — no caption, no prose — AND which is
+// a PDF/HTML highlight, i.e. an *area* highlight: one where RemNote stored the
+// clipped image instead of the selected text.
+//
+// A separate powerup rather than a CSS combination of HasImage + pdf-highlight,
+// because that combination is wrong for the common case of adding a figure to an
+// ordinary TEXT highlight — such a rem holds an image and is a highlight, yet is
+// not an area highlight. "Image and nothing else" is a property of the rem's
+// rich text, which no CSS selector can inspect, so it has to be decided during
+// the scan and written down as a tag.
+export const pdfAreaHighlightPowerupCode = 'pdfAreaHighlight';
+// Slug consumed by the CSS: lowercased, spaces stripped (see hasImagePowerupName).
+export const pdfAreaHighlightPowerupName = 'PdfAreaHighlight';
+
 // settings
 export const initialIntervalId = 'initial-interval';
 export const multiplierId = 'multiplier';

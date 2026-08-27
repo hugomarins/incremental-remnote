@@ -22,6 +22,8 @@ import {
   videoExtractEndSlotCode,
   hasImagePowerupCode,
   hasImagePowerupName,
+  pdfAreaHighlightPowerupCode,
+  pdfAreaHighlightPowerupName,
 } from '../lib/consts';
 import { initIncrementalRem } from '../lib/incremental_rem';
 import { BAND_COUNT, bandPowerupCode, bandPowerupName } from '../lib/priority_bands';
@@ -284,6 +286,17 @@ export async function registerPluginPowerups(
     code: hasImagePowerupCode,
     description:
       'Marks a Rem that contains an image. Applied and removed by the "Tag Rems With Images" command; filter a document by this tag to see only its images.',
+    options: { slots: [] },
+  });
+
+  // PdfAreaHighlight Powerup - marks an image-only PDF/HTML highlight, i.e. a
+  // clipped region of the source rather than selected text. Slotless: like
+  // HasImage it exists to be filtered on and to give the pin ring a CSS hook.
+  await plugin.app.registerPowerup({
+    name: pdfAreaHighlightPowerupName,
+    code: pdfAreaHighlightPowerupCode,
+    description:
+      'Marks a PDF/HTML highlight that holds only a clipped image (an "area highlight"). Applied and removed by the "Tag Rems With Images" command.',
     options: { slots: [] },
   });
 

@@ -1,5 +1,11 @@
-import { RNPlugin, PluginRem, RemId, RichTextInterface } from '@remnote/plugin-sdk';
-import { hasImagePowerupCode } from './consts';
+import {
+  RNPlugin,
+  PluginRem,
+  RemId,
+  RichTextInterface,
+  BuiltInPowerupCodes,
+} from '@remnote/plugin-sdk';
+import { hasImagePowerupCode, pdfAreaHighlightPowerupCode } from './consts';
 import { SuppressionLease } from './operation_suppression';
 
 /**
@@ -29,6 +35,12 @@ export interface ImageScanResult {
   untagged: number;
   /** Rems whose tag write threw; counted rather than aborting the whole scan. */
   failed: number;
+  /** Image-only rems confirmed to be PDF/HTML area highlights. */
+  areaHighlights: number;
+  /** Of those, the ones that gained the PdfAreaHighlight tag on this run. */
+  areaTagged: number;
+  /** Rems that carried it but no longer qualify — a caption was added, say. */
+  areaUntagged: number;
   /** Where the wall clock actually went. */
   timing: ImageScanTiming;
 }
@@ -75,6 +87,13 @@ export interface ImageScanTiming {
   /** Cumulative time parked in the event-loop yields, and how many there were. */
   yieldMs: number;
   yieldCount: number;
+  /**
+   * The area-highlight confirmation pass: bridge READS, not writes, and only for
+   * rems whose text is nothing but an image. Kept separate because it is the one
+   * phase whose cost scales with figures rather than with rems.
+   */
+  probeMs: number;
+  probeCount: number;
   /** Cumulative time renewing the suppression lease. */
   leaseMs: number;
   /**
@@ -168,6 +187,8 @@ const emptyTiming = (): ImageScanTiming => ({
   concurrency: 0,
   yieldMs: 0,
   yieldCount: 0,
+  probeMs: 0,
+  probeCount: 0,
   leaseMs: 0,
   walkMs: 0,
   totalMs: 0,
@@ -195,8 +216,10 @@ const formatScanTiming = (t: ImageScanTiming): string => {
     const perSec = t.writeWallMs > 0 ? Math.round(t.writeCount / (t.writeWallMs / 1000)) : 0;
     writes += ` ${s(t.writeWallMs)} (${perWrite}ms ea, ${perSec}/s, x${t.concurrency})`;
   }
+  const probes = t.probeCount > 0 ? `probes ${t.probeCount} ${s(t.probeMs)} · ` : '';
   return (
     `walk ${s(t.walkMs)} · ` +
+    `${probes}` +
     `${writes} · ` +
     `yields ${t.yieldCount} ${s(t.yieldMs)} · ` +
     `collect ${s(t.collectMs)} · tags ${s(t.membershipMs)}`
@@ -281,6 +304,76 @@ export const remHasImage = (rem: PluginRem): boolean =>
   richTextHasImage(rem.text) || richTextHasImage(rem.backText);
 
 /**
+ * True when the rem's front text is an image and NOTHING else.
+ *
+ * This is the discriminator the `HasImage` + `pdf-highlight` pair could not
+ * provide: adding a figure to an ordinary TEXT highlight satisfies both of those
+ * yet is not an area highlight. An area highlight is one where RemNote stored the
+ * clipped image *in place of* the text, so its front text holds the image alone.
+ *
+ * Whitespace-only strings are tolerated (RemNote leaves padding around inline
+ * nodes); anything else — prose, a reference, LaTeX, a caption you added — makes
+ * it not image-only. Back text is deliberately ignored: a rem with a back is a
+ * flashcard, not a highlight.
+ *
+ * Synchronous, so it costs nothing where it runs — the same Phase 1 walk that
+ * already calls remHasImage.
+ */
+export const remIsImageOnly = (rem: PluginRem): boolean => {
+  const text = rem.text;
+  if (!richTextHasImage(text)) return false;
+  return !text!.some((el) =>
+    typeof el === 'string' ? el.trim().length > 0 : (el as { i?: string }).i !== 'i'
+  );
+};
+
+/**
+ * Confirms an image-only rem really is a clipping from a source document rather
+ * than a bare figure pasted into your own notes.
+ *
+ * Two signals, because neither is guaranteed. The powerup test is authoritative
+ * where it applies — RemNote models both highlight kinds with the single
+ * PDFHighlight/HTMLHighlight powerup, there being no area-specific code. The
+ * structural fallback covers the case where an area highlight turns out not to
+ * carry it: the rem then sits under a `Page N` node (PDFPageNumber) inside the
+ * PDF's managed "Highlights" container, which is the same signal Repair PDF uses
+ * to find that container.
+ *
+ * Reads only, ~0.5ms each against ~74ms for a write, and only image-only rems
+ * ever reach here. `parentIsPage` is memoised because area highlights cluster
+ * many-to-one under the same page node.
+ */
+async function confirmAreaHighlight(
+  plugin: RNPlugin,
+  rem: PluginRem,
+  parentIsPage: Map<RemId, boolean>
+): Promise<boolean> {
+  try {
+    if (await rem.hasPowerup(BuiltInPowerupCodes.PDFHighlight)) return true;
+    if (await rem.hasPowerup(BuiltInPowerupCodes.HTMLHighlight)) return true;
+  } catch (e) {
+    console.warn('[ImageScan] highlight powerup probe failed for', rem._id, e);
+  }
+
+  // `parent` is a plain field on the rem, so reaching the page node costs one
+  // lookup rather than a walk.
+  const parentId = rem.parent;
+  if (!parentId) return false;
+  const cached = parentIsPage.get(parentId);
+  if (cached !== undefined) return cached;
+
+  let isPage = false;
+  try {
+    const parent = await plugin.rem.findOne(parentId);
+    isPage = !!parent && (await parent.hasPowerup(BuiltInPowerupCodes.PDFPageNumber));
+  } catch (e) {
+    console.warn('[ImageScan] page-parent probe failed for', rem._id, e);
+  }
+  parentIsPage.set(parentId, isPage);
+  return isPage;
+}
+
+/**
  * Resolves the rems a scope covers.
  *
  * The whole-KB branch leans on `plugin.rem.getAll()`. That call has been removed
@@ -337,11 +430,15 @@ export async function scanAndTagImages(
   const rems = await collectScopeRems(plugin, scope, onProgress);
   timing.collectMs = now() - tCollect;
 
-  // One read of the tag's current members, turned into a set for O(1) tests.
+  // One read of each tag's current members, turned into sets for O(1) tests.
   const tMembership = now();
   const powerup = await plugin.powerup.getPowerupByCode(hasImagePowerupCode);
   const alreadyTagged = new Set(
     powerup ? (await powerup.taggedRem()).map((r) => r._id) : []
+  );
+  const areaPowerup = await plugin.powerup.getPowerupByCode(pdfAreaHighlightPowerupCode);
+  const alreadyArea = new Set(
+    areaPowerup ? (await areaPowerup.taggedRem()).map((r) => r._id) : []
   );
   timing.membershipMs = now() - tMembership;
 
@@ -351,6 +448,9 @@ export async function scanAndTagImages(
     tagged: 0,
     untagged: 0,
     failed: 0,
+    areaHighlights: 0,
+    areaTagged: 0,
+    areaUntagged: 0,
     timing,
   };
 
@@ -376,7 +476,11 @@ export async function scanAndTagImages(
     // progress counts what is actually slow, and the writes become an
     // order-independent set that can be run concurrently.
     const tWalk = now();
-    const pending: Array<{ rem: PluginRem; add: boolean }> = [];
+    const pending: Array<{ rem: PluginRem; code: string; add: boolean }> = [];
+    // Image-only rems not already known to be area highlights. Confirmed in
+    // Phase 1.5 rather than here, because confirmation needs the bridge and this
+    // loop must stay synchronous.
+    const areaCandidates: PluginRem[] = [];
     for (let i = 0; i < rems.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) {
         onProgress?.(`Scanning ${i} / ${rems.length} Rems…`, i, rems.length);
@@ -392,23 +496,63 @@ export async function scanAndTagImages(
       if (hasImage) result.withImages++;
 
       // Already in the right state — no write, which is what keeps a re-run cheap.
-      if (hasImage === isTagged) continue;
-      pending.push({ rem, add: hasImage });
+      if (hasImage !== isTagged) pending.push({ rem, code: hasImagePowerupCode, add: hasImage });
+
+      // The area-highlight tag rides along on the same walk. Only the image-only
+      // shape is decided here; whether it came from a PDF is decided in Phase 1.5.
+      const wasArea = alreadyArea.has(rem._id);
+      if (hasImage && remIsImageOnly(rem)) {
+        // Already confirmed on a previous run — no probe, no write. This is what
+        // keeps a re-scan of an unchanged document free of reads as well as writes.
+        if (wasArea) result.areaHighlights++;
+        else areaCandidates.push(rem);
+      } else if (wasArea) {
+        // A caption (or any other text) was added since — it is a text highlight now.
+        pending.push({ rem, code: pdfAreaHighlightPowerupCode, add: false });
+      }
     }
     // Clamped: derived by subtraction, so accumulated float error can otherwise
     // print a negative tenth of a second on a run whose walk was ~0.
     timing.walkMs = Math.max(0, now() - tWalk - timing.yieldMs);
 
+    // PHASE 1.5 — confirm which image-only rems are clippings from a source.
+    // Reads only, and only for candidates, so this is bounded by the number of
+    // figures rather than the size of the scope. Each await hands control back to
+    // the event loop on its own, so the popup keeps repainting without explicit
+    // yields.
+    if (areaCandidates.length > 0) {
+      const tProbe = now();
+      const parentIsPage = new Map<RemId, boolean>();
+      for (let i = 0; i < areaCandidates.length; i++) {
+        if (i > 0 && i % PROGRESS_EVERY === 0) {
+          onProgress?.(
+            `Checking ${i} / ${areaCandidates.length} image Rems…`,
+            i,
+            areaCandidates.length
+          );
+        }
+        const rem = areaCandidates[i];
+        timing.probeCount++;
+        if (await confirmAreaHighlight(plugin, rem, parentIsPage)) {
+          result.areaHighlights++;
+          pending.push({ rem, code: pdfAreaHighlightPowerupCode, add: true });
+        }
+      }
+      timing.probeMs = now() - tProbe;
+    }
+
     // PHASE 2 — the expensive part, overlapped.
     await runWriteQueue(
       pending,
-      async ({ rem, add }) => {
+      async ({ rem, code, add }) => {
         if (add) {
-          await rem.addPowerup(hasImagePowerupCode);
-          result.tagged++;
+          await rem.addPowerup(code);
+          if (code === hasImagePowerupCode) result.tagged++;
+          else result.areaTagged++;
         } else {
-          await rem.removePowerup(hasImagePowerupCode);
-          result.untagged++;
+          await rem.removePowerup(code);
+          if (code === hasImagePowerupCode) result.untagged++;
+          else result.areaUntagged++;
         }
       },
       ({ rem }, e) => {
@@ -465,8 +609,20 @@ export async function removeImageTags(
 
   onProgress?.('Finding tagged Rems…');
   const tMembership = now();
+  // Both tags come off together: PdfAreaHighlight is derived from the same scan,
+  // so leaving it behind would strand a tag the user has no other way to clear.
   const powerup = await plugin.powerup.getPowerupByCode(hasImagePowerupCode);
-  let tagged: PluginRem[] = powerup ? await powerup.taggedRem() : [];
+  const areaPowerup = await plugin.powerup.getPowerupByCode(pdfAreaHighlightPowerupCode);
+  let tagged: Array<{ rem: PluginRem; code: string }> = [
+    ...(powerup ? await powerup.taggedRem() : []).map((rem) => ({
+      rem,
+      code: hasImagePowerupCode,
+    })),
+    ...(areaPowerup ? await areaPowerup.taggedRem() : []).map((rem) => ({
+      rem,
+      code: pdfAreaHighlightPowerupCode,
+    })),
+  ];
   timing.membershipMs = now() - tMembership;
 
   // A rem scope narrows the tagged list to the subtree. The descendant walk is
@@ -476,7 +632,7 @@ export async function removeImageTags(
     const tCollect = now();
     const inScope = new Set((await collectScopeRems(plugin, scope, onProgress)).map((r) => r._id));
     timing.collectMs = now() - tCollect;
-    tagged = tagged.filter((r) => inScope.has(r._id));
+    tagged = tagged.filter((t) => inScope.has(t.rem._id));
   }
 
   const result: ImageTagRemovalResult = {
@@ -498,11 +654,11 @@ export async function removeImageTags(
     // the write phase and nothing else.
     await runWriteQueue(
       tagged,
-      async (rem) => {
-        await rem.removePowerup(hasImagePowerupCode);
+      async ({ rem, code }) => {
+        await rem.removePowerup(code);
         result.removed++;
       },
-      (rem, e) => {
+      ({ rem }, e) => {
         result.failed++;
         console.error('[ImageScan] tag removal failed for', rem._id, e);
       },

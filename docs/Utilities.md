@@ -614,6 +614,12 @@ The pin next to it in that screenshot shows the two markers are independent: the
 
 The ring is drawn in RemNote's **accent** colour — the same one the app uses for links and selection, which reads correctly on something that *is* a navigation target. It was neutral grey at first, on the theory that hue is already spoken for in this plugin ([priority bands](Prioritization-&-Sorting.md) own the red→green ramp, `#pdfextract` is blue, `#incremental` green); in practice a grey hairline around an 18px icon in running text was invisible until hovered, which is no marker at all. The accent can't be confused with any of those, because this ring is an **outline on an icon** — never a background fill, never a left border — and it appears on nothing but pins. There is no fill either, so a pin sitting inside a highlighted extract never paints over the highlight's own colour, and both colours come from RemNote's own border tokens, so the ring follows light and dark mode.
 
+**Blue for a figure, yellow for a PDF area highlight.** When you clip a *region* of a PDF instead of selecting its text, RemNote stores the **image** on the highlight Rem in place of the text — an **area highlight**. Those pins get a **highlighter-yellow** ring, so a link into the source document reads differently from a link to a figure in your own notes.
+
+What identifies one is that the Rem holds an image **and nothing else** — no caption, no prose. That matters, because *adding* a figure to an ordinary text highlight is common, and such a Rem holds an image and is a highlight, yet is not an area highlight; it keeps the blue ring. The scan decides this and records it as a second tag, **`PdfAreaHighlight`**, since "image and nothing else" is a property of the Rem's text that no filter or stylesheet can inspect on its own. Like `HasImage`, its chip is hidden from the tag bar and it appears in the `Ctrl+F` Filter list — so you can isolate just the **clipped figures** in a chapter, separately from Rems that merely contain an image.
+
+Two consequences worth knowing: caption an area highlight and the next scan takes the tag off, turning its ring blue; and a Rem holding only an image that did **not** come from a PDF — a figure pasted into your own notes — stays blue, since the yellow means "this leads into the source document".
+
 > **Only image pins.** Pins to ordinary Rems are left alone. Ringing *every* pin was tried and says nothing — a marker that appears on all of them carries no information.
 
 ---
