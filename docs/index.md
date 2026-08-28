@@ -43,18 +43,21 @@ I'm excited to share that **Incremental RemNote** has reached a major milestone.
 ### The Full Learning Flow
 
 **1. First Contact → Acquisition (Incremental Reading)**
+
 - Import PDFs, articles, and reading material into your queue
 - Read actively using page-by-page control with rem-specific progress tracking
 - Extract insights and create flashcards as you read
 - Priority system ensures you process your most important material first
 
 **2. Active Processing → Understanding (Mixed Review)**
+
 - Alternate between passive reading (IncRems) and active recall (flashcards) in a single session
 - **[Priority Review Documents](Priority-Review-Document.md)** let you create custom study sessions mixing both types
 - Study your top 50-100 priority items when facing thousands of due cards
 - Everything sorted by priority, not just chronologically
 
 **3. Long-term → Mastery (Spaced Repetition)**
+
 - Flashcards inherit priorities from their parent notes
 - High-priority cards get preferential review scheduling (through the [Priority Review Document](Priority-Review-Document.md))
 - **[Priority Shields](Prioritization-&-Sorting.md#priority-shield)** track whether you're keeping up with critical material
@@ -85,6 +88,7 @@ The priority shield graphs show you exactly how well you're keeping up with impo
 ## 📱 Now Mobile-Ready!
 
 **v0.2.9** adds automatic Light Mode switching for iOS/Android:
+
 - Prevents mobile crashes from resource-intensive features
 - Auto-detects your device and adjusts performance mode
 - Desktop still gets full feature set
@@ -93,11 +97,13 @@ The priority shield graphs show you exactly how well you're keeping up with impo
 ## 🎨 [Performance Modes](Full-Mode-x-Light-Mode.md)
 
 **Light Mode** (default, recommended for web/mobile):
+
 - Manual priority tools for flashcards
 - Fast, stable performance
 - Essential features only
 
 **Full Mode** (Desktop App recommended):
+
 - Automatic priority inheritance and caching
 - Relative priority percentiles
 - Priority shield tracking with universe size
@@ -107,12 +113,14 @@ The priority shield graphs show you exactly how well you're keeping up with impo
 ## 💡 Why This Matters for SRS Enthusiasts
 
 If you're familiar with Anki or any SRS system (except SuperMemo), you know the pain:
+
 - **Queue explosion** when life gets busy
 - **All-or-nothing** review sessions
 - **No way to triage** when overwhelmed
 - **Guilt** over skipped reviews
 
 Incremental RemNote solves this by:
+
 - ✅ **Guaranteeing** high-priority items get reviewed
 - ✅ **Mixing** acquisition and retention in one flow
 - ✅ **Tracking** your capacity with [priority shields](Prioritization-&-Sorting.md#priority-shield)
@@ -153,6 +161,7 @@ The workflow is designed to grow with you—start simple, add complexity as need
 ## 🙏 Feedback Welcome
 
 This represents months of iteration to build a complete learning system. I'd love to hear from the community:
+
 - What workflows are you using?
 - What features would enhance your process?
 - How are you handling information overload?

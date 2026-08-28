@@ -48,6 +48,7 @@ The **Execute Repetition** command (`Ctrl+Shift+J`) lets you register a review o
   ![Scheduling Conflict dialog](assets/review-in-editor-scheduling-resolution.png){ width="500" }
 
   You can resolve the conflict using the following options (which also support keyboard shortcuts):
+
   - **Keep Current Date** (`Enter` or `1`): Log the review and time in history but preserve the existing future due date. (Note: once you start typing a custom interval, `Enter` confirms the typed interval instead).
   - **Use New Date** (`2`): Proceed with the calculated shorter interval.
   - **Custom Interval** (`3`): Reveals an inline input to set a custom review interval in days.
@@ -246,5 +247,6 @@ For a full explanation of what this command does, how it differs from native Rem
 ### Built-in Remove From Queue Support
 
 The plugin natively handles the styling for the `#remove-from-queue` tag used by extracts.
+
 - When an extract is created, the parent/context Rem is tagged with `#remove-from-queue` so that its queue item acts seamlessly.
 - This ensures that you only see the specific snippet you extracted or interact with it properly, focusing your review on the most atomic piece of information.

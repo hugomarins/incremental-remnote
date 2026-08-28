@@ -117,6 +117,7 @@ Both commands automatically assign a **Card Priority** to every new cloze, imple
   - the parent's `#cloze-extract` children (clozes previously extracted from it as siblings of the new one), plus
   - the cards the parent rem owns itself — native cloze markers inside its text and front/back-direction cards if it is a flashcard.
   A first cloze from a plain text extract sees `existingCount = 0` and inherits the parent's priority exactly. A first cloze from a Concept/Descriptor extract (which already has 2 own cards) or from a rem that already contains native clozes starts with a non-zero count, reflecting that the material is already partially cardified.
+
 - **`stepSize`** — how much the number moves per cloze, set by **[Priority Step Size](Plugin-Settings-Reference.md#priority)** (default: `5`). The same setting drives the [Quick Priority shortcuts](Prioritization-&-Sorting.md#quick-priority-shortcuts), so one value defines "one step" everywhere in the plugin.
 - The count is **capped at 10 steps**, so even the 15th cloze from the same extract is only 10 steps below the parent — a long cloze session cannot push a card all the way to priority 100.
 

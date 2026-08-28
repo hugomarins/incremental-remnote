@@ -75,18 +75,21 @@ When you have finished processing an item and no longer wish to see it in your q
 
 * **[Change Priority](#change-priority):** (Shortcut: `Opt+P` / `Alt+P` for full widget and `Ctrl+Opt+P` / `Ctrl+Alt+P` for light widget)
 This opens the advanced priority popup. The label on the button itself provides rich, at-a-glance information:
+
   * **The Number:** The Rem's absolute priority value (0-100, lower is more important).
   * **The Percentiles:** The Rem's rank within your entire Knowledge Base (`% of KB`) and within the current document (`% of Doc`).
   * **The Color:** The background color shifts from red (high priority) to blue (low priority) for an instant visual cue of its importance.
 
 * **[Review in Editor](#review-in-editor):** (Shortcut: `Ctrl+Shift+J`) *(Previously called "Review & Open")*
 This is a powerful workflow tool. It performs a sequence of actions:
+
   1. It first **reviews** the item (rescheduling it) and **opens** the Rem in the editor, exiting the queue.
   2. It immediately starts an **Editor Review Timer**. When finished, clicking **"End Review"** stops the timer and routes you back to your queue document.
 This is perfect to avoid friction with the queue interface, and when an item inspires you to do more detailed work, like extensive note-taking or using other features like the AI assistant.
 
 * **Scroll to Highlight / Scroll to Bookmark:**
 This button appears for **PDF highlights, HTML highlights, and Incremental Rems with PDF sources**. 
+
   * If you are reviewing a highlight, clicking this instantly snaps your view back to the highlight's position in the document.
   * If you are reviewing a full PDF chapter (an Incremental Rem with a PDF source), this button acts as a **Scroll to Bookmark**. It jumps directly to your last recorded reading position within that chapter/PDF/IncRem.
   * *See the [PDF-Incremental-Reading-Workflow#4-pdf-highlight-toolbar-utilities](PDF-Incremental-Reading-Workflow.md) guide to learn how bookmark positions are automatically tracked when extracting highlights.*
@@ -116,6 +119,7 @@ When the current Incremental Rem is a plain **Rem** (a text/note extract, not a 
 
 * **PDF Switcher (multi-PDF Inc Rems):**
 When the current Inc Rem has **more than one PDF source**, a small PDF dropdown appears in the top bar next to the 📝 Document Notes icon. Selecting a different PDF:
+
   - **Pins it as active** for this Inc Rem (stored in synced storage as the new default for future queue opens, the Editor Review Timer, the PDF Control Panel, etc.),
   - **Re-renders the Reader on the new PDF** immediately — the queue card stays the same, just the PDF view swaps. The new PDF's bookmark auto-scroll, page controls, and reading-time writes all follow.
   - The switcher is hidden for **PDF highlights and HTML hosts** (highlights are tied to a specific PDF; switching would orphan the queue card).
@@ -235,6 +239,7 @@ The plugin differentiates how repetition/reschedule events are tracked based on 
 | `dismissed` | [Dismiss](#dismiss) button / tag removal | ❌ No | Event marker (orange) |
 
 **Key distinction:**
+
 - **Review actions** (`rep`, `rescheduledInQueue`, `executeRepetition`) count for interval calculation because you engaged with and reviewed the content before scheduling the next review
 - **Administrative adjustments** (`rescheduledInEditor`, `manualDateReset`) only change the schedule without confirming a review—useful for planning but don't advance the SRS algorithm
 
@@ -265,6 +270,7 @@ For a deep dive into how the priority system works, please see the [Prioritizati
 This button (shortcut `Ctrl+Shift+J`) provides a seamless bridge between the focused queue environment and the full-power RemNote editor.
 
 It performs a powerful sequence of actions:
+
 1. It registers the item as conceptually "reviewed" (rescheduling it for the future, just like the "Next" button).
 2. It instantly **navigates you to the editor** for that Rem, exiting the queue.
 3. It **automatically starts the Editor Review Timer** for that session.
@@ -275,6 +281,7 @@ It performs a powerful sequence of actions:
 #### The Workflow Loop
 Once you are in the editor with the timer running, you can perform heavy editing, restructuring, or use AI tools. 
 When you are completely finished processing the item:
+
 1. Click **"End Review"** on the Timer Widget. 
 2. The timer will conclude, record your repetition (along with the time spent), and **navigate you back to the original queue document**.
 3. You must then press `Cmd+Shift+P` (or your Practice shortcut / the Practice button) to instantly dive back into the queue and continue.
@@ -282,6 +289,7 @@ When you are completely finished processing the item:
 ####  When to use it
 
 Use "Review in Editor" whenever the queue interface feels too limited for the task at hand. This workflow is ideal for situations where you need to:
+
 * See the broader **context** of a Rem within your outliner.
 * Perform **heavy editing** or restructuring.
 * Use other features not fully available in the queue, like **"Ask AI"** or AI **Create Flashcards**.
@@ -375,6 +383,7 @@ Clicking the 🔬 button (or pressing `Ctrl+Shift+H`) opens a detailed popup sho
 ![Flashcard Repetition History](assets/flashcard-rep-history.png){ width="900" }
 
 **Header & Summary Information:**
+
 *   **Rem Name:** The document's parent name is displayed bolded at the very top.
 *   **Total Reviews & Time:** An aggregate sum of your historical effort, the **card age**, the **coverage** (time until next scheduled review), and the **cost** (ignoring any reviews that occurred before a manual Date Reset).
 *   **Optimum Next Repetition Date:** Calculates the optimal review date you *should* practice based directly on FSRS stability formulas (`Last practice date + Stability`). Hover for a tooltip explaining discrepancies with the scheduled date.
@@ -383,6 +392,7 @@ Clicking the 🔬 button (or pressing `Ctrl+Shift+H`) opens a detailed popup sho
 *   **Retrievability Gradient:** The *R* metric is color-coded using a dynamic gradient transitioning from pure red (≤ 70%) to green (100%).
 
 **Each row contains:**
+
 *   **Rating:** The score given (Again, Hard, Good, Easy), color-coded.
 *   **Response Time:** How long you spent answering.
 *   **Target Date:** When the review was originally scheduled.
@@ -449,6 +459,7 @@ For most users who use a single global scheduler, this is not an issue — just 
 The **Incremental Rem History** widget automatically records and displays the Incremental Rems you have viewed in your queue.
 
 **Key Features:**
+
 *   **Searchable History:** Easily find previously viewed items using the search bar.
 *   **Context Aware:** Shows history specific to the current Knowledge Base.
 *   **Recency Tracking:** Displays how long ago you viewed each item.

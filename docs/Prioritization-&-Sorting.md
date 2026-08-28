@@ -80,6 +80,7 @@ There are several ways to set priorities in Incremental RemNote, each designed f
 This is the fully-featured priority interface. Access it by pressing `Opt+P` or clicking the "Change Priority" button in the queue.
 
 It displays detailed context, including:
+
 1.  **Absolute Priority Value:** The number (0-100) stored in the Rem.
 2.  **Relative Priority:** Where this item stands compared to the rest of your knowledge base (as a percentile).
 3.  **Visual Slider:** A slider for absolute value, giving you both precise control and intuitive visual ranking. The color of the slider indicates the absolute priority, while the color of the selector circle indicates the relative priority.
@@ -105,6 +106,7 @@ It displays detailed context, including:
 **Shortcut:** `Ctrl+Opt+P`
 
 Designed for speed. This popup opens instantly and provides just the essentials:
+
 *   A slider for the **Incremental Rem** priority or/and
 *   A slider for the **Flashcard** priority.
 
@@ -120,6 +122,7 @@ It works exactly like the main popup but skips the heavy calculations (like chec
 
 ### Quick Priority Shortcuts
 **Shortcuts:** 
+
 *   `Ctrl+Opt+Up Arrow`: **Increase** priority number (make **less** important). E.g., 10 → 15 with the default step of 5.
 *   `Ctrl+Opt+Down Arrow`: **Decrease** priority number (make **more** important). E.g., 20 → 15 with the default step of 5.
 
@@ -141,6 +144,7 @@ The step in which priorities will increase or decrease can be configured in the 
 **Location:** Right side of the editor (when a Incremental Rem or a Card is focused) or potentially inline.
 
 This widget provides a persistent visual indicator of the item's priority.
+
 *   **Clicking it** opens the full priority popup.
 *   **Expanding it** reveals quick `+` / `-` buttons to adjust priority by 1 or 10 points directly.
 
@@ -206,10 +210,12 @@ A powerful table view for unified priority management across an entire document 
 Designed specifically for **Flashcards**. You can now assign `CardPriority` to hundreds of rems at once, based on a tag.
 
 **Use Cases:**
+
 *   **Topic Prioritization:** When you have a specific topic or exam tag (e.g., `#Exam1`) and want to ensure all related flashcards are prioritized highly.
 *   **System Migration:** If you used to use tags to prioritize your cards (like `#important!`, `#P1`, `#P2`), you can convert your old manual system to the new one in bulk.
 
 **Features:**
+
 *   **Smart Randomization:** Assigns random priorities within a specific range (e.g., 20-40). This distributes the load so important cards don't all pile up on the same day.
 *   **Intelligent Handling:** Capable of checking if the item is also an Incremental Rem, allowing you to use its existing IncRem priority as the Card Priority.
 *   **Safety:** Safely updates rems that already have `manual` priorities by requiring explicit "Overwrite" confirmation.
@@ -473,6 +479,7 @@ While the standard Priority Shield identifies the *single* most important item y
 ![Weighted Shield](assets/shield-weighted-card.png){ width="1000" }
 
 **How it works:**
+
 * Each item is weighted exponentially by its priority percentile. High-priority items carry significantly more weight than low-priority items (a top-priority item carries approximately 10× the weight of a bottom-priority item).
 * As you process items, your shield percentage increases.
 * Processing high-priority items gives a much larger boost to your shield than processing low-priority items.
@@ -631,6 +638,7 @@ W_A / W_B = e^(k × (p_B − p_A)/100)
 You can track your performance over time by accessing the **"Priority Shield History"** graph from the queue menu (the three-dot icon). This graph plots your daily shield values, helping you identify trends and adjust your workload or priorities accordingly.
 
 **Interactivity & Features:**
+
 *   **Dismissed Rems Tracking:** The IncRem shield graph track your process progression with a stacked area chart: 
     *   The **green line** plots your active Incremental Rems universe.
     *   The **black dashed line** on top plots your *Total Universe* (IncRems + those marked with the `dismissed` powerup).
@@ -643,6 +651,7 @@ You can track your performance over time by accessing the **"Priority Shield His
 *   **Automatic Y-Scaling:** As you zoom or pan, the Universe Size axis adapts to the peak values in your visible range, providing maximum visual resolution.
 
 **Understanding the Metrics:**
+
 *   **Priority Shield:** This metric represents your processing capacity for high-priority items. A higher shield value (closer to 100) means you are successfully reviewing your most important material on time.
 *   **Document Shield:** Shows your priority protection within the current document/folder scope (or original scope for Priority Review Documents). This helps you track how well you're keeping up with the most important items in specific contexts.
 *   **Weighted Shield (⚖️):** Plots the historical trajectory of your Weighted Shield parameter over time. A rising line indicates you are actively clearing out high-priority debt, while a dropping line means high-priority material is accumulating faster than you can review it. Toggle this line on and off using the global "Show Weighted Shield" checkbox at the top of the history widget.
@@ -659,6 +668,7 @@ You can track your performance over time by accessing the **"Priority Shield His
     *   You can increase that number by doing more work, reducing the inflow of new material, deprioritizing less important items, or reducing the randomization degree in your **Sorting Criteria**.
 
 **Understanding Universe Size Changes:**
+
 *   For **Incremental Rems**, observing your layers change over time paints a clear picture of your workflow:
     *   If your **Active Universe (Green)** drops but your **Total Universe (Black)** remains steady and your **Dismissed Area (Yellow)** expands, you are successfully processing and dismissing items faster than you are adding them! You are burning through your backlog!
     *   If your **Active Universe (Green)** increases while the **Dismissed Area (Yellow)** stays flat, you are actively adding new IncRems to your queue without clearing out old ones. This influx expands your active workload, and will likely drop your priority percentiles because each remaining item becomes a smaller percentage of the larger expanding whole.
@@ -684,6 +694,7 @@ Here is a complete breakdown of how the plugin decides which incremental item to
 
 3.  **Applies Controlled Randomness (The "Shuffle")**
     This is where the "Sorting Randomness" setting comes into play. After creating the perfectly sorted list of due items, the plugin applies a degree of "shuffling".
+
     * **At 0% randomness:** No shuffling occurs. The list remains perfectly sorted by priority, and the plugin will deterministically show you the highest-priority due item. *(The default is **20%**, not 0% — see [Incremental Rem Randomness](#1-incremental-rem-randomness) above.)*
     * **At >0% randomness:** The plugin performs a series of random swaps on the items in the sorted list. A higher randomness setting results in more shuffling. This introduces a controlled chance for a lower-priority (but still due) item to appear before a higher-priority one, achieving the aim of preservation of strict priorities with a tiny bit of serendipity. *Note: The randomness slider is built on an exponential curve—reserving the first 50% of the slider dial specifically for safely fine-tuning low amounts of randomness.*
 

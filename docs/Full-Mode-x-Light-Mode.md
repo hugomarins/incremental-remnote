@@ -25,6 +25,7 @@ Best For:    🔬 Overloaded Students, Power Users
 ```
 
 **Key Features:**
+
 - KB-scoped and Document-scoped relative priority percentiles
 - [Priority Shield](Prioritization-&-Sorting.md#priority-shield) (KB and Document scope)
 - [Priority Shield](Prioritization-&-Sorting.md#priority-shield) stats are stored for historical comparison used the Priority Shield Graph
@@ -40,6 +41,7 @@ Best For:    🎓 Beginner and eventual users, Mobile and Web-browser users, use
 ```
 
 **Key Features:**
+
 - Absolute Priorities (flashcards and IncRems)
 - No need for cache mounting of the startup / queue Enter
 - Universal platform support
@@ -96,9 +98,11 @@ The plugin auto-detects your platform (if you chose Full Mode):
 
 ### Manual Override
 **`Incremental RemNote: Settings` (quick code `is`) → Performance → Performance Mode**
+
 - Choose "Light Mode" or "Full Mode"
 
 **Platform-Specific Settings:**
+
 - "Always use Light Mode on Mobile" (default: ON)
 - "Always use Light Mode on Web Browser" (default: ON)
 

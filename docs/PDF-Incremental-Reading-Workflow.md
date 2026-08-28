@@ -74,6 +74,7 @@ When you have many chapters, manually adding the PDF source to each one would be
 The **PDF Control Panel** (`Command Palette → PDF Control Panel`) is the central hub for managing all rems that share the same PDF.
 
 **Features:**
+
 - Set and adjust the page range for each chapter
 - Edit priorities inline with visual feedback
 - View reading histories and time spent
@@ -229,6 +230,7 @@ An Incremental Rem can now have **as many PDF sources as you like**, and you can
 The selector only appears when the Inc Rem has **two or more** PDF sources. Single-PDF Inc Rems look exactly as before.
 
 **Why two flavours of pin behaviour?**
+
 - In **active-reading surfaces** (Reader, Timer, Execute Repetition popup), switching the dropdown is the same gesture as "I'm reading this PDF now" — so it pins immediately and the rest of the UI re-targets the new PDF.
 - In **management surfaces** (PDF Control Panel, Editor Toolbar), you often want to *inspect* a different PDF's data (range, history, stats) without changing the queue default. The dropdown changes the view only; the **📌 Set as active** button is the explicit commit.
 
@@ -298,6 +300,7 @@ When you open the PDF Control Panel, `getAllIncrementsForPDF` discovers rems thr
 | **3. Persistent index** (`known_pdf_rems_*`) | A synced-storage list of rem IDs explicitly registered as users of this PDF — covers rems discovered in previous sessions or registered via the Copy/Paste commands | Fast |
 
 The persistent index is updated in the following situations:
+
 - When a rem is **found** by strategies 1 or 2 (it gets added to the index automatically)
 - When you run **Copy Rem Sources** (the template rem is registered immediately for all its PDF sources)
 - When you run **Paste Rem Sources** (each target rem is registered for each PDF source that was added)

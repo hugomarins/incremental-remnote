@@ -14,6 +14,7 @@ This creates a problem when you are overwhelmed. If you have 1000 due flashcards
 The **Priority Review Document** bypasses this limitation by creating a temporary document filled with **Rem References (Portals)** to your most important due items.
 
 When you practice this specific document, you are guaranteed to see:
+
 1.  **High-Priority Flashcards** first.
 2.  **High-Priority Incremental Rems** interleaved according to your ratio settings.
 3.  A manageable workload (e.g., exactly 50 items) instead of an endless queue.
@@ -57,6 +58,7 @@ A popup will appear allowing you to tailor the session:
 
 > **Keyboard tip :keyboard: :** 
 > The popup is fully keyboard-navigable:
+>
 > * **Initial focus** lands on the **Scope** radio buttons when the popup opens — no mouse click needed to start.
 > * **↑ / ↓ arrow keys** switch between "Current Document" (↑) and "Full Knowledge Base" (↓) (when "Scope" selection section is focused), and increment/decrement the "Number of Items" (if focused) by 10.
 > * **Tab / Shift+Tab** cycles between the Scope selection and the Number of Items field.
@@ -68,6 +70,7 @@ A popup will appear allowing you to tailor the session:
 ### 3. Review
 Click (5) **"Create Review Document"**.
 The plugin will generate a new document tagged `#Priority Review Queue` and automatically open it.
+
 1.  Click the **Practice** button (Flashcards) on this new document.
 2.  Review your items as normal.
 3.  When finished, you can safely **delete** the Priority Review Document. The actual items (your cards and notes) are just references; deleting the review document **does not** delete your actual data.
@@ -98,6 +101,7 @@ To help users visualize how the items are selected, a **Priority Distribution Gr
 ![Priority Review Doc Graph](assets/priority-review-doc-graph.png){ width="800" }
 
 This visualization helps you verify:
+
 *   **The effect of Randomness:** See how "shuffled" your review session is compared to a strict priority order.
 *   **[Priority Shield](Prioritization-&-Sorting.md#priority-shield) Logic:** Confirm that the system is correctly prioritizing your high-value items as expected.
 *   **Scope Distribution:** Visualize the balance of absolute priorities and relative percentiles within your included Incremental Rems and Flashcards.
@@ -123,6 +127,7 @@ This check is **lazy**: the ancestor walk runs for each card as it is pulled int
 ### What You See
 
 After creation, if any items were skipped:
+
 - A **warning panel** replaces the "How it works" info box, showing the count and a scrollable list of skipped rems (name + priority score).
 - Items with priority < 20 are highlighted in **red** to flag potential high-priority oversight.
 - The document's **metadata code block** includes a `Skipped (paused docs): N flashcard rems` line.
@@ -258,6 +263,7 @@ This section documents how the plugin distinguishes between **active**, **paused
 **`plugin.card.getAll()`** returns *all* cards in the knowledge base, regardless of state — active, due, disabled, and paused-deck cards alike. This is the call used when building the priority cache at startup.
 
 **`rem.getCards()`** returns the cards for a specific rem but behaves differently depending on rem state:
+
 - For a **normal rem**: returns the rem's cards as expected.
 - For a rem inside a **paused document**: returns `[]` — the SDK silently suppresses the cards. This makes `rem.getCards()` an *unreliable* source for building the full card universe; use `plugin.card.getAll()` instead.
 - For a rem with **disabled cards**: also returns `[]`.

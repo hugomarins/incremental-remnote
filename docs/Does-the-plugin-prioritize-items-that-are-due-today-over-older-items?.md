@@ -15,6 +15,7 @@ Here is a complete breakdown of how the plugin decides which incremental item to
 
 3.  **Applies Controlled Randomness (The Priority-Weighted Lottery)**
     This is where the "[Sorting Randomness](Prioritization-&-Sorting.md#sorting-criteria)" setting comes into play. After creating the perfectly sorted list of due items, the plugin randomizes a portion of it.
+
     * **At 0% randomness:** No shuffling occurs. The list remains perfectly sorted by priority, and the plugin will deterministically show you the highest-priority due item.
     * **At 20% (the default) and above:** The plugin randomizes a slice of the list via a **[priority-weighted lottery](Prioritization-&-Sorting.md#how-randomness-works-the-priority-weighted-lottery)**. Rather than blind swaps, the items pulled forward are drawn with probability proportional to their priority weight, so a higher-priority (but lower-ranked) item is far more likely to surface than a deep, low-priority one — while every item keeps a real, non-zero chance. This preserves strict priorities with a controlled bit of serendipity, and because it is priority-weighted, **higher settings stay safe**. *Note: the slider is non-linear (eases in), so the left portion finely tunes small amounts while the middle reaches a meaningful ~25%.*
 

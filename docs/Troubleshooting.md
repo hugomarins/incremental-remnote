@@ -39,11 +39,13 @@ Error 15/268:
 ```
 
 **Step 2:** Jump to the rem
+
 - `Ctrl+/` → "Jump to Rem by ID"
 - Paste: `tfhQYD3Q2wDw4VWUH`
 - Press Enter
 
 **Step 3:** Investigate
+
 - View the rem's content
 - Check if it's corrupted
 - Fix any issues
@@ -61,6 +63,7 @@ ghi789rst
 ```
 
 **Quick workflow:**
+
 1. `Ctrl+/` → "Jump to Rem by ID"
 2. Paste first RemId → Enter
 3. Investigate the rem
@@ -73,6 +76,7 @@ ghi789rst
 When you see "Rem not found" errors:
 
 **Use Jump to Rem to confirm:**
+
 - If popup shows "Rem not found" → The rem was deleted (orphaned)
 - If rem opens → The rem exists (error was temporary)
 
@@ -141,6 +145,7 @@ tfhQYD3Q2wDw4VWUH
 ```
 
 **Result:** 
+
 - Popup closes automatically
 - Rem opens in RemNote
 - Toast notification: "✅ Found: What is the capital..."
@@ -156,6 +161,7 @@ tfhQYD3Q2wDw4VWUH
 ```
 
 **Result:**
+
 - Error message shown in popup: "Rem not found: tfhQYD3Q2wDw4VWUH"
 - Popup stays open so you can try again
 - Toast notification: "❌ Rem not found"
@@ -173,12 +179,14 @@ tfhQYD3Q2wDw4VWUH
 **Cause:** The rem with this ID doesn't exist in your knowledge base
 
 **Possible reasons:**
+
 1. The rem was deleted
 2. You copied the RemId incorrectly
 3. The rem is in a different knowledge base
 4. Typo in the RemId
 
 **Solutions:**
+
 - Double-check you copied the full RemId
 - Verify you're in the correct knowledge base
 - Check if the rem was recently deleted
@@ -190,6 +198,7 @@ tfhQYD3Q2wDw4VWUH
 **Cause:** Unexpected error during processing
 
 **Solutions:**
+
 1. Try again (might be temporary)
 2. Reload the plugin (Settings → Plugins → Toggle off/on)
 3. Check console for detailed error (F12)
@@ -227,11 +236,13 @@ Future startups will be much faster!
 **What it means:** The card references a Rem that no longer exists in your knowledge base.
 
 **Why this happens:**
+
 - The Rem was deleted but the card still exists
 - Database inconsistency
 - The card's parent Rem was removed
 
 **Impact:** 
+
 - ❌ The card was **NOT** tagged with cardPriority
 - ❌ No priority was assigned
 - The card may not appear correctly in the queue
@@ -258,17 +269,20 @@ Each candidate is **double-checked** with a fresh live lookup before removal, so
 **What it means:** An unexpected error occurred while processing the Rem.
 
 **Common causes:**
+
 - Permission issues
 - Corrupted Rem data
 - Network timeout during processing
 - Bug in the code logic
 
 **Impact:**
+
 - ❌ The card was **NOT** tagged with cardPriority
 - ❌ No priority was assigned
 - The Rem needs manual investigation
 
 **How to fix:**
+
 1. Check the detailed error log in console
 2. Look for the specific error message
 3. Try to open the Rem manually in RemNote
@@ -309,12 +323,14 @@ ghi789rst
 ```
 
 You can copy this list and:
+
 1. Search for these Rems in RemNote
 2. Check if they still exist
 3. Manually assign priorities if needed
 
 #### Step 3: Re-run Pre-computation
 After fixing issues:
+
 1. Run pre-computation again
 2. Check if error count decreased
 3. Most "Rem not found" errors should auto-resolve after card cleanup
@@ -343,6 +359,7 @@ A "rogue" `CardPriority` tag is the powerup sitting on a rem that is **not** a f
 
 #### For the Entire Knowledge Base (Batch)
 Use the global command to scan your entire knowledge base and remove rogue tags in bulk:
+
 1. **Press `Ctrl+/`** (or `Cmd+/` on Mac)
 2. **Type:** `Sanitize Rogue CardPriority Tags`
 3. **Press Enter**
@@ -351,6 +368,7 @@ You'll get a batch confirmation dialog (in chunks of 20) listing the rems about 
 
 #### For a Specific Rem (Debug Widget)
 To inspect and clean a single rem and its descendants:
+
 1. Navigate to the rem in the editor.
 2. Type `/debug` to open the **Debug Widget** below the rem.
 3. Under **Card Priority Powerup**, click **Sanitize Rogue Tags**. This runs the *same* authoritative scan as the global command, scoped to this rem's subtree.
@@ -471,6 +489,7 @@ The tool merges/moves all misplaced page nodes into the `Highlights` container a
 **Step 3 — Verify**
 
 Click **Debug PDF** again and confirm:
+
 - All page nodes now sit **under** the `Highlights` container, with one page per page number (no duplicates).
 - All `PDFHighlight` rems show the correct `PdfId` (matching the PDF document rem ID).
 - Clicking a highlight pin in the PDF viewer navigates to the right page.
