@@ -2,6 +2,22 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.65 - August 28th, 2026
+
+### 🐛 Fixed - the Card shield graph was plotting a different universe from the shield itself
+
+The Card shield charts recorded **one point per Rem-with-cards** while the queue's shield and the Weighted Shield popup had been working per card since v1.0.51. Same knowledge base, two populations: a library of ~67,600 cards was stored as a universe of ~45,350, with a Weighted Shield several points away from the one on screen and a Relative Priority % to match.
+
+Card shield points are now recorded over the per-card universe, at both Knowledge Base and Document scope. **Expect a one-time step in the Card shield charts on the day you upgrade** — the Universe Size line jumps from the Rem count to the larger card count, and the Weighted Shield and Relative Priority % lines shift with it. The IncRem charts are Rem-based by design and are unaffected.
+
+📖 [Priority Shield Graph](Plugin-Widgets-Reference.md#44-priority-shield-graph)
+
+#### Technical explanation
+
+The per-card transition changed the popup, the session-cache shields and the priority commands, but never `saveKBShield` / `saveDocumentShield` — both kept receiving `CardPriorityInfo[]`. The graph's own help text had been describing that migration as complete since 2026-05-27; it now names v1.0.65 as the point from which stored Card points are per-card.
+
+`expandCardInfosToCards` now feeds both save paths, with a per-card `isPerCardDueOverdue` preserving the "due up to the start of today" threshold the history has always used, so only the universe changes and not the definition of overdue.
+
 ## v1.0.64 - August 28th, 2026
 
 ### ⚡ Improved - spoiler protection now covers clozes made with `Alt+Z`

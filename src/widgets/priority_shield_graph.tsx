@@ -758,7 +758,7 @@ function PriorityShieldGraph() {
               - <b>Total Universe (Black dashed line):</b> The absolute maximum volume of material you have managed in this scope (Active + Dismissed).<br />
               - <b>Active Universe (Green line):</b> The physical volume of IncRems currently in your queue awaiting review.<br />
               - <b>Dismissed Area (Yellow shading):</b> The accumulated volume of material you have permanently marked with the `dismissed` powerup. The wider this area gets, the more backlog you've cleared!</li>
-            <li><b>For Cards:</b> It shows the <b>Universe Size (Dashed line)</b>, which is the total number of <i>cards</i> in scope (each card counts as one item — a Rem owning N cards contributes N to the universe). <i>Note:</i> History points recorded before 2026-05-27 used a per-Rem-with-cards universe; from that date onward the universe is per-card. Expect a one-time step in the Card shield charts on that date.</li>
+            <li><b>For Cards:</b> It shows the <b>Universe Size (Dashed line)</b>, which is the total number of <i>cards</i> in scope (each card counts as one item — a Rem owning N cards contributes N to the universe). <i>Note:</i> points stored before v1.0.65 used a per-Rem-with-cards universe, so expect a one-time step in the Card shield charts on the day you upgraded to it.</li>
           </ul>
         </div>
 
