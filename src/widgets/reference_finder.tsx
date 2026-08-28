@@ -3,10 +3,12 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { resolveRemTextForBreadcrumb, buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { sanitizeRichTextForSetText } from '../lib/richTextSanitize';
 
-// Temporary: report each step of the aliasId repair pass as a toast. The
+// Report each step of the alias-id resolution as a toast. Off by default: the
 // picker's console lives in its own widget iframe, so toasts are the only
-// diagnosis that reaches the user without re-scoping DevTools.
-const ALIAS_REPAIR_DEBUG = true;
+// diagnosis that reaches the user without re-scoping DevTools — but they are
+// noise in daily use. Flip to true when re-testing alias insertion (e.g. after
+// RemNote answers on how a plugin should obtain an alias's id).
+const ALIAS_REPAIR_DEBUG = false;
 
 // The rem id of an alias returned by `rem.getAliases()`. Historically that is
 // `_id`; the fallbacks are here because a candidate matched by alias text has
@@ -110,6 +112,9 @@ interface Candidate {
   aliasText?: string;
   // Debug only: set when the alias object came back without a usable rem id.
   aliasKeys?: string;
+  // The matched alias's own rich text. Aliases are no longer rems, so their id
+  // can only be recovered by handing this back to getOrCreateAliasWithText().
+  aliasRichText?: any;
 }
 
 function ReferenceFinder() {
@@ -369,7 +374,7 @@ function ReferenceFinder() {
         // for the rems we'll actually show, to keep per-keystroke cost low.)
         type Scored = {
           r: any; id: string; name: string; normName: string; type: number; times: number;
-          score: number; aliasId?: string; aliasText?: string; aliasKeys?: string;
+          score: number; aliasId?: string; aliasText?: string; aliasKeys?: string; aliasRichText?: any;
           matchFold: string; // folded text the match was made on (alias or name)
         };
         const scored: Scored[] = [];
@@ -389,6 +394,7 @@ function ReferenceFinder() {
           let aliasId: string | undefined;
           let aliasText: string | undefined;
           let aliasKeys: string | undefined; // debug: shape of the alias object when it has no id
+          let aliasRichText: any; // the alias's own rich text — resolves its id at pick time
           let matchFold = foldName;
           if (!foldedTokens.every((t) => foldName.includes(t))) {
             // …or in one of the rem's aliases. RemNote indexes aliases into the
@@ -396,14 +402,14 @@ function ReferenceFinder() {
             // non-matching primary name); consult its aliases to confirm and
             // capture which alias to reference. Only the non-matching results
             // pay this extra lookup, so per-keystroke cost stays low.
-            let matched: { id: string; text: string; fold: string } | undefined;
+            let matched: { id: string; text: string; fold: string; rt: any } | undefined;
             try {
               for (const a of await r.getAliases()) {
                 const atRaw = (await resolveRemTextForBreadcrumb(plugin, a.text)).trim();
                 const at = atRaw === 'Untitled' ? '' : atRaw;
                 const fa = canonFig(fold(at));
                 if (at && foldedTokens.every((t) => fa.includes(t))) {
-                  matched = { id: aliasRemId(a), text: at, fold: fa };
+                  matched = { id: aliasRemId(a), text: at, fold: fa, rt: a.text };
                   if (!matched.id) aliasKeys = Object.keys(a ?? {}).join(',').slice(0, 120);
                   break;
                 }
@@ -412,6 +418,7 @@ function ReferenceFinder() {
             if (!matched) continue;
             aliasId = matched.id || undefined;
             aliasText = matched.text;
+            aliasRichText = matched.rt;
             matchFold = matched.fold;
           }
           const times = await r.timesSelectedInSearch().catch(() => 0);
@@ -424,7 +431,7 @@ function ReferenceFinder() {
           if (matchFold === qf) score = 0;
           else if (matchFold.startsWith(qf)) score = 1;
           else if (matchFold.includes(qf)) score = 2;
-          scored.push({ r, id: r._id, name, normName: normalize(name), type, times, score, aliasId, aliasText, aliasKeys, matchFold });
+          scored.push({ r, id: r._id, name, normName: normalize(name), type, times, score, aliasId, aliasText, aliasKeys, aliasRichText, matchFold });
         }
 
         scored.sort((a, b) => {
@@ -453,6 +460,7 @@ function ReferenceFinder() {
             id: s.id, name: s.name, normName: s.normName, type: s.type,
             times: s.times, score: s.score, backText, breadcrumb,
             aliasId: s.aliasId, aliasText: s.aliasText, aliasKeys: s.aliasKeys,
+            aliasRichText: s.aliasRichText,
           });
         }
 
@@ -477,8 +485,9 @@ function ReferenceFinder() {
   }, [floatingWidgetId, plugin]);
 
   const pick = useCallback(
-    async (cand: Candidate | undefined, mode: 'ref' | 'pin' | 'textPin' = 'ref') => {
-      if (!cand) return;
+    async (picked: Candidate | undefined, mode: 'ref' | 'pin' | 'textPin' = 'ref') => {
+      if (!picked) return;
+      let cand: Candidate = picked;
 
       // Insert WHILE the widget is still open: RemNote keeps the underlying
       // editor as the "active editor" even though DOM focus is in this iframe.
@@ -493,6 +502,29 @@ function ReferenceFinder() {
         if (sel) {
           sawSelection = true;
           targetRemId = (sel as any).remId;
+          // An alias reference needs the alias's id, and `getAliases()` no
+          // longer supplies one — the objects it returns are rem shells whose
+          // `_id` is empty, because a built-in powerup's data is not stored as
+          // rems any more. `getOrCreateAliasWithText` is the surviving route:
+          // "if an equivalent alias already exists, that alias will be
+          // returned". Feeding it the alias's OWN rich text (not a re-typed
+          // string) is what keeps it a lookup rather than a create.
+          if (!cand.aliasId && cand.aliasText && cand.aliasRichText) {
+            try {
+              const owner = await plugin.rem.findOne(cand.id);
+              const alias: any = await owner?.getOrCreateAliasWithText(cand.aliasRichText);
+              if (typeof alias?._id === 'string' && alias._id) {
+                cand = { ...cand, aliasId: alias._id };
+              } else if (ALIAS_REPAIR_DEBUG) {
+                await plugin.app.toast(
+                  `alias id lookup: getOrCreateAliasWithText returned ${alias ? 'an object with no _id' : 'nothing'}`
+                );
+              }
+            } catch (e) {
+              console.warn('[reference-finder] alias id lookup failed:', e);
+              if (ALIAS_REPAIR_DEBUG) await plugin.app.toast(`alias id lookup threw: ${(e as any)?.message ?? e}`);
+            }
+          }
           // Cloze-awareness: if the insertion point sits inside a cloze, stamp
           // that cloze's id onto the reference so it stays INSIDE the cloze
           // instead of breaking it. Prefer the selected span's cId; fall back
