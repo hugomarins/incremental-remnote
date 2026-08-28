@@ -1,5 +1,5 @@
 import { renderWidget, usePlugin, useTrackerPlugin } from '@remnote/plugin-sdk';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import '../style.css';
 import '../App.css';
 import { IE_DOCS_BASE_URL } from '../lib/settings';
@@ -131,6 +131,87 @@ const segmentIconStyle: React.CSSProperties = {
   fontSize: 12,
   borderLeft: '1px solid var(--rn-clr-border-primary, #cbd5e1)',
 };
+
+/**
+ * The panel's title, as two words that are dropped whole rather than cut.
+ *
+ * A plain `truncate` on "Incremental RemNote" produces "Incremental Re…" in a
+ * narrow sidebar, which reads as a different plugin's name. Losing the second
+ * word entirely is the honest fallback: "Incremental" is still this plugin.
+ *
+ * CSS cannot express "hide the last word if it does not fit" — `overflow` cuts
+ * mid-glyph and `text-overflow` only adds the ellipsis — so the width is
+ * measured and the text chosen.
+ *
+ * Both halves of that measurement have a trap in them:
+ *
+ * - **The box must not be sized by its own text**, or the question answers
+ *   itself: a box holding "Incremental" is only as wide as "Incremental", so
+ *   the full name would never look like it fits again and the second word could
+ *   never come back. It therefore *fills* the row (`flex: 1 1 auto` here and on
+ *   the wrapper), which makes its width the space available and nothing else.
+ * - **The comparison must be sub-pixel.** `clientWidth` and `scrollWidth` are
+ *   rounded to integers, and `text-overflow` fires on an overflow of any size:
+ *   a box 0.02px narrower than its text reports 70 against 70 and still paints
+ *   "Incremen…", dropping three characters to make room for the ellipsis. The
+ *   natural width comes from an out-of-flow probe and both sides are read as
+ *   fractions, with a quarter-pixel of margin so a hairline fit renders the
+ *   short form rather than an ellipsised long one.
+ */
+function PanelTitle() {
+  const boxRef = useRef<HTMLSpanElement>(null);
+  const probeRef = useRef<HTMLSpanElement>(null);
+  const [showFull, setShowFull] = useState(true);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const probe = probeRef.current;
+    if (!box || !probe) return;
+
+    const measure = () =>
+      setShowFull(
+        probe.getBoundingClientRect().width <= box.getBoundingClientRect().width - 0.25
+      );
+    measure();
+
+    // The box for the space available, the probe for the text's natural width —
+    // which changes when a web font finishes loading, and would otherwise leave
+    // the first measurement standing on the fallback font's metrics.
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    observer.observe(probe);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <span
+      ref={boxRef}
+      className="truncate"
+      style={{ flex: '1 1 auto', minWidth: 0, position: 'relative', fontSize: 12.5, fontWeight: 600 }}
+      title="Incremental RemNote"
+    >
+      {showFull ? 'Incremental RemNote' : 'Incremental'}
+      <span
+        ref={probeRef}
+        aria-hidden
+        // `width: max-content` matters: an absolutely positioned box with `auto`
+        // width shrinks to fit its containing block, which is the very box being
+        // measured — it would report the space available, not the text's width.
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: 'max-content',
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          whiteSpace: 'pre',
+        }}
+      >
+        Incremental RemNote
+      </span>
+    </span>
+  );
+}
 
 function IconButton(props: {
   label: string;
@@ -366,19 +447,15 @@ export function PluginHub() {
   return (
     <div style={containerStyle} className="flex flex-col gap-1.5 p-2 rounded-lg mb-2">
       <div className="flex items-center justify-between gap-1">
-        <div className="flex items-center gap-1 min-w-0">
+        {/* Fills the row so the title's width is the space left by the icons,
+            not the width of whichever text it currently holds. */}
+        <div className="flex items-center gap-1 min-w-0" style={{ flex: '1 1 auto' }}>
           <img
             src={`${plugin.rootURL}globe-icon.png`}
             alt=""
             style={{ width: 16, height: 16, flex: '0 0 auto' }}
           />
-          <span
-            className="truncate"
-            style={{ fontSize: 12.5, fontWeight: 600 }}
-            title="Incremental RemNote"
-          >
-            Incremental RemNote
-          </span>
+          <PanelTitle />
         </div>
         <div className="flex items-center gap-0.5">
           <IconButton
