@@ -75,7 +75,7 @@ export const ONBOARDING_TIPS: OnboardingTip[] = [
     category: 'basics',
     title: 'Your first Incremental Rem',
     body: 'Alt+X on any Rem, nothing selected, and it joins your queue. No flashcard needed.',
-    docsPath: 'Getting-Started/#method-2-keyboard-shortcut',
+    docsPath: 'Getting-Started/#making-a-rem-incremental',
   },
   {
     id: 'extract-while-reading',
