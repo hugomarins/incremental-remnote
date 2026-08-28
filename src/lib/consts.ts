@@ -303,9 +303,10 @@ export const currentScopeRemIdsKey = 'current-scope-rem-ids-key';
 export const seenRemInSessionKey = 'seen-rem-in-session-key';
 export const seenCardInSessionKey = 'seen-card-in-session-key';
 export const displayPriorityShieldId = 'display-priority-shield';
-// Spoiler protection: hold back an IncRem whose own rem still has a flashcard
-// due in this session, so the extract cannot give away the answer before the
-// card is graded. See lib/queue_prefetch.
+// Spoiler protection: hold back an IncRem while a card it would give away is
+// still due this session — one on the rem itself, or one on a direct child
+// tagged `cloze-extract` (a cloze carved out of it with Alt+Z) — so the extract
+// cannot hand over the answer before the card is graded. See lib/queue_prefetch.
 export const deferSpoilerIncRemsId = 'defer-spoiler-increms';
 export const displayQueueToolbarPriorityId = 'display-queue-toolbar-priority';
 export const autoFocusQueueDashboardId = 'auto-focus-queue-dashboard';

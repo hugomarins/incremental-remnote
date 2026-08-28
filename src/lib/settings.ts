@@ -499,9 +499,10 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     group: 'queue',
     title: 'Hold Back Spoiler IncRems',
     description:
-      'When a Rem is both an Incremental Rem and a flashcard, holds the IncRem back while any ' +
-      'of its own cards is still due, so reading the extract cannot give away the answer ' +
-      'before you grade the card. The IncRem returns to the running once the card is graded, ' +
+      'Holds an Incremental Rem back while a flashcard it would give away is still due — ' +
+      'either a card on the Rem itself, or a cloze extracted from it with Alt+Z and filed ' +
+      'directly underneath it. Reading the extract first would hand you the answer before ' +
+      'you grade the card. The IncRem returns to the running once those cards are graded, ' +
       'and is released anyway once nothing else is due. Only applies to the normal queue — ' +
       'Practice All and In Order are unaffected.',
   },

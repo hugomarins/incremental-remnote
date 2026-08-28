@@ -2223,24 +2223,31 @@ function Debug() {
     }
   };
 
-  // Spoiler-protection probe. The queue gate in lib/queue_prefetch decides that a
-  // dual-type rem is a "spoiler" when one of its OWN cards satisfies
-  // `(nextRepetitionTime ?? Infinity) <= now`. That predicate rests on a claim
-  // about the SDK — that an unscheduled card reports a null nextRepetitionTime —
-  // and getting it wrong in the other direction would hold an IncRem back in
-  // every session with no card ever appearing to release it. This prints the raw
-  // per-card state so the claim can be checked against real rems instead of
-  // assumed: disable one direction of a two-way card, or make a fresh
-  // never-practiced one, and read off what actually comes back.
+  // Spoiler-protection probe. The queue gate in lib/queue_prefetch decides that
+  // an IncRem is a "spoiler" when one of its OWN cards — or a card on one of its
+  // DIRECT children tagged `cloze-extract`, the clozes Alt+Z files underneath it
+  // — satisfies `(nextRepetitionTime ?? Infinity) <= now`. That predicate rests
+  // on a claim about the SDK — that an unscheduled card reports a null
+  // nextRepetitionTime — and getting it wrong in the other direction would hold
+  // an IncRem back in every session with no card ever appearing to release it.
+  // This prints the raw per-card state for both sources so the claim can be
+  // checked against real rems instead of assumed: disable one direction of a
+  // two-way card, or make a fresh never-practiced one, and read off what
+  // actually comes back.
   const handleProbeSpoilerState = async () => {
     if (!rem) return;
     const now = Date.now();
-    const [cards, enablePractice, direction] = await Promise.all([
+    const [ownCards, enablePractice, direction, children, clozeExtractTag] = await Promise.all([
       rem.getCards(),
       rem.getEnablePractice(),
       rem.getPracticeDirection(),
+      rem.getChildrenRem(),
+      plugin.rem.findByName(['cloze-extract'], null),
     ]);
-    const rows = cards.map((c) => ({
+
+    const describe = (c: any, source: string, ownerId: string) => ({
+      source,
+      ownerRemId: ownerId,
       cardId: c._id,
       type: typeof c.type === 'string' ? c.type : `cloze:${c.type.clozeId}`,
       nextRepetitionTime: c.nextRepetitionTime ?? null,
@@ -2249,15 +2256,34 @@ function Debug() {
       reps: c.repetitionHistory?.length ?? 0,
       // Exactly the predicate the queue gate applies.
       countsAsDue: (c.nextRepetitionTime ?? Infinity) <= now,
-    }));
+    });
+
+    const rows = ownCards.map((c) => describe(c, 'own', rem._id));
+
+    // Same walk the gate does: direct children only, cloze-extract tag only.
+    let clozeChildCount = 0;
+    if (clozeExtractTag) {
+      for (const child of children || []) {
+        const tags = await child.getTagRems();
+        if (!tags?.some((t) => t._id === clozeExtractTag._id)) continue;
+        clozeChildCount++;
+        const childCards = await child.getCards();
+        childCards.forEach((c) => rows.push(describe(c, 'cloze-extract child', child._id)));
+      }
+    }
+
+    const dueCount = rows.filter((r) => r.countsAsDue).length;
     console.log(
       `🎭 Spoiler probe for ${rem._id}: enablePractice=${enablePractice}, direction=${direction}, ` +
-        `${cards.length} card(s), ${rows.filter((r) => r.countsAsDue).length} counted as due.`
+        `${ownCards.length} own card(s), ${clozeChildCount} cloze-extract child(ren) with ` +
+        `${rows.length - ownCards.length} card(s), ${dueCount} counted as due` +
+        (clozeExtractTag ? '' : ' — no cloze-extract tag in this KB, child check skipped') +
+        `.`
     );
     console.table(rows);
     await plugin.app.toast(
-      `${cards.length} card(s), ${rows.filter((r) => r.countsAsDue).length} due ` +
-        `(practice: ${enablePractice ? direction : 'off'}). See console.`
+      `${ownCards.length} own + ${rows.length - ownCards.length} cloze-child card(s), ` +
+        `${dueCount} due (practice: ${enablePractice ? direction : 'off'}). See console.`
     );
   };
 
@@ -4298,7 +4324,7 @@ function Debug() {
                    borderRadius: '4px',
                    cursor: 'pointer'
                  }}
-                 title="Print every card on this rem with its raw nextRepetitionTime and whether the queue's spoiler gate counts it as due"
+                 title="Print every card on this rem and on its cloze-extract children, with raw nextRepetitionTime and whether the queue's spoiler gate counts it as due"
                >
                  Probe Spoiler State
                </button>
