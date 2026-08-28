@@ -3,6 +3,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { resolveRemTextForBreadcrumb, buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { sanitizeRichTextForSetText } from '../lib/richTextSanitize';
 
+// Temporary: report each step of the aliasId repair pass as a toast. The
+// picker's console lives in its own widget iframe, so toasts are the only
+// diagnosis that reaches the user without re-scoping DevTools.
+const ALIAS_REPAIR_DEBUG = true;
+
 // ---------------------------------------------------------------------------
 // Find & Insert Reference
 //
@@ -471,10 +476,12 @@ function ReferenceFinder() {
       let inserted = false;
       let sawSelection = false;
       let insertErr: any = null;
+      let targetRemId: string | undefined;
       try {
         const sel = await plugin.editor.getSelection();
         if (sel) {
           sawSelection = true;
+          targetRemId = (sel as any).remId;
           // Cloze-awareness: if the insertion point sits inside a cloze, stamp
           // that cloze's id onto the reference so it stays INSIDE the cloze
           // instead of breaking it. Prefer the selected span's cId; fall back
@@ -611,6 +618,77 @@ function ReferenceFinder() {
             } else {
               throw insErr;
             }
+          }
+          // --- aliasId repair pass -------------------------------------
+          // The reference we hand to insertRichText carries `aliasId` so it
+          // renders the matched alias ("momento de inércia") instead of the
+          // rem's primary name ("mass moment of inertia"). RemNote's editor
+          // drops that field on insert — the saved rich text comes back with
+          // `_id` only — so the reference renders the primary name. Re-read
+          // the target rem, stamp `aliasId` back onto the node we just
+          // inserted and write it with setText, which goes through a
+          // different validator.
+          //
+          // ALIAS_REPAIR_DEBUG surfaces each outcome as a toast as well as a
+          // console line: this widget runs in its own iframe, so its console
+          // output is invisible unless DevTools' context is switched to that
+          // frame — a toast is the only report that always reaches the user.
+          if (inserted && cand.aliasId) {
+            const say = async (msg: string, data?: any) => {
+              console.log('[reference-finder] alias repair:', msg, data ?? '');
+              if (ALIAS_REPAIR_DEBUG) await plugin.app.toast(`alias repair: ${msg}`);
+            };
+            try {
+              if (!targetRemId) {
+                await say('skipped — no remId on the editor selection');
+              } else {
+                // Search from the end: earlier references to the same rem are
+                // pre-existing, the one we just inserted is the last. Retry once
+                // in case the rem hasn't picked up the edit yet.
+                const lastRefIdx = (rt: any[]) => {
+                  for (let i = rt.length - 1; i >= 0; i--) {
+                    const n = rt[i];
+                    if (n && typeof n !== 'string' && n.i === 'q' && n._id === cand.id) return i;
+                  }
+                  return -1;
+                };
+                let rem = await plugin.rem.findOne(targetRemId);
+                let rt: any[] = Array.isArray(rem?.text) ? (rem!.text as any[]) : [];
+                let idx = lastRefIdx(rt);
+                if (idx === -1) {
+                  await new Promise((r) => setTimeout(r, 150));
+                  rem = await plugin.rem.findOne(targetRemId);
+                  rt = Array.isArray(rem?.text) ? (rem!.text as any[]) : [];
+                  idx = lastRefIdx(rt);
+                }
+                if (idx === -1) {
+                  await say('inserted reference not found in the target rem', { targetRemId, refId: cand.id });
+                } else if (rt[idx].aliasId === cand.aliasId) {
+                  await say('insertRichText kept aliasId — nothing to repair');
+                } else {
+                  const patched = rt.map((n, i) => (i === idx ? { ...(n as any), aliasId: cand.aliasId } : n));
+                  await rem!.setText(patched as any);
+                  const after = await plugin.rem.findOne(targetRemId);
+                  const afterRt: any[] = Array.isArray(after?.text) ? (after!.text as any[]) : [];
+                  const stored = afterRt.find(
+                    (n: any) => n && typeof n !== 'string' && n.i === 'q' && n._id === cand.id && n.aliasId
+                  );
+                  await say(
+                    stored
+                      ? 'setText stored aliasId ✓ (if the alias text still is not rendered, RemNote is ignoring the id)'
+                      : 'setText ALSO dropped aliasId ✗ — RemNote rejects the field on every plugin write path',
+                    { targetRemId, refId: cand.id, aliasId: cand.aliasId, storedNode: stored }
+                  );
+                }
+              }
+            } catch (e) {
+              console.warn('[reference-finder] alias repair failed:', e);
+              if (ALIAS_REPAIR_DEBUG) await plugin.app.toast(`alias repair failed: ${(e as any)?.message ?? e}`);
+            }
+          } else if (inserted && ALIAS_REPAIR_DEBUG) {
+            // Distinguishes "the picked candidate had no alias" from "this code
+            // isn't running at all" — silence would look the same either way.
+            await plugin.app.toast('alias repair: picked candidate carries no aliasId');
           }
         } else {
           console.warn('[reference-finder] no active editor selection — will use clipboard fallback');
