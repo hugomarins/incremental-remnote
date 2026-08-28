@@ -2272,7 +2272,38 @@ function Debug() {
       }
     }
 
+    // Cross-check the membership source. The gate reads the tag PER CHILD
+    // (getTagRems) rather than from the tag's taggedRem() member list, because
+    // that list is known to under-report — it enumerated three Rems on a KB
+    // holding thousands (see lib/empty_ecd_scan.ts). That finding was about
+    // BUILT-IN powerups, and cloze-extract is a plain plugin-made Rem, so it
+    // should not apply here; this prints the evidence either way rather than
+    // leaving it assumed. Two numbers matter: whether the KB-wide total is a
+    // plausible count of the user's Alt+Z extracts, and — the decisive one —
+    // whether every child getTagRems() found is actually PRESENT in that list.
+    // A child found per-rem but missing from the list is direct proof the list
+    // under-reports this tag too.
+    let membershipLine = 'no cloze-extract tag in this KB, membership cross-check skipped';
+    if (clozeExtractTag) {
+      try {
+        const members = await clozeExtractTag.taggedRem();
+        const memberIds = new Set(members.map((m) => m._id));
+        const foundChildIds = Array.from(new Set(rows.filter((r) => r.source === 'cloze-extract child').map((r) => r.ownerRemId)));
+        const missing = foundChildIds.filter((id) => !memberIds.has(id));
+        membershipLine =
+          `taggedRem() reports ${members.length} cloze-extract Rem(s) KB-wide; ` +
+          `of the ${foundChildIds.length} child/children getTagRems() found here, ` +
+          (missing.length === 0
+            ? 'all appear in that list (sources agree)'
+            : `${missing.length} MISSING from it [${missing.join(', ')}] — taggedRem() under-reports this tag`);
+      } catch (e) {
+        console.error('taggedRem() cross-check failed:', e);
+        membershipLine = 'taggedRem() cross-check threw — see console';
+      }
+    }
+
     const dueCount = rows.filter((r) => r.countsAsDue).length;
+    console.log(`🔎 cloze-extract membership: ${membershipLine}.`);
     console.log(
       `🎭 Spoiler probe for ${rem._id}: enablePractice=${enablePractice}, direction=${direction}, ` +
         `${ownCards.length} own card(s), ${clozeChildCount} cloze-extract child(ren) with ` +
@@ -2283,7 +2314,7 @@ function Debug() {
     console.table(rows);
     await plugin.app.toast(
       `${ownCards.length} own + ${rows.length - ownCards.length} cloze-child card(s), ` +
-        `${dueCount} due (practice: ${enablePractice ? direction : 'off'}). See console.`
+        `${dueCount} due (practice: ${enablePractice ? direction : 'off'}).\n${membershipLine}.\nSee console.`
     );
   };
 

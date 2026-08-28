@@ -399,12 +399,25 @@ async function resolveClozeExtractTagId(plugin: ReactRNPlugin): Promise<RemId | 
  * card RemNote would schedule right now.
  *
  * Membership is read per child (`getTagRems`) rather than from the tag's
- * `taggedRem()` member list on purpose. The member list would be one call
- * instead of many, but it returns every cloze extract in the KB — thousands of
- * Rems on a mature graph — deserialized across the bridge on every rebuild,
- * which is precisely the kind of cost this module exists to keep out of a study
- * session. A candidate's children are a handful of Rems and they are read
- * concurrently, so the wall time is one round-trip deep regardless of fan-out.
+ * `taggedRem()` member list, for two independent reasons.
+ *
+ * CORRECTNESS first: `taggedRem()` under-reports. On a KB holding thousands of
+ * Extra Card Detail Rems it enumerated THREE while `hasPowerup` returned true on
+ * those same Rems — see the finding recorded in lib/empty_ecd_scan.ts. A gate
+ * built on it would silently stop protecting most of the graph, and silence is
+ * the one failure mode this subsystem cannot afford. The under-reporting is a
+ * BUILT-IN POWERUP problem, though, and `cloze-extract` is neither built-in nor
+ * a powerup — register/commands.ts creates it as a plain Rem and attaches it
+ * with addTag() — which is precisely the case that same finding says
+ * `getTagRems()` reports correctly. Confirmed on a real dual-extract parent: the
+ * probe found both tagged children.
+ *
+ * COST second: the member list would be one call instead of many, but it returns
+ * every cloze extract in the KB — thousands of Rems on a mature graph —
+ * deserialized across the bridge on every rebuild, which is the kind of cost
+ * this module exists to keep out of a study session. A candidate's children are
+ * a handful of Rems and they are read concurrently, so the wall time is one
+ * round-trip deep regardless of fan-out.
  *
  * Fails OPEN, like the own-cards gate: a read that throws reports "no spoiler"
  * and the IncRem is shown, rather than being silently withheld.

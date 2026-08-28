@@ -20,15 +20,15 @@ Each button is designed for a specific action to manage your learning flow effic
 
 ## Spoiler Protection
 
-A single Rem is often **both** an Incremental Rem and a flashcard — you extract a paragraph, then cloze part of it in place. Both are due, and the queue used to show them in whatever order came up. When the extract came first, it handed you the answer: the recall was no longer a recall, and the grade you gave the card afterwards measured nothing.
+An extract and the flashcard it gives away are often both due in the same session, and the queue used to show them in whatever order came up. When the extract came first, it handed you the answer: the recall was no longer a recall, and the grade you gave the card afterwards measured nothing.
 
-The plugin now **holds an Incremental Rem back while any flashcard on that same Rem is still due.** The card comes up first, you grade it honestly, and the extract returns to the running immediately afterwards — usually a few items later in the same session. Nothing is skipped; only the order changes.
+The plugin now **holds an Incremental Rem back while a flashcard it would spoil is still due.** The card comes up first, you grade it honestly, and the extract returns to the running immediately afterwards — usually a few items later in the same session. Nothing is skipped; only the order changes.
 
 ### When it releases
 
 The hold is always temporary. The Incremental Rem is shown as soon as any of these becomes true:
 
-* **You grade the card.** The card stops being due, the Rem stops being a spoiler, and it re-enters the running at its normal priority position.
+* **You grade the card.** The card stops being due, the Rem stops being a spoiler, and it re-enters the running at its normal priority position. Where several cards hold it — its own plus a few `Alt+Z` clozes — it is released once the last of them is graded.
 * **Nothing unspoiled is left.** If every remaining due Incremental Rem is holding for a card, the highest-priority one is shown anyway rather than showing you nothing.
 * **No flashcards remain.** With the flashcard queue empty, there is nothing left to spoil, so held items are released.
 
@@ -36,7 +36,12 @@ So a held Incremental Rem is never lost, and never postponed past the end of the
 
 ### What counts as a spoiler
 
-Only flashcards **on the Rem itself**. Cards on its children are not considered — an extract can certainly spoil those too, but checking every descendant of every candidate is a much heavier operation, so this first version stays with the direct case.
+Two kinds of flashcard hold an Incremental Rem back:
+
+* **Cards on the Rem itself.** You extract a paragraph, then cloze part of it in place, so the same Rem is both the extract and the card.
+* **Cards on its direct [`Alt+Z` cloze children](IR-Flow--Reading-Extracting-and-Clozing.md#create-cloze-altz-altshiftz).** An `Alt+Z` cloze is a separate child Rem that quotes the parent's sentence with one span blanked out — so the parent gives it away just as surely, even when the parent carries no card of its own. This was the common case the first version missed: a plain extract you had clozed underneath had nothing for the check to look at, and sailed through.
+
+Everything else is out of scope. **Deeper descendants are not checked**, and neither are children clozed by other means — only the direct children `Alt+Z` marks as its own. An extract can certainly spoil those too, but finding them means walking the whole subtree of every candidate, which is a much heavier operation than reading one tag.
 
 Two behaviours are worth knowing:
 
@@ -50,7 +55,7 @@ Two behaviours are worth knowing:
 
 ### Turning it off
 
-**Hold Back Spoiler IncRems** in the IE Settings popup, under *Queue*. On by default. Switching it off restores the previous behaviour, where a dual-type Rem's extract and card appear in whatever order the queue produces.
+**Hold Back Spoiler IncRems** in the IE Settings popup, under *Queue*. On by default. Switching it off restores the previous behaviour, where an extract and the cards it spoils appear in whatever order the queue produces.
 
 ---
 

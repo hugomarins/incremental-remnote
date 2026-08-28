@@ -2,6 +2,24 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.64 - August 28th, 2026
+
+### ⚡ Improved - spoiler protection now covers clozes made with `Alt+Z`
+
+Spoiler protection only ever looked at cards on the Incremental Rem itself, so a parent carrying no cards of its own passed straight through the check — and read you the sentence its own `Alt+Z` clozes were about to test.
+
+An Incremental Rem is now also **held back while a due flashcard sits on one of its direct `Alt+Z` cloze children**. Nothing else changes: the hold lifts as soon as those cards are graded, when nothing unspoiled is left to show, or when no flashcards remain.
+
+Deeper descendants, and children you cloze by other means, are still not checked.
+
+📖 [Spoiler Protection](Reviewing-Items-in-the-Queue.md#spoiler-protection)
+
+#### Technical explanation
+
+`Alt+Z` tags every cloze it creates with `cloze-extract`, and that tag is what makes this affordable: the children that can spoil a parent are identifiable from its direct children alone, with no subtree walk. The tag is resolved once per prefetch build, and the child scan is issued concurrently with the verification that path already performs — so the protection still adds no wall time to a callback that has to stay inside RemNote's ~1s deadline.
+
+Membership is read per child with `getTagRems()`, never from the tag's `taggedRem()` member list. That list under-reports built-in powerup membership badly enough to have silently emptied an earlier scan, and it would also drag every cloze extract in the knowledge base across the bridge on every rebuild. **Probe Spoiler State** in the debug widget now prints both sources side by side, so the two can be compared on a real Rem rather than assumed to agree.
+
 ## v1.0.63 - August 28th, 2026
 
 ### ✨ New - the whole Priority Review workflow is in the sidebar panel
