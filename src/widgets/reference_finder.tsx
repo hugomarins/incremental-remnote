@@ -8,6 +8,13 @@ import { sanitizeRichTextForSetText } from '../lib/richTextSanitize';
 // diagnosis that reaches the user without re-scoping DevTools.
 const ALIAS_REPAIR_DEBUG = true;
 
+// The rem id of an alias returned by `rem.getAliases()`. Historically that is
+// `_id`; the fallbacks are here because a candidate matched by alias text has
+// been coming back without one, which is exactly what leaves the inserted
+// reference showing the rem's primary name instead of the alias.
+const aliasRemId = (a: any): string =>
+  a?._id ?? a?.id ?? a?.remId ?? a?.rem?._id ?? a?._rem?._id ?? '';
+
 // ---------------------------------------------------------------------------
 // Find & Insert Reference
 //
@@ -101,6 +108,8 @@ interface Candidate {
   // reference so it renders the alias text and links back to this rem.
   aliasId?: string;
   aliasText?: string;
+  // Debug only: set when the alias object came back without a usable rem id.
+  aliasKeys?: string;
 }
 
 function ReferenceFinder() {
@@ -360,7 +369,7 @@ function ReferenceFinder() {
         // for the rems we'll actually show, to keep per-keystroke cost low.)
         type Scored = {
           r: any; id: string; name: string; normName: string; type: number; times: number;
-          score: number; aliasId?: string; aliasText?: string;
+          score: number; aliasId?: string; aliasText?: string; aliasKeys?: string;
           matchFold: string; // folded text the match was made on (alias or name)
         };
         const scored: Scored[] = [];
@@ -379,6 +388,7 @@ function ReferenceFinder() {
           // Accent-insensitive: every typed token must appear in the folded name…
           let aliasId: string | undefined;
           let aliasText: string | undefined;
+          let aliasKeys: string | undefined; // debug: shape of the alias object when it has no id
           let matchFold = foldName;
           if (!foldedTokens.every((t) => foldName.includes(t))) {
             // …or in one of the rem's aliases. RemNote indexes aliases into the
@@ -393,13 +403,14 @@ function ReferenceFinder() {
                 const at = atRaw === 'Untitled' ? '' : atRaw;
                 const fa = canonFig(fold(at));
                 if (at && foldedTokens.every((t) => fa.includes(t))) {
-                  matched = { id: a._id, text: at, fold: fa };
+                  matched = { id: aliasRemId(a), text: at, fold: fa };
+                  if (!matched.id) aliasKeys = Object.keys(a ?? {}).join(',').slice(0, 120);
                   break;
                 }
               }
             } catch { /* ignore */ }
             if (!matched) continue;
-            aliasId = matched.id;
+            aliasId = matched.id || undefined;
             aliasText = matched.text;
             matchFold = matched.fold;
           }
@@ -413,7 +424,7 @@ function ReferenceFinder() {
           if (matchFold === qf) score = 0;
           else if (matchFold.startsWith(qf)) score = 1;
           else if (matchFold.includes(qf)) score = 2;
-          scored.push({ r, id: r._id, name, normName: normalize(name), type, times, score, aliasId, aliasText, matchFold });
+          scored.push({ r, id: r._id, name, normName: normalize(name), type, times, score, aliasId, aliasText, aliasKeys, matchFold });
         }
 
         scored.sort((a, b) => {
@@ -441,7 +452,7 @@ function ReferenceFinder() {
           candidates.push({
             id: s.id, name: s.name, normName: s.normName, type: s.type,
             times: s.times, score: s.score, backText, breadcrumb,
-            aliasId: s.aliasId, aliasText: s.aliasText,
+            aliasId: s.aliasId, aliasText: s.aliasText, aliasKeys: s.aliasKeys,
           });
         }
 
@@ -685,6 +696,13 @@ function ReferenceFinder() {
               console.warn('[reference-finder] alias repair failed:', e);
               if (ALIAS_REPAIR_DEBUG) await plugin.app.toast(`alias repair failed: ${(e as any)?.message ?? e}`);
             }
+          } else if (inserted && ALIAS_REPAIR_DEBUG && cand.aliasText) {
+            // Matched by alias text but no alias rem id came back from
+            // getAliases() — report the object's shape so we can see what the
+            // id now lives under.
+            await plugin.app.toast(
+              `alias repair: no aliasId for "${cand.aliasText}" — alias object keys: ${cand.aliasKeys || '(none)'}`
+            );
           } else if (inserted && ALIAS_REPAIR_DEBUG) {
             // Distinguishes "the picked candidate had no alias" from "this code
             // isn't running at all" — silence would look the same either way.
