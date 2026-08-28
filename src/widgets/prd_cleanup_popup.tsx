@@ -121,6 +121,13 @@ export function PrdCleanupPopup() {
     ? selectedDocs.filter((d) => d.deletable).length
     : 0;
   const nothingToDo = selectedEntryCount === 0 && selectedDocDeletions === 0;
+  /**
+   * Still-due incremental entries sitting in documents that qualify for
+   * deletion. Deleting takes them with it, so the count is stated up front
+   * rather than discovered afterwards.
+   */
+  const incInDeletableDocs =
+    scan?.docs.filter((d) => d.deletable).reduce((n, d) => n + d.remainingIncEntries, 0) ?? 0;
 
   const runClean = async () => {
     if (nothingToDo) return;
@@ -244,7 +251,13 @@ export function PrdCleanupPopup() {
               {doc.docName}
             </div>
             <div className="text-xs mt-0.5" style={{ color: 'var(--rn-clr-content-secondary)' }}>
-              <span className="font-bold">{doc.dueEntries.length}</span> still due ·{' '}
+              <span className="font-bold">{doc.dueFlashcards}</span> flashcard
+              {doc.dueFlashcards === 1 ? '' : 's'} due ·{' '}
+              {doc.remainingIncEntries > 0 && (
+                <>
+                  <span className="font-bold">{doc.remainingIncEntries}</span> INC ·{' '}
+                </>
+              )}
               <span className="font-bold" style={{ color: removable ? '#dc2626' : undefined }}>
                 {removable}
               </span>{' '}
@@ -270,15 +283,21 @@ export function PrdCleanupPopup() {
                 className="text-xs mt-0.5 font-medium"
                 style={{ color: deleteEmptiedDocs ? '#dc2626' : 'var(--rn-clr-content-tertiary)' }}
               >
-                {deleteEmptiedDocs
-                  ? 'Nothing due left — the document itself will be deleted'
-                  : 'Nothing due left — the document is finished'}
+                {doc.remainingIncEntries > 0
+                  ? deleteEmptiedDocs
+                    ? `No flashcards due — the document itself will be deleted, dropping ${
+                        doc.remainingIncEntries
+                      } incremental ${doc.remainingIncEntries === 1 ? 'entry' : 'entries'}`
+                    : 'No flashcards due — only incremental entries are left'
+                  : deleteEmptiedDocs
+                    ? 'Nothing due left — the document itself will be deleted'
+                    : 'Nothing due left — the document is finished'}
               </div>
             )}
             {doc.undeletableReason && (
               <div className="text-xs mt-0.5" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
-                Nothing due left, but the document {UNDELETABLE_REASON_LABELS[doc.undeletableReason]} —
-                delete it yourself
+                No flashcards due, but the document {UNDELETABLE_REASON_LABELS[doc.undeletableReason]}{' '}
+                — delete it yourself
               </div>
             )}
           </div>
@@ -376,7 +395,7 @@ export function PrdCleanupPopup() {
                 {scan.totalDeletableDocs > 0 && (
                   <>
                     , <span className="font-bold">{scan.totalDeletableDocs}</span> document
-                    {scan.totalDeletableDocs === 1 ? '' : 's'} exhausted
+                    {scan.totalDeletableDocs === 1 ? '' : 's'} with no flashcards left
                   </>
                 )}
                 . Read in {formatElapsed(scan.elapsedMs)}.
@@ -416,13 +435,27 @@ export function PrdCleanupPopup() {
               <span>
                 <span className="font-medium">
                   Delete the {scan.totalDeletableDocs} document
-                  {scan.totalDeletableDocs === 1 ? '' : 's'} left with nothing due
+                  {scan.totalDeletableDocs === 1 ? '' : 's'} with no flashcards left due
                 </span>
                 <span style={{ color: 'var(--rn-clr-content-secondary)' }}>
                   {' '}
-                  — a review document with nothing due in it is finished, and leaving it behind keeps
-                  its Rem references in your knowledge base. Never applies to a document holding notes
-                  of your own.
+                  — a review document exists to get flashcards reviewed in priority order, so once
+                  none of its flashcards is due it is finished, and leaving it behind keeps its Rem
+                  references in your knowledge base.
+                  {incInDeletableDocs > 0 && (
+                    <>
+                      {' '}
+                      <span style={{ color: 'var(--rn-clr-content-primary)' }}>
+                        {incInDeletableDocs} still-due incremental{' '}
+                        {incInDeletableDocs === 1 ? 'entry goes' : 'entries go'} with{' '}
+                        {scan.totalDeletableDocs === 1 ? 'it' : 'them'}
+                      </span>
+                      : incremental Rems are injected into every queue by the sorting criteria, so
+                      they do not need a review document to come back. The Rems themselves are
+                      untouched.
+                    </>
+                  )}{' '}
+                  Never applies to a document holding notes of your own.
                 </span>
               </span>
             </label>
@@ -474,8 +507,16 @@ export function PrdCleanupPopup() {
             {clean.deletedDocs.length > 0 && (
               <>
                 {' '}
-                and <span className="font-bold">{clean.deletedDocs.length}</span> exhausted document
+                and <span className="font-bold">{clean.deletedDocs.length}</span> finished document
                 {clean.deletedDocs.length === 1 ? '' : 's'}
+                {clean.incEntriesDropped > 0 && (
+                  <>
+                    {' '}
+                    (with {clean.incEntriesDropped} still-due incremental{' '}
+                    {clean.incEntriesDropped === 1 ? 'entry' : 'entries'} in them — the Rems
+                    themselves are untouched and stay in your queue)
+                  </>
+                )}
               </>
             )}
             {clean.failed > 0 ? ` — ${clean.failed} could not be deleted (see the console)` : '.'}
@@ -509,7 +550,7 @@ export function PrdCleanupPopup() {
             >
               <div className="font-semibold">
                 {clean.emptiedDocs.length} document
-                {clean.emptiedDocs.length === 1 ? ' holds' : 's hold'} nothing due any more but{' '}
+                {clean.emptiedDocs.length === 1 ? ' holds' : 's hold'} no due flashcards any more but{' '}
                 {clean.emptiedDocs.length === 1 ? 'was' : 'were'} kept — delete{' '}
                 {clean.emptiedDocs.length === 1 ? 'it' : 'them'} yourself:
               </div>
