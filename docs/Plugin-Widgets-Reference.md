@@ -514,7 +514,11 @@ The confirmation *and* the report for the image scan, in one popup that stays op
 ### 6.10. Incremental RemNote Panel
 *(Left Sidebar)*
 
-The plugin's hub, at the bottom of the left sidebar. Header controls: **⚙** opens the [IE Settings](Plugin-Settings-Reference.md) popup, **?** opens this documentation, **✕** hides the panel for the session — it returns on the next start, and the **Show Incremental RemNote Panel** command brings it back sooner. Three shortcut buttons: **⌨** ([Keyboard Shortcuts](Keyboard-Shortcuts.md)), **Sorting** ([Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)), and **Priority Review** — which creates a [Priority Review Document](Priority-Review-Document.md) scoped to the document you currently have open, naming that scope under the button.
+The plugin's hub, at the bottom of the left sidebar. Header controls: **⌨** ([Keyboard Shortcuts](Keyboard-Shortcuts.md)), **⚙** opens the [IE Settings](Plugin-Settings-Reference.md) popup, **?** opens this documentation, **✕** hides the panel for the session — it returns on the next start, and the **Show Incremental RemNote Panel** command brings it back sooner.
+
+Two action buttons: **Sorting** ([Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)), and a **Priority Review** group of three — the label creates a [Priority Review Document](Priority-Review-Document.md) scoped to the document you currently have open (naming that scope under the button), **👁** opens the **Priority Review Queue** Rem that lists every review document you have built, and **🧹** runs [Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document).
+
+![The Incremental RemNote panel in the sidebar](assets/panel-hub.png){ width="700" }
 
 Below the shortcuts it shows **one onboarding tip per session**, with **I Got It** (retires the tip permanently, per knowledge base), **✕** (returns it to the pile; the panel also goes quiet for two hours) and **Learn More** (opens the tip's documentation section). Either answer closes the tip area until the next start — it never chains into a second tip.
 
@@ -539,11 +543,11 @@ Scan, review and delete in one popup — but deliberately in **two stages**, bec
 Two stages, like the Empty Extra Card Detail popup and for the same reason: the scan writes nothing, and you confirm against real counts before any Rem is deleted.
 
 - **Stage one — the scan** runs as soon as the popup opens and is read-only. It reads every document tagged *Priority Review Queue* and works out which of its entries still have something due.
-- **Stage two — review.** One row per document, most recently built first: **still due / reviewed / total entries**, the date it was built, and a note of anything being kept back. **Show** expands the row into the entries themselves, by name and with their `INC` / `FC` tag, split into *To remove*, *Reviewed, but kept*, and *Still due, staying*.
+- **Stage two — review.** One row per document, most recently built first: **flashcards due / incremental entries held / reviewed / total entries**, the date it was built, and a note of anything being kept back. **Show** expands the row into the entries themselves, by name and with their `INC` / `FC` tag, split into *To remove*, *Reviewed, but kept*, and *Still due, staying*.
 - **Tick the documents to clean.** Every document with work to do starts ticked; untick to leave one alone. The button counts what you have selected and estimates how long it will take.
-- **Delete the documents left with nothing due** — a checkbox above the buttons, ticked by default. A review document with nothing due in it is finished, so the document itself goes; one holding notes of your own never does, and the row says why. Doomed documents are struck through in the list.
+- **Delete the documents with no flashcards left due** — a checkbox above the buttons, ticked by default. A review document with no flashcard due in it is finished, so the document itself goes, taking any still-due `INC` entries with it (counted in the checkbox line first — the Rems themselves are untouched). One holding writing of your own never goes, and the row says why. Doomed documents are struck through in the list.
 - **`Enter` is inert here** — the red button has to be clicked. `Esc` is ignored while the scan or the deletion runs.
-- **The report stays on screen**: how many entries were removed, which documents were deleted, and which hold nothing due but were kept.
+- **The report stays on screen**: how many entries were removed, which documents were deleted (and how many still-due incremental entries went with them), and which have no flashcards due but were kept.
 - **The console holds the full readout**: a table per document with every entry's status, kind, name and Rem ID, which is the quickest way to see what a review document is still carrying.
 
 📖 **Full documentation:** [Cleaning a Review Document](Priority-Review-Document.md#cleaning-a-review-document)

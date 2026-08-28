@@ -2,6 +2,38 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.63 - August 28th, 2026
+
+### ✨ New - the whole Priority Review workflow is in the sidebar panel
+
+The **Priority Review** button in the [panel](Getting-Started.md#the-incremental-plugin-panel) has gained two neighbours. **👁** opens the **Priority Review Queue** Rem — every review document you have built is tagged with it, so its references are the list of them, and that is where you go to study from one you made earlier. **🧹** runs **Clean Priority Review Documents**. Create, study, clean: the three things you do with review documents, in one control.
+
+![The Incremental RemNote panel: the Priority Review group with its eye and broom actions, and the scope it is about to use named underneath](assets/panel-hub.png){ width="700" }
+
+**⌨** moved up into the header, next to **⚙ ? ✕** — it opens a documentation page like **?** does, so it was never an action. That is what paid for the two new buttons. **Sorting** is now sized to its own word instead of half the row, so **Priority Review** stops being truncated.
+
+#### Technical explanation
+
+The trio is one segmented control — a single outline with dividers instead of three bordered buttons with gaps between them — which is worth ~10px in a column the user can drag down to ~130px, and says the right thing besides. Only the label cell flexes, and it truncates with an ellipsis rather than overflowing its box the way a `nowrap` button does; **👁** and **🧹** stay 22px however narrow the sidebar gets. The eye resolves the tag with `findByName` and toasts instead of failing when it is absent — the tag is created lazily by the first review document, so having none is a state, not an error.
+
+📖 [The Incremental RemNote Panel](Getting-Started.md#the-incremental-plugin-panel)
+
+### ✨ New - cleaning retires a review document once its flashcards are done
+
+**Clean Priority Review Documents** used to keep a document alive for any entry still due, incremental ones included. It now deletes a document once **no flashcard in it is due**, and the still-due `INC` entries go with it.
+
+A review document exists to get flashcards reviewed in priority order, which is the one thing an ordinary queue will not do for you. Incremental Rems are injected into every queue by the sorting criteria whether or not a document points at them — so one down to its incremental entries has nothing left to offer, and keeping it only leaves stale Rem references in your knowledge base. **The Rems themselves are untouched**: only the document's references to them go, and they come up in your queue exactly as before. The review screen counts them in the checkbox line before you delete anything, and the report names them afterwards.
+
+Documents holding **writing of your own** are still never deleted — including, now, notes you wrote under an incremental entry that is staying.
+
+#### Technical explanation
+
+The predicate went from `dueEntries.length === 0 && unknownEntries.length === 0` to `dueFlashcards === 0`. That opened a data-loss path that had to be closed in the same pass: a due entry used to block deletion outright, so nothing ever checked whether one carried notes — and `remove()` on the document takes descendants with it. Due and unjudged `INC` entries are now checked for children and edited text exactly as the stale ones already were, under a new `inc-with-notes` reason.
+
+It also makes the command work on a cold cache. `unknown` status is only ever set on `INC` entries — a flashcard is read straight off the card data — so an empty IncRem cache no longer suppresses document deletion, because the flashcard half of the decision is never unavailable.
+
+📖 [Finished documents are deleted too](Priority-Review-Document.md#finished-documents-are-deleted-too)
+
 ## v1.0.61 - August 27th, 2026
 
 ### ✨ New - a pin's ring now says where it leads

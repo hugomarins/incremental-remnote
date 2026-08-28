@@ -37,6 +37,10 @@ You can create a review document from anywhere in RemNote:
 
 * **Keyboard Shortcut:** Press [`Opt+Shift+R`](Keyboard-Shortcuts.md#batch-operations) (Mac) or [`Alt+Shift+R`](Keyboard-Shortcuts.md#batch-operations) (Windows).
 
+* **Sidebar Panel:** The **Priority Review** button in the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel), which names the scope it will use underneath it. The two buttons beside it are the other half of the workflow — **👁** opens the **Priority Review Queue** Rem, where every document you have built is listed, and **🧹** runs [Clean Priority Review Documents](#cleaning-a-review-document).
+
+![The Incremental RemNote panel: the Priority Review button with its eye and broom actions, and the scope it is about to use named underneath](assets/panel-hub.png){ width="700" }
+
 ### 2. Configure Your Session
 A popup will appear allowing you to tailor the session:
 
@@ -180,24 +184,29 @@ The **Clean Priority Review Documents** command (quick code `cprd`) removes thos
 It reads *every* review document in your knowledge base, works out which entries still have something due, and shows you the result **before** anything is deleted:
 
 - **`FC` entries** are kept when the referenced Rem still has a card of its own due. Descendants are not consulted — the document never selected that Rem for its children's cards, so cleaning does not keep it for them either.
-- **`INC` entries** are kept when the referenced Rem is still an Incremental Rem whose next repetition has arrived.
+- **`INC` entries** are kept when the referenced Rem is still an Incremental Rem whose next repetition has arrived. (They are kept *as entries* — but they are not what keeps the **document** alive; see [below](#finished-documents-are-deleted-too).)
 - **Entries whose Rem has been deleted** are removed.
 
 "Due" here means **due at any point up to the end of today**, not due at this exact second. A card you answered *Forgot* an hour ago is sitting in a learning step ten minutes out: it is not due right now, but it is coming back in this very session, and deleting its entry would take it out of the document that is meant to bring it back.
 
-### Exhausted documents are deleted too
+### Finished documents are deleted too
 
-A review document with **nothing due left in it** is finished. Leaving it behind keeps its Rem references in your knowledge base for nothing, so the cleaner offers to delete the document itself — including one that already holds no entries at all.
+A review document with **no flashcards left due in it** is finished. Leaving it behind keeps its Rem references in your knowledge base for nothing, so the cleaner offers to delete the document itself — including one that already holds no entries at all.
 
-This is a checkbox on the review screen, ticked by default: *Delete the N documents left with nothing due*. Untick it to clean the entries and keep the documents. Documents on their way out are struck through in the list and named in the report afterwards.
+This is a checkbox on the review screen, ticked by default: *Delete the N documents with no flashcards left due*. Untick it to clean the entries and keep the documents. Documents on their way out are struck through in the list and named in the report afterwards.
+
+!!! info "Why flashcards decide it, and incremental entries do not"
+    A review document exists to get **flashcards** reviewed in priority order, which is the one thing an ordinary queue will not do for you. **Incremental Rems are injected into every queue by the [sorting criteria](Prioritization-&-Sorting.md#sorting-criteria)** whether or not a review document points at them — so a document down to its `INC` entries has nothing left to offer, and its still-due incremental entries go with it when it is deleted.
+
+    The Rems themselves are untouched: only the document's *references* to them are removed, and they keep coming up in your queue exactly as before. The review screen counts those entries in the checkbox line before you delete anything, and the report names them afterwards.
 
 A document is only ever offered for deletion when it carries **none of your own writing**. Any of these keeps it:
 
 - an entry kept for the notes you wrote under it,
-- a bullet of your own added to the document,
-- an `INC` entry that could not be judged (see the note at the end).
+- notes you wrote under an `INC` entry that is staying,
+- a bullet of your own added to the document.
 
-Its metadata block and distribution graph do not count — those are the plugin's own. When a document holds nothing due but cannot be deleted, the review screen says so and why, and you can delete it by hand.
+Its metadata block and distribution graph do not count — those are the plugin's own. When a document has no flashcards due but cannot be deleted, the review screen says so and why, and you can delete it by hand.
 
 ### What it never deletes
 
@@ -211,12 +220,14 @@ Both kinds of kept entry are listed separately in the review screen as *Reviewed
 
 Run the command from the Command Palette. The scan is read-only and takes a few seconds — it answers every entry in every document from two knowledge-base-wide reads rather than one lookup per entry.
 
-The review screen lists each document with **how many entries are still due, how many have been reviewed, and how many it holds in total**, most recently built first. Expand any row to see the entries by name, with their `INC` / `FC` tag. Tick the documents you want cleaned — every document with work to do starts ticked — and press the button, which counts both the entries and the documents it will remove. Deleting cannot be undone, and `Enter` is inert on that screen: the red button has to be clicked.
+The review screen lists each document with **how many flashcards are still due, how many incremental entries it still holds, how many entries have been reviewed, and how many it holds in total**, most recently built first. Expand any row to see the entries by name, with their `INC` / `FC` tag. Tick the documents you want cleaned — every document with work to do starts ticked — and press the button, which counts both the entries and the documents it will remove. Deleting cannot be undone, and `Enter` is inert on that screen: the red button has to be clicked.
 
-Afterwards, each surviving document's metadata block gains a line recording what was removed, and the report names every document that was deleted, plus any that hold nothing due but were kept.
+Afterwards, each surviving document's metadata block gains a line recording what was removed, and the report names every document that was deleted, plus any that have no flashcards due but were kept.
 
 !!! note "Incremental Rems need the queue to have been opened once"
     `INC` entries are judged against the plugin's Incremental Rem cache. If that cache has not been built yet in this session, an unbuilt cache is indistinguishable from *every incremental Rem has been reviewed* — so the command says so and leaves all `INC` entries alone. Open the queue once and run it again.
+
+    This does not hold back document deletion: whether a flashcard is due is read from the card data, which is always available. An unjudged `INC` entry is still an `INC` entry, and does not keep a document alive.
 
 ---
 

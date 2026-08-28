@@ -29,19 +29,29 @@ For a deeper understanding, see [What is Incrementalism?](What-is-Incrementalism
 
 Once installed, the plugin adds a small **Incremental RemNote** 🌐 panel at the bottom of the left sidebar. It is the one fixed place to reach the plugin from, and where the onboarding tips live.
 
+![The Incremental RemNote panel in the sidebar: header controls, the Sorting button, the Priority Review group with its eye and broom actions, the scope line, and one onboarding tip](assets/panel-hub.png){ width="700" }
+
 **In the header:**
 
 | Control | What it does |
 |---------|--------------|
+| ⌨ | Opens the [Keyboard Shortcuts](Keyboard-Shortcuts.md) page |
 | ⚙ | Opens the plugin's [settings popup](Plugin-Settings-Reference.md) — every setting the plugin owns, grouped |
 | ? | Opens this documentation, at the home page |
 | ✕ | Hides the panel **for this session** — it is back next time you open RemNote. To bring it back sooner, run the **Show Incremental RemNote Panel** command |
 
-**Shortcut buttons:**
+**Action buttons:**
 
-- **⌨** — the [Keyboard Shortcuts](Keyboard-Shortcuts.md) page.
 - **Sorting** — the [flashcard/incremental mix and randomness](Prioritization-&-Sorting.md#sorting-criteria) for your queue.
-- **Priority Review** — creates a [Priority Review Document](Priority-Review-Document.md), scoped to the document you currently have open. This is the same as using **Create Priority Review Document** in the document menu, without having to open the menu; the scope it will use is named under the button. With no document open, it falls back to the whole knowledge base.
+- **Priority Review** — three actions on [Priority Review Documents](Priority-Review-Document.md), grouped into one control:
+
+| Button | What it does |
+|--------|--------------|
+| **Priority Review** | Creates a review document scoped to the document you currently have open. The same as **Create Priority Review Document** in the document menu, without opening the menu; the scope it will use is named under the button, and with no document open it falls back to the whole knowledge base |
+| 👁 | Opens the **Priority Review Queue** Rem — every review document you have built is tagged with it, so its references are the list of them. Go there to study from one you made earlier |
+| 🧹 | Runs [Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document) — strips the entries you have already reviewed and offers to delete the documents that are finished |
+
+The 👁 button says so if you have no review documents yet: the tag is created by the first one.
 
 ### Tips { #tips }
 

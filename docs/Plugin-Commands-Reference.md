@@ -110,7 +110,7 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   Generate a custom document that compiles your absolute highest priority Rems mixed with standard Flashcards for subset review.
 
 - **[Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document)** — `quick: cprd`
-  Scans every Priority Review Document, finds the entries whose Rem no longer has anything due — reviewed flashcards and Incremental Rems — and removes them after you confirm, per document. Documents left with nothing due are deleted outright. Entries you have written notes under, and documents holding them, are never touched.
+  Scans every Priority Review Document, finds the entries whose Rem no longer has anything due — reviewed flashcards and Incremental Rems — and removes them after you confirm, per document. Documents with **no flashcards left due** are deleted outright, since incremental Rems reach your queue through the sorting criteria without needing a review document. Entries you have written notes under, and documents holding them, are never touched. Also on the **🧹** button of the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel).
 
 - **[Open Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)** — `quick: sort`
   Brings up the Sorting dialog to manipulate the flashcard:increm ratio and queue randomization.
