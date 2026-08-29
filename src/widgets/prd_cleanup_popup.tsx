@@ -60,6 +60,12 @@ export function PrdCleanupPopup() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   /** Delete a document outright once cleaning leaves nothing due in it. */
   const [deleteEmptiedDocs, setDeleteEmptiedDocs] = useState(true);
+  /**
+   * Footer button the keyboard is on. Starts on Cancel: Enter reaching this
+   * popup is usually the tail of whatever keystroke opened it, and the other
+   * button is an irreversible delete.
+   */
+  const [footerFocus, setFooterFocus] = useState<'cancel' | 'run'>('cancel');
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -85,8 +91,28 @@ export function PrdCleanupPopup() {
     run();
   }, []);
 
+  // Keys are read on the container, not on the buttons: with focus on a button,
+  // Enter would fire the browser's native activation AND bubble up here, running
+  // the action twice. The retry loop is there to win against RemNote settling
+  // focus after the popup opens.
   useEffect(() => {
-    containerRef.current?.focus();
+    let cancelled = false;
+    const tryFocus = (attemptsLeft: number) => {
+      if (cancelled) return;
+      try {
+        window.focus();
+      } catch {
+        /* ignore */
+      }
+      containerRef.current?.focus();
+      if (document.activeElement !== containerRef.current && attemptsLeft > 0) {
+        setTimeout(() => tryFocus(attemptsLeft - 1), 50);
+      }
+    };
+    tryFocus(8);
+    return () => {
+      cancelled = true;
+    };
   }, [phase]);
 
   const close = () => plugin.widget.closePopup();
@@ -155,12 +181,35 @@ export function PrdCleanupPopup() {
       close();
       return;
     }
-    // No Enter-to-delete on the review screen — the destructive button is clicked.
+    // A focused button (Show, or a footer button reached by Tab) handles its own
+    // keys — otherwise Enter would fire both the native click and this handler.
+    if ((e.target as HTMLElement)?.tagName === 'BUTTON') return;
+
+    if (phase === 'review') {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        setFooterFocus((b) => (b === 'cancel' ? 'run' : 'cancel'));
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (footerFocus === 'cancel') close();
+        else runClean();
+      }
+      return;
+    }
+
     if ((phase === 'done' || phase === 'error') && e.key === 'Enter') {
       e.preventDefault();
       close();
     }
   };
+
+  /** The ring that marks the button Enter will press, as in the Empty ECD popup. */
+  const selectionRing = (isSelected: boolean): React.CSSProperties =>
+    isSelected
+      ? { outline: '2px solid var(--rn-clr-border-accent, #3B82F6)', outlineOffset: '2px' }
+      : {};
 
   const primaryButton: React.CSSProperties = {
     background: '#3B82F6',
@@ -463,25 +512,41 @@ export function PrdCleanupPopup() {
 
           <div className="flex items-center justify-between gap-2">
             <div className="text-xs" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
-              {nothingToDo
-                ? 'Nothing selected.'
-                : `About ${estimateDeleteTime(
-                    selectedEntryCount + selectedDocDeletions
-                  )}. This cannot be undone.`}
+              <div>
+                {nothingToDo
+                  ? 'Nothing selected.'
+                  : `About ${estimateDeleteTime(
+                      selectedEntryCount + selectedDocDeletions
+                    )}. This cannot be undone.`}
+              </div>
+              <div className="mt-0.5">
+                <span className="font-mono">←→</span> choose ·{' '}
+                <span className="font-mono">Enter</span> confirm ·{' '}
+                <span className="font-mono">Esc</span> cancel
+              </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={close} className="px-3 py-1.5 text-sm rounded" style={secondaryButton}>
+              <button
+                onClick={close}
+                onMouseEnter={() => setFooterFocus('cancel')}
+                onMouseDown={(e) => e.preventDefault()}
+                className="px-3 py-1.5 text-sm rounded"
+                style={{ ...secondaryButton, ...selectionRing(footerFocus === 'cancel') }}
+              >
                 Cancel
               </button>
               <button
                 onClick={runClean}
+                onMouseEnter={() => !nothingToDo && setFooterFocus('run')}
+                onMouseDown={(e) => e.preventDefault()}
                 disabled={nothingToDo}
                 className="px-4 py-1.5 text-sm font-medium rounded"
-                style={
-                  nothingToDo
+                style={{
+                  ...(nothingToDo
                     ? { ...secondaryButton, opacity: 0.5, cursor: 'not-allowed' }
-                    : dangerButton
-                }
+                    : dangerButton),
+                  ...selectionRing(footerFocus === 'run' && !nothingToDo),
+                }}
               >
                 {selectedEntryCount > 0 &&
                   `Remove ${selectedEntryCount.toLocaleString()} entr${
@@ -568,7 +633,12 @@ export function PrdCleanupPopup() {
             </div>
           )}
           <div className="flex justify-end">
-            <button onClick={close} className="px-4 py-1.5 text-sm font-medium rounded" style={primaryButton}>
+            <button
+              onClick={close}
+              onMouseDown={(e) => e.preventDefault()}
+              className="px-4 py-1.5 text-sm font-medium rounded"
+              style={{ ...primaryButton, ...selectionRing(true) }}
+            >
               Close
             </button>
           </div>
@@ -581,7 +651,12 @@ export function PrdCleanupPopup() {
             {error || 'Something went wrong — see the console.'}
           </div>
           <div className="flex justify-end">
-            <button onClick={close} className="px-4 py-1.5 text-sm font-medium rounded" style={primaryButton}>
+            <button
+              onClick={close}
+              onMouseDown={(e) => e.preventDefault()}
+              className="px-4 py-1.5 text-sm font-medium rounded"
+              style={{ ...primaryButton, ...selectionRing(true) }}
+            >
               Close
             </button>
           </div>
