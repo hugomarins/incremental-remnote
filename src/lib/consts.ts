@@ -492,3 +492,7 @@ export const sourceFloatingWidgetId = 'pdf_source_floating';
 export const sourceFloatingTargetKey = 'source-floating-target';
 export const sourceFloatingActiveIdKey = 'source-floating-active-id';
 
+
+// Convert literal \[..\] / \(..\) / **..** left by PDF text-layer extraction
+// into real RemNote rich text (formulas, bold, italic).
+export const convertExtractedMarkupCommandId = 'convert-extracted-markup';

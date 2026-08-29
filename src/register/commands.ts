@@ -9,6 +9,7 @@ import {
   RemType,
   QueueInteractionScore,
 } from '@remnote/plugin-sdk';
+import { convertRemTree } from '../lib/markup_to_richtext';
 import {
   powerupCode,
   currentIncRemKey,
@@ -24,6 +25,7 @@ import {
   showPluginHubCommandId,
   nextInQueueCommandId,
   togglePdfHighlightBordersCommandId,
+  convertExtractedMarkupCommandId,
   currentIncrementalRemTypeKey,
   incremReviewStartTimeKey,
   allCardPriorityInfoKey,
@@ -189,6 +191,33 @@ export async function registerCommands(plugin: ReactRNPlugin) {
       const enabled = await togglePdfHighlightBorders(plugin);
       await plugin.app.toast(
         enabled ? 'Highlight marker borders shown' : 'Highlight marker borders hidden (peek)'
+      );
+    },
+  });
+
+  // Convert literal markup left by PDF text-layer extraction into rich text.
+  // RemNote's highlight extraction runs no parser, so formulas arrive as the
+  // characters \[ ... \] and bold as **...**; this turns them into real nodes.
+  await plugin.app.registerCommand({
+    id: convertExtractedMarkupCommandId,
+    name: 'Convert extracted markup to rich text',
+    quickCode: 'cem',
+    action: async () => {
+      const focused = await plugin.focus.getFocusedRem();
+      if (!focused) {
+        await plugin.app.toast('No focused rem — place your cursor in a rem first.');
+        return;
+      }
+      const kids = await focused.getDescendants();
+      const { scanned, converted } = await convertRemTree(
+        plugin,
+        focused._id,
+        kids.length > 0
+      );
+      await plugin.app.toast(
+        converted === 0
+          ? `Nothing to convert (${scanned} rem${scanned === 1 ? '' : 's'} scanned).`
+          : `Converted ${converted} of ${scanned} rem${scanned === 1 ? '' : 's'}.`
       );
     },
   });
