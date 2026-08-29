@@ -45,6 +45,7 @@ import {
 } from '../lib/card_priority_snapshot';
 import { probeLocalPerKeyLimit, LocalLimitReport } from '../lib/local_storage_probe';
 import { probeRemCardEnablement, probeCardOwnership } from '../lib/card_analytics_export';
+import { probeAliasStructure, AliasProbeReport } from '../lib/alias_probe';
 import {
   OrphanCardAnalysis,
   KEEP_REASON_LABELS,
@@ -646,6 +647,8 @@ function Debug() {
   }>(null);
 
   const [isProbingSearch, setIsProbingSearch] = useState(false);
+  const [isProbingAlias, setIsProbingAlias] = useState(false);
+  const [aliasProbe, setAliasProbe] = useState<null | AliasProbeReport>(null);
   const [searchProbe, setSearchProbe] = useState<null | {
     plainString: string;
     typeLabel: string;
@@ -2220,24 +2223,31 @@ function Debug() {
     }
   };
 
-  // Spoiler-protection probe. The queue gate in lib/queue_prefetch decides that a
-  // dual-type rem is a "spoiler" when one of its OWN cards satisfies
-  // `(nextRepetitionTime ?? Infinity) <= now`. That predicate rests on a claim
-  // about the SDK — that an unscheduled card reports a null nextRepetitionTime —
-  // and getting it wrong in the other direction would hold an IncRem back in
-  // every session with no card ever appearing to release it. This prints the raw
-  // per-card state so the claim can be checked against real rems instead of
-  // assumed: disable one direction of a two-way card, or make a fresh
-  // never-practiced one, and read off what actually comes back.
+  // Spoiler-protection probe. The queue gate in lib/queue_prefetch decides that
+  // an IncRem is a "spoiler" when one of its OWN cards — or a card on one of its
+  // DIRECT children tagged `cloze-extract`, the clozes Alt+Z files underneath it
+  // — satisfies `(nextRepetitionTime ?? Infinity) <= now`. That predicate rests
+  // on a claim about the SDK — that an unscheduled card reports a null
+  // nextRepetitionTime — and getting it wrong in the other direction would hold
+  // an IncRem back in every session with no card ever appearing to release it.
+  // This prints the raw per-card state for both sources so the claim can be
+  // checked against real rems instead of assumed: disable one direction of a
+  // two-way card, or make a fresh never-practiced one, and read off what
+  // actually comes back.
   const handleProbeSpoilerState = async () => {
     if (!rem) return;
     const now = Date.now();
-    const [cards, enablePractice, direction] = await Promise.all([
+    const [ownCards, enablePractice, direction, children, clozeExtractTag] = await Promise.all([
       rem.getCards(),
       rem.getEnablePractice(),
       rem.getPracticeDirection(),
+      rem.getChildrenRem(),
+      plugin.rem.findByName(['cloze-extract'], null),
     ]);
-    const rows = cards.map((c) => ({
+
+    const describe = (c: any, source: string, ownerId: string) => ({
+      source,
+      ownerRemId: ownerId,
       cardId: c._id,
       type: typeof c.type === 'string' ? c.type : `cloze:${c.type.clozeId}`,
       nextRepetitionTime: c.nextRepetitionTime ?? null,
@@ -2246,15 +2256,65 @@ function Debug() {
       reps: c.repetitionHistory?.length ?? 0,
       // Exactly the predicate the queue gate applies.
       countsAsDue: (c.nextRepetitionTime ?? Infinity) <= now,
-    }));
+    });
+
+    const rows = ownCards.map((c) => describe(c, 'own', rem._id));
+
+    // Same walk the gate does: direct children only, cloze-extract tag only.
+    let clozeChildCount = 0;
+    if (clozeExtractTag) {
+      for (const child of children || []) {
+        const tags = await child.getTagRems();
+        if (!tags?.some((t) => t._id === clozeExtractTag._id)) continue;
+        clozeChildCount++;
+        const childCards = await child.getCards();
+        childCards.forEach((c) => rows.push(describe(c, 'cloze-extract child', child._id)));
+      }
+    }
+
+    // Cross-check the membership source. The gate reads the tag PER CHILD
+    // (getTagRems) rather than from the tag's taggedRem() member list, because
+    // that list is known to under-report — it enumerated three Rems on a KB
+    // holding thousands (see lib/empty_ecd_scan.ts). That finding was about
+    // BUILT-IN powerups, and cloze-extract is a plain plugin-made Rem, so it
+    // should not apply here; this prints the evidence either way rather than
+    // leaving it assumed. Two numbers matter: whether the KB-wide total is a
+    // plausible count of the user's Alt+Z extracts, and — the decisive one —
+    // whether every child getTagRems() found is actually PRESENT in that list.
+    // A child found per-rem but missing from the list is direct proof the list
+    // under-reports this tag too.
+    let membershipLine = 'no cloze-extract tag in this KB, membership cross-check skipped';
+    if (clozeExtractTag) {
+      try {
+        const members = await clozeExtractTag.taggedRem();
+        const memberIds = new Set(members.map((m) => m._id));
+        const foundChildIds = Array.from(new Set(rows.filter((r) => r.source === 'cloze-extract child').map((r) => r.ownerRemId)));
+        const missing = foundChildIds.filter((id) => !memberIds.has(id));
+        membershipLine =
+          `taggedRem() reports ${members.length} cloze-extract Rem(s) KB-wide; ` +
+          `of the ${foundChildIds.length} child/children getTagRems() found here, ` +
+          (missing.length === 0
+            ? 'all appear in that list (sources agree)'
+            : `${missing.length} MISSING from it [${missing.join(', ')}] — taggedRem() under-reports this tag`);
+      } catch (e) {
+        console.error('taggedRem() cross-check failed:', e);
+        membershipLine = 'taggedRem() cross-check threw — see console';
+      }
+    }
+
+    const dueCount = rows.filter((r) => r.countsAsDue).length;
+    console.log(`🔎 cloze-extract membership: ${membershipLine}.`);
     console.log(
       `🎭 Spoiler probe for ${rem._id}: enablePractice=${enablePractice}, direction=${direction}, ` +
-        `${cards.length} card(s), ${rows.filter((r) => r.countsAsDue).length} counted as due.`
+        `${ownCards.length} own card(s), ${clozeChildCount} cloze-extract child(ren) with ` +
+        `${rows.length - ownCards.length} card(s), ${dueCount} counted as due` +
+        (clozeExtractTag ? '' : ' — no cloze-extract tag in this KB, child check skipped') +
+        `.`
     );
     console.table(rows);
     await plugin.app.toast(
-      `${cards.length} card(s), ${rows.filter((r) => r.countsAsDue).length} due ` +
-        `(practice: ${enablePractice ? direction : 'off'}). See console.`
+      `${ownCards.length} own + ${rows.length - ownCards.length} cloze-child card(s), ` +
+        `${dueCount} due (practice: ${enablePractice ? direction : 'off'}).\n${membershipLine}.\nSee console.`
     );
   };
 
@@ -3591,6 +3651,31 @@ function Debug() {
     await plugin.app.toast(ok ? 'Copied to clipboard.' : 'Copy failed — long-press the box and Select All → Copy.');
   };
 
+  // Alias structure probe. The reference picker builds an alias reference as
+  // { i:'q', _id: <owner>, aliasId: <alias> } and gets that second id from
+  // rem.getAliases(); the objects it returns now carry readable text but an
+  // empty _id, so the picker inserts a plain reference and the alias text is
+  // lost. This asks every other route for the id — ids already written into
+  // existing references, the Aliases powerup property, child rems — and says
+  // which one the picker should use.
+  const handleAliasProbe = async () => {
+    if (!remId) {
+      await plugin.app.toast('Focus a rem first (one that has an alias).');
+      return;
+    }
+    setIsProbingAlias(true);
+    try {
+      const report = await probeAliasStructure(plugin, remId);
+      setAliasProbe(report);
+      console.log('[alias-probe]', report);
+    } catch (e) {
+      console.error('[alias-probe] failed:', e);
+      await plugin.app.toast(`Alias probe failed: ${(e as any)?.message ?? e}`);
+    } finally {
+      setIsProbingAlias(false);
+    }
+  };
+
   const handleSearchProbe = async () => {
     if (!remId) return;
     setIsProbingSearch(true);
@@ -4270,7 +4355,7 @@ function Debug() {
                    borderRadius: '4px',
                    cursor: 'pointer'
                  }}
-                 title="Print every card on this rem with its raw nextRepetitionTime and whether the queue's spoiler gate counts it as due"
+                 title="Print every card on this rem and on its cloze-extract children, with raw nextRepetitionTime and whether the queue's spoiler gate counts it as due"
                >
                  Probe Spoiler State
                </button>
@@ -5154,6 +5239,53 @@ function Debug() {
                 <li key={i} style={{ marginBottom: '2px' }}>{s}</li>
               ))}
             </ol>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: '16px' }}>
+        <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', paddingBottom: '4px', borderBottom: '1px solid var(--rn-clr-background-tertiary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Alias Structure
+          <button
+            onClick={handleAliasProbe}
+            disabled={isProbingAlias}
+            style={{ fontSize: '11px', padding: '2px 8px', backgroundColor: 'var(--rn-clr-background-secondary)', color: 'var(--rn-clr-content-primary)', border: '1px solid var(--rn-clr-border)', borderRadius: '4px', cursor: isProbingAlias ? 'wait' : 'pointer' }}
+          >
+            {isProbingAlias ? 'Probing…' : 'Probe Aliases'}
+          </button>
+        </h2>
+        <div style={{ fontSize: '12px', color: 'var(--rn-clr-content-tertiary)', marginBottom: '8px' }}>
+          Run on a rem that HAS an alias. Answers where an alias's id can still be read now that built-in powerups
+          are no longer stored as rems: what <code>getAliases()</code> hands back, which <code>aliasId</code>s existing
+          references already use and whether they still resolve, what the Aliases powerup property holds, and whether
+          any child rem is the alias. The reference picker needs exactly one of these to work.
+        </div>
+        {aliasProbe && (
+          <div style={{ fontSize: '11px' }}>
+            <div style={{ marginBottom: '8px', padding: '8px', backgroundColor: 'var(--rn-clr-background-secondary)', borderRadius: '4px', border: '1px solid var(--rn-clr-border)' }}>
+              <strong>Verdict for "{aliasProbe.remText.slice(0, 60)}"</strong>
+              <ul style={{ margin: '6px 0 0 0', paddingLeft: '18px' }}>
+                {aliasProbe.verdict.map((v, i) => (
+                  <li key={i} style={{ marginBottom: '4px' }}>{v}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex gap-4 mb-2" style={{ flexWrap: 'wrap' }}>
+              <Info className="" label="hasPowerup(Aliases)" data={String(aliasProbe.hasAliasesPowerup)} />
+              <Info className="" label="Aliases powerup id" data={aliasProbe.aliasesPowerupId ?? '—'} />
+              <Info className="" label="Slot code" data={aliasProbe.aliasSlotCode ?? '—'} />
+              <Info className="" label="getAliases() count" data={aliasProbe.getAliasesCount} />
+              <Info className="" label="Rems referencing this" data={aliasProbe.referencingRemCount} />
+            </div>
+            <Info
+              className=""
+              label="Best id per alias (what the picker would use)"
+              data={<pre style={preStyle}>{JSON.stringify(aliasProbe.resolvedAliases, null, 2)}</pre>}
+            />
+            <Info className="" label="A — getAliases() objects" data={<pre style={preStyle}>{JSON.stringify(aliasProbe.aliasObjects, null, 2)}</pre>} />
+            <Info className="" label="B — aliasIds found in existing references" data={<pre style={preStyle}>{JSON.stringify(aliasProbe.referenceAliases, null, 2)}</pre>} />
+            <Info className="" label="C — Aliases powerup property" data={<pre style={preStyle}>{JSON.stringify(aliasProbe.properties, null, 2)}</pre>} />
+            <Info className="" label="D — child rems" data={<pre style={preStyle}>{JSON.stringify(aliasProbe.children, null, 2)}</pre>} />
           </div>
         )}
       </div>

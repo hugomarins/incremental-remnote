@@ -1,5 +1,5 @@
 import { renderWidget, usePlugin, useTrackerPlugin } from '@remnote/plugin-sdk';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import '../style.css';
 import '../App.css';
 import { IE_DOCS_BASE_URL } from '../lib/settings';
@@ -89,6 +89,129 @@ const actionButtonStyle: React.CSSProperties = {
   textAlign: 'center',
   whiteSpace: 'nowrap',
 };
+
+/**
+ * The Priority Review trio is one segmented control rather than three buttons:
+ * the sidebar can be dragged to ~130px of usable width, and three separate
+ * bordered buttons would spend ~10px of that on borders and gaps that say
+ * nothing. Collapsing them into a single outline also says the right thing —
+ * create, browse and clean are three doors onto the same feature.
+ */
+const segmentedGroupStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'stretch',
+  flex: '1 1 auto',
+  minWidth: 0,
+  height: 22,
+  borderRadius: 5,
+  border: '1px solid var(--rn-clr-border-primary, #cbd5e1)',
+  overflow: 'hidden',
+};
+
+/** A cell inside the group: no outline of its own, just a divider on its left. */
+const segmentStyle: React.CSSProperties = {
+  background: 'transparent',
+  color: 'var(--rn-clr-content-secondary, #64748b)',
+  fontSize: 11,
+  lineHeight: '16px',
+  fontWeight: 500,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  border: 'none',
+};
+
+/** The icon cells are fixed; only the label cell gives ground as the panel narrows. */
+const segmentIconStyle: React.CSSProperties = {
+  ...segmentStyle,
+  width: 22,
+  flex: '0 0 auto',
+  fontSize: 12,
+  borderLeft: '1px solid var(--rn-clr-border-primary, #cbd5e1)',
+};
+
+/**
+ * The panel's title, as two words that are dropped whole rather than cut.
+ *
+ * A plain `truncate` on "Incremental RemNote" produces "Incremental Re…" in a
+ * narrow sidebar, which reads as a different plugin's name. Losing the second
+ * word entirely is the honest fallback: "Incremental" is still this plugin.
+ *
+ * CSS cannot express "hide the last word if it does not fit" — `overflow` cuts
+ * mid-glyph and `text-overflow` only adds the ellipsis — so the width is
+ * measured and the text chosen.
+ *
+ * Both halves of that measurement have a trap in them:
+ *
+ * - **The box must not be sized by its own text**, or the question answers
+ *   itself: a box holding "Incremental" is only as wide as "Incremental", so
+ *   the full name would never look like it fits again and the second word could
+ *   never come back. It therefore *fills* the row (`flex: 1 1 auto` here and on
+ *   the wrapper), which makes its width the space available and nothing else.
+ * - **The comparison must be sub-pixel.** `clientWidth` and `scrollWidth` are
+ *   rounded to integers, and `text-overflow` fires on an overflow of any size:
+ *   a box 0.02px narrower than its text reports 70 against 70 and still paints
+ *   "Incremen…", dropping three characters to make room for the ellipsis. The
+ *   natural width comes from an out-of-flow probe and both sides are read as
+ *   fractions, with a quarter-pixel of margin so a hairline fit renders the
+ *   short form rather than an ellipsised long one.
+ */
+function PanelTitle() {
+  const boxRef = useRef<HTMLSpanElement>(null);
+  const probeRef = useRef<HTMLSpanElement>(null);
+  const [showFull, setShowFull] = useState(true);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const probe = probeRef.current;
+    if (!box || !probe) return;
+
+    const measure = () =>
+      setShowFull(
+        probe.getBoundingClientRect().width <= box.getBoundingClientRect().width - 0.25
+      );
+    measure();
+
+    // The box for the space available, the probe for the text's natural width —
+    // which changes when a web font finishes loading, and would otherwise leave
+    // the first measurement standing on the fallback font's metrics.
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    observer.observe(probe);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <span
+      ref={boxRef}
+      className="truncate"
+      style={{ flex: '1 1 auto', minWidth: 0, position: 'relative', fontSize: 12.5, fontWeight: 600 }}
+      title="Incremental RemNote"
+    >
+      {showFull ? 'Incremental RemNote' : 'Incremental'}
+      <span
+        ref={probeRef}
+        aria-hidden
+        // `width: max-content` matters: an absolutely positioned box with `auto`
+        // width shrinks to fit its containing block, which is the very box being
+        // measured — it would report the space available, not the text's width.
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: 'max-content',
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          whiteSpace: 'pre',
+        }}
+      >
+        Incremental RemNote
+      </span>
+    </span>
+  );
+}
 
 function IconButton(props: {
   label: string;
@@ -268,6 +391,35 @@ export function PluginHub() {
   }, [plugin]);
 
   /**
+   * Opens the "Priority Review Queue" tag Rem — the one place every Priority
+   * Review Document shows up, since the creator tags each document with it. Its
+   * references list is the browsable index of past documents, and the queue can
+   * be entered from any of them.
+   *
+   * The tag is created lazily by the first document, so its absence is not an
+   * error state: it means there is nothing to browse yet, and the toast points
+   * at the button that fixes that.
+   */
+  const openPriorityReviewQueue = useCallback(async () => {
+    // Literal rather than the PRD_TAG_NAME export: that module pulls dayjs and
+    // the IncRem cache in behind it, and this panel is mounted for the whole
+    // session.
+    const tagRem = await plugin.rem.findByName(['Priority Review Queue'], null);
+    if (!tagRem) {
+      await plugin.app.toast(
+        'No Priority Review Documents yet — create one with the button to the left.'
+      );
+      return;
+    }
+    await plugin.window.openRem(tagRem);
+  }, [plugin]);
+
+  /** The "Clean Priority Review Documents" command, as a button. */
+  const openPrdCleanup = useCallback(async () => {
+    await plugin.widget.openPopup('prd_cleanup_popup');
+  }, [plugin]);
+
+  /**
    * What the Priority Review button will scope to, shown under it so the user is
    * not guessing which document they are about to collect. Tracked rather than
    * read once — the open document changes while the panel stays mounted.
@@ -295,21 +447,22 @@ export function PluginHub() {
   return (
     <div style={containerStyle} className="flex flex-col gap-1.5 p-2 rounded-lg mb-2">
       <div className="flex items-center justify-between gap-1">
-        <div className="flex items-center gap-1 min-w-0">
+        {/* Fills the row so the title's width is the space left by the icons,
+            not the width of whichever text it currently holds. */}
+        <div className="flex items-center gap-1 min-w-0" style={{ flex: '1 1 auto' }}>
           <img
             src={`${plugin.rootURL}globe-icon.png`}
             alt=""
             style={{ width: 16, height: 16, flex: '0 0 auto' }}
           />
-          <span
-            className="truncate"
-            style={{ fontSize: 12.5, fontWeight: 600 }}
-            title="Incremental RemNote"
-          >
-            Incremental RemNote
-          </span>
+          <PanelTitle />
         </div>
         <div className="flex items-center gap-0.5">
+          <IconButton
+            label="Keyboard shortcuts"
+            glyph="⌨"
+            onClick={() => openDocs('Keyboard-Shortcuts/')}
+          />
           <IconButton
             label="Open the plugin's settings"
             glyph="⚙"
@@ -329,32 +482,76 @@ export function PluginHub() {
       </div>
 
       <div className="flex gap-1">
-        <IconButton
-          label="Keyboard shortcuts"
-          glyph="⌨"
-          onClick={() => openDocs('Keyboard-Shortcuts/')}
-          style={{ height: 22, width: 24, borderRadius: 5, fontSize: 12 }}
-        />
         <button
           onClick={() => plugin.widget.openPopup('sorting_criteria')}
-          style={{ ...actionButtonStyle, flex: '1 1 0', minWidth: 0 }}
+          // Sized to its own word, not to half the row: "Sorting" is a fixed
+          // label that never needs more, while the Priority Review group has a
+          // longer label plus two icon cells to fit. It still shrinks (0 1) if
+          // the sidebar is dragged narrower than the two of them together.
+          style={{
+            ...actionButtonStyle,
+            flex: '0 1 auto',
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
           className="hover:opacity-75"
           title="Sorting Criteria — the mix of flashcards, incremental items and randomness in your queue"
         >
           Sorting
         </button>
-        <button
-          onClick={openReviewDocumentCreator}
-          style={{ ...actionButtonStyle, flex: '1 1 0', minWidth: 0 }}
-          className="hover:opacity-75"
-          title={
-            scopeName
-              ? `Create a Priority Review Document scoped to "${scopeName}"`
-              : 'Create a Priority Review Document'
-          }
-        >
-          Priority Review
-        </button>
+
+        {/*
+          Create / browse / clean, in the order you meet them. The label cell is
+          the only one that flexes, and it truncates rather than overflowing its
+          box the way a `nowrap` button does at sidebar widths.
+        */}
+        <div style={segmentedGroupStyle}>
+          <button
+            onClick={openReviewDocumentCreator}
+            style={{
+              ...segmentStyle,
+              flex: '1 1 0',
+              minWidth: 0,
+              padding: '0 5px',
+              // `display: block` is what makes the ellipsis work, and it costs
+              // the flex centring — so the line box is the group's 20px inner
+              // height instead.
+              lineHeight: '20px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
+              textAlign: 'center',
+            }}
+            className="hover:opacity-75"
+            title={
+              scopeName
+                ? `Create a Priority Review Document scoped to "${scopeName}"`
+                : 'Create a Priority Review Document'
+            }
+          >
+            Priority Review
+          </button>
+          <button
+            onClick={openPriorityReviewQueue}
+            style={segmentIconStyle}
+            className="hover:opacity-75"
+            title="Open the “Priority Review Queue” Rem — every Priority Review Document you have made, ready to study from"
+            aria-label="Open the Priority Review Queue Rem"
+          >
+            👁
+          </button>
+          <button
+            onClick={openPrdCleanup}
+            style={segmentIconStyle}
+            className="hover:opacity-75"
+            title="Clean Priority Review Documents — remove the entries whose Rem no longer has anything due"
+            aria-label="Clean Priority Review Documents"
+          >
+            🧹
+          </button>
+        </div>
       </div>
 
       {scopeName && (

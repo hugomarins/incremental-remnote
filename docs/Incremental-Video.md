@@ -30,10 +30,12 @@ There are two ways a YouTube video Incremental Rem can be displayed in the queue
 When you paste a YouTube URL directly into RemNote and make the Rem incremental, the plugin uses RemNote's **built-in video player** (NativeVideoViewer). This happens because RemNote processes the YouTube URL internally in a way that prevents the plugin from retrieving it.
 
 **Benefits:**
+
 - All of RemNote's native YouTube features: **highlight moments**, **AI Summary**, **AI Tutor**
 - Familiar RemNote experience
 
 **Limitations:**
+
 - ❌ **No Video Extracts** — the Extract button is not available
 - ❌ **No session-level position tracking** — RemNote saves your last playback position, but if you open the video outside an Incremental Session (e.g., in the editor), its position resets. Your next Incremental Session will start from that point, not from where the last session left off.
 - ❌ **No automatic transcription**
@@ -47,6 +49,7 @@ To enable **Video Extracts and automatic transcription**, import the video using
 ![Making a Video Incremental for Extract Mode](assets/YT-make-incremental-Extract-Mode.png)
 
 **Benefits:**
+
 - ✅ **Video Extracts** (1) — mark specific passages with start/end times
 - ✅ **Session-level position tracking** — resume where you left off in each Incremental Session
 - ✅ **Automatic transcription** (macOS, with local proxy)
@@ -57,6 +60,7 @@ To enable **Video Extracts and automatic transcription**, import the video using
 
 
 **Limitations:**
+
 - Does not have RemNote's built-in YouTube features (highlight moments, AI Summary, AI Tutor)
 
 > **Which should I use?** If you plan to create extracts from the video (recommended for lectures and long content), use the **RemNote Clipper**. If you just want to watch and take notes with RemNote's AI tools, paste the URL directly.
@@ -107,6 +111,7 @@ When creating a Video Extract, the plugin can automatically fetch the YouTube tr
 Transcript fetching uses a small local proxy server that runs on your machine. This is necessary because YouTube's transcript API requires requests from a residential IP address — cloud-hosted proxies (like Cloudflare Workers) are blocked by YouTube.
 
 The proxy:
+
 - Uses **zero external dependencies** — runs with Node.js built-in modules only
 - Listens on `http://localhost:3456`
 - Fetches YouTube caption data through YouTube's internal API
@@ -173,6 +178,7 @@ If the proxy is not running or the video has no captions available, the extract 
 ---
 
 **See also:**
+
 - [What is Incrementalism?](What-is-Incrementalism%3F.md)
 - [PDF Incremental Reading Workflow](PDF-Incremental-Reading-Workflow.md)
 - [Reviewing Items in the Queue](Reviewing-Items-in-the-Queue.md)

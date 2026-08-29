@@ -79,6 +79,7 @@ The percentages next to **Incremental** and **Dismissed** show each one's share 
 The bold **Total** row sums Items / w-Reps / Reps / Time across the three types. Retention and Speed are not aggregated across types (they aren't meaningfully addable).
 
 Filtering rules match the plugin's other authoritative-summary tooling:
+
 - Cards count only when scored `AGAIN`, `HARD`, `GOOD`, or `EASY` (RemNote's `TOO_EARLY`, `VIEWED_AS_LEECH`, `RESET`, `MANUAL_DATE`, `MANUAL_EASE` are excluded).
 - IncRem reps count only for `rep`, `executeRepetition`, and `rescheduledInQueue` event types (rescheduledInEditor, manualDateReset, lifecycle markers are excluded).
 - Card response time is capped by the **Flashcard response time limit** setting (default 180 s). IncRem `reviewTimeSeconds` is intentionally **uncapped** — an IncRem rep can legitimately span minutes of reading.

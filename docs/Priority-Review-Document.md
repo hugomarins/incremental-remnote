@@ -14,6 +14,7 @@ This creates a problem when you are overwhelmed. If you have 1000 due flashcards
 The **Priority Review Document** bypasses this limitation by creating a temporary document filled with **Rem References (Portals)** to your most important due items.
 
 When you practice this specific document, you are guaranteed to see:
+
 1.  **High-Priority Flashcards** first.
 2.  **High-Priority Incremental Rems** interleaved according to your ratio settings.
 3.  A manageable workload (e.g., exactly 50 items) instead of an endless queue.
@@ -37,6 +38,10 @@ You can create a review document from anywhere in RemNote:
 
 * **Keyboard Shortcut:** Press [`Opt+Shift+R`](Keyboard-Shortcuts.md#batch-operations) (Mac) or [`Alt+Shift+R`](Keyboard-Shortcuts.md#batch-operations) (Windows).
 
+* **Sidebar Panel:** The **Priority Review** button in the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel), which names the scope it will use underneath it. The two buttons beside it are the other half of the workflow — **👁** opens the **Priority Review Queue** Rem, where every document you have built is listed, and **🧹** runs [Clean Priority Review Documents](#cleaning-a-review-document).
+
+![The Incremental RemNote panel: the Priority Review button with its eye and broom actions, and the scope it is about to use named underneath](assets/panel-hub.png){ width="700" }
+
 ### 2. Configure Your Session
 A popup will appear allowing you to tailor the session:
 
@@ -53,6 +58,7 @@ A popup will appear allowing you to tailor the session:
 
 > **Keyboard tip :keyboard: :** 
 > The popup is fully keyboard-navigable:
+>
 > * **Initial focus** lands on the **Scope** radio buttons when the popup opens — no mouse click needed to start.
 > * **↑ / ↓ arrow keys** switch between "Current Document" (↑) and "Full Knowledge Base" (↓) (when "Scope" selection section is focused), and increment/decrement the "Number of Items" (if focused) by 10.
 > * **Tab / Shift+Tab** cycles between the Scope selection and the Number of Items field.
@@ -64,6 +70,7 @@ A popup will appear allowing you to tailor the session:
 ### 3. Review
 Click (5) **"Create Review Document"**.
 The plugin will generate a new document tagged `#Priority Review Queue` and automatically open it.
+
 1.  Click the **Practice** button (Flashcards) on this new document.
 2.  Review your items as normal.
 3.  When finished, you can safely **delete** the Priority Review Document. The actual items (your cards and notes) are just references; deleting the review document **does not** delete your actual data.
@@ -94,6 +101,7 @@ To help users visualize how the items are selected, a **Priority Distribution Gr
 ![Priority Review Doc Graph](assets/priority-review-doc-graph.png){ width="800" }
 
 This visualization helps you verify:
+
 *   **The effect of Randomness:** See how "shuffled" your review session is compared to a strict priority order.
 *   **[Priority Shield](Prioritization-&-Sorting.md#priority-shield) Logic:** Confirm that the system is correctly prioritizing your high-value items as expected.
 *   **Scope Distribution:** Visualize the balance of absolute priorities and relative percentiles within your included Incremental Rems and Flashcards.
@@ -119,6 +127,7 @@ This check is **lazy**: the ancestor walk runs for each card as it is pulled int
 ### What You See
 
 After creation, if any items were skipped:
+
 - A **warning panel** replaces the "How it works" info box, showing the count and a scrollable list of skipped rems (name + priority score).
 - Items with priority < 20 are highlighted in **red** to flag potential high-priority oversight.
 - The document's **metadata code block** includes a `Skipped (paused docs): N flashcard rems` line.
@@ -180,29 +189,50 @@ The **Clean Priority Review Documents** command (quick code `cprd`) removes thos
 It reads *every* review document in your knowledge base, works out which entries still have something due, and shows you the result **before** anything is deleted:
 
 - **`FC` entries** are kept when the referenced Rem still has a card of its own due. Descendants are not consulted — the document never selected that Rem for its children's cards, so cleaning does not keep it for them either.
-- **`INC` entries** are kept when the referenced Rem is still an Incremental Rem whose next repetition has arrived.
+- **`INC` entries** are kept when the referenced Rem is still an Incremental Rem whose next repetition has arrived. (They are kept *as entries* — but they are not what keeps the **document** alive; see [below](#finished-documents-are-deleted-too).)
 - **Entries whose Rem has been deleted** are removed.
 
 "Due" here means **due at any point up to the end of today**, not due at this exact second. A card you answered *Forgot* an hour ago is sitting in a learning step ten minutes out: it is not due right now, but it is coming back in this very session, and deleting its entry would take it out of the document that is meant to bring it back.
+
+### Finished documents are deleted too
+
+A review document with **no flashcards left due in it** is finished. Leaving it behind keeps its Rem references in your knowledge base for nothing, so the cleaner offers to delete the document itself — including one that already holds no entries at all.
+
+This is a checkbox on the review screen, ticked by default: *Delete the N documents with no flashcards left due*. Untick it to clean the entries and keep the documents. Documents on their way out are struck through in the list and named in the report afterwards.
+
+!!! info "Why flashcards decide it, and incremental entries do not"
+    A review document exists to get **flashcards** reviewed in priority order, which is the one thing an ordinary queue will not do for you. **Incremental Rems are injected into every queue by the [sorting criteria](Prioritization-&-Sorting.md#sorting-criteria)** whether or not a review document points at them — so a document down to its `INC` entries has nothing left to offer, and its still-due incremental entries go with it when it is deleted.
+
+    The Rems themselves are untouched: only the document's *references* to them are removed, and they keep coming up in your queue exactly as before. The review screen counts those entries in the checkbox line before you delete anything, and the report names them afterwards.
+
+A document is only ever offered for deletion when it carries **none of your own writing**. Any of these keeps it:
+
+- an entry kept for the notes you wrote under it,
+- notes you wrote under an `INC` entry that is staying,
+- a bullet of your own added to the document.
+
+Its metadata block and distribution graph do not count — those are the plugin's own. When a document has no flashcards due but cannot be deleted, the review screen says so and why, and you can delete it by hand.
 
 ### What it never deletes
 
 - **Entries you have written under.** If you added notes as children of an entry, it is kept — deleting a Rem takes its descendants with it, and those notes are not recoverable by re-running the command.
 - **Entries you have typed next to.** Anything beyond the bare reference counts as yours.
-- **The document itself**, its metadata block, its distribution graph, and any bullet of your own that holds no reference.
+- **Any bullet of your own** in the document that holds no reference — and, as above, the document itself for as long as it holds one.
 
-Both kinds are listed separately in the review screen as *Reviewed, but kept*, so you can deal with them by hand.
+Both kinds of kept entry are listed separately in the review screen as *Reviewed, but kept*, so you can deal with them by hand.
 
 ### Using it
 
 Run the command from the Command Palette. The scan is read-only and takes a few seconds — it answers every entry in every document from two knowledge-base-wide reads rather than one lookup per entry.
 
-The review screen lists each document with **how many entries are still due, how many have been reviewed, and how many it holds in total**, most recently built first. Expand any row to see the entries by name, with their `INC` / `FC` tag. Tick the documents you want cleaned — every document with work to do starts ticked — and press **Remove**. Deleting cannot be undone, and `Enter` is inert on that screen: the red button has to be clicked.
+The review screen lists each document with **how many flashcards are still due, how many incremental entries it still holds, how many entries have been reviewed, and how many it holds in total**, most recently built first. Expand any row to see the entries by name, with their `INC` / `FC` tag. Tick the documents you want cleaned — every document with work to do starts ticked — and press the button, which counts both the entries and the documents it will remove. Deleting cannot be undone, and `Enter` is inert on that screen: the red button has to be clicked.
 
-Afterwards, each cleaned document's metadata block gains a line recording what was removed, and any document left holding **nothing due at all** is named in the report — those are finished, and can be deleted.
+Afterwards, each surviving document's metadata block gains a line recording what was removed, and the report names every document that was deleted, plus any that have no flashcards due but were kept.
 
 !!! note "Incremental Rems need the queue to have been opened once"
     `INC` entries are judged against the plugin's Incremental Rem cache. If that cache has not been built yet in this session, an unbuilt cache is indistinguishable from *every incremental Rem has been reviewed* — so the command says so and leaves all `INC` entries alone. Open the queue once and run it again.
+
+    This does not hold back document deletion: whether a flashcard is due is read from the card data, which is always available. An unjudged `INC` entry is still an `INC` entry, and does not keep a document alive.
 
 ---
 
@@ -211,7 +241,7 @@ Afterwards, each cleaned document's metadata block gains a line recording what w
 * **The "Overwhelmed" Workflow:** If you wake up to 1000+ due cards, don't panic. Create a Priority Review Document for 100 items (Full KB). Review them. If you have energy left, create another. If not, you can stop knowing you tackled the most important 100 items.
 * **The "Deep Dive" Workflow:** If you want to focus specifically on one project, navigate to that folder, create a Priority Review Document (Current Document scope), and finish that queue completely before moving on.
 * **Maintain Priority Hygiene:** To ensure your Priority Review Documents accurately catch your most critical content, regularly set priorities on your key documents and flashcards. Crucially, run the "**[Priorities-for-Flashcards#maintenance-the-update-all-inherited-card-priorities-command](Priorities-for-Flashcards.md#manual-full-kb-sweep-update-all-inherited-card-priorities)**" command periodically (e.g., weekly). This updates the priority inheritance across your entire knowledge base, ensuring that every single flashcard — even those you haven't manually touched — inherits the correct priority from its parent document.
-* **Cleanup:** Get in the habit of deleting these documents after you finish the queue. They are meant to be temporary snapshots of your priorities at that specific moment. Leaving them in your collection will create unnecessary rem references to your items, cluttering the UI and making your KB heavier and slower. If you would rather keep a document in play across several sessions, run [Clean Priority Review Documents](#cleaning-a-review-document) so it stops serving what you have already reviewed.
+* **Cleanup:** Get in the habit of deleting these documents after you finish the queue. They are meant to be temporary snapshots of your priorities at that specific moment. Leaving them in your collection will create unnecessary rem references to your items, cluttering the UI and making your KB heavier and slower. [Clean Priority Review Documents](#cleaning-a-review-document) does both halves of this for you: it stops a document you are keeping in play from serving what you have already reviewed, and deletes the ones you have finished.
 
 ---
 
@@ -233,6 +263,7 @@ This section documents how the plugin distinguishes between **active**, **paused
 **`plugin.card.getAll()`** returns *all* cards in the knowledge base, regardless of state — active, due, disabled, and paused-deck cards alike. This is the call used when building the priority cache at startup.
 
 **`rem.getCards()`** returns the cards for a specific rem but behaves differently depending on rem state:
+
 - For a **normal rem**: returns the rem's cards as expected.
 - For a rem inside a **paused document**: returns `[]` — the SDK silently suppresses the cards. This makes `rem.getCards()` an *unreliable* source for building the full card universe; use `plugin.card.getAll()` instead.
 - For a rem with **disabled cards**: also returns `[]`.

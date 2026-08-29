@@ -1,4 +1,4 @@
-import { ReactRNPlugin, RemId } from '@remnote/plugin-sdk';
+import { PluginRem, ReactRNPlugin, RemId } from '@remnote/plugin-sdk';
 import * as _ from 'remeda';
 import {
   allIncrementalRemKey,
@@ -374,9 +374,86 @@ type Verdict =
   | 'invalid';
 
 /**
+ * Resolves the `cloze-extract` tag Rem, or null when the KB has none yet.
+ *
+ * It is a plain named Rem, not a powerup — `register/commands.ts` creates it
+ * lazily the first time "Extract as cloze" runs — so a user who has never used
+ * Alt+Z simply has no such tag and the child check is skipped entirely. Resolved
+ * once per build rather than per candidate: it is one round-trip on a path that
+ * already issues dozens, and re-reading it each build means a tag created (or
+ * recreated) mid-session is picked up by the next rebuild without any cache to
+ * invalidate.
+ */
+async function resolveClozeExtractTagId(plugin: ReactRNPlugin): Promise<RemId | null> {
+  try {
+    const tag = await plugin.rem.findByName(['cloze-extract'], null);
+    return tag?._id ?? null;
+  } catch (e) {
+    console.error('[prefetch] cloze-extract tag lookup failed:', e);
+    return null;
+  }
+}
+
+/**
+ * True when a DIRECT child of `rem` carries the `cloze-extract` tag and owns a
+ * card RemNote would schedule right now.
+ *
+ * Membership is read per child (`getTagRems`) rather than from the tag's
+ * `taggedRem()` member list, for two independent reasons.
+ *
+ * CORRECTNESS first: `taggedRem()` under-reports. On a KB holding thousands of
+ * Extra Card Detail Rems it enumerated THREE while `hasPowerup` returned true on
+ * those same Rems — see the finding recorded in lib/empty_ecd_scan.ts. A gate
+ * built on it would silently stop protecting most of the graph, and silence is
+ * the one failure mode this subsystem cannot afford. The under-reporting is a
+ * BUILT-IN POWERUP problem, though, and `cloze-extract` is neither built-in nor
+ * a powerup — register/commands.ts creates it as a plain Rem and attaches it
+ * with addTag() — which is precisely the case that same finding says
+ * `getTagRems()` reports correctly. Confirmed on a real dual-extract parent: the
+ * probe found both tagged children.
+ *
+ * COST second: the member list would be one call instead of many, but it returns
+ * every cloze extract in the KB — thousands of Rems on a mature graph —
+ * deserialized across the bridge on every rebuild, which is the kind of cost
+ * this module exists to keep out of a study session. A candidate's children are
+ * a handful of Rems and they are read concurrently, so the wall time is one
+ * round-trip deep regardless of fan-out.
+ *
+ * Fails OPEN, like the own-cards gate: a read that throws reports "no spoiler"
+ * and the IncRem is shown, rather than being silently withheld.
+ */
+async function hasDueClozeExtractChild(
+  rem: PluginRem,
+  clozeExtractTagId: RemId,
+  now: number
+): Promise<boolean> {
+  try {
+    const children = (await rem.getChildrenRem()) || [];
+    if (children.length === 0) return false;
+    const spoils = await Promise.all(
+      children.map(async (child: PluginRem) => {
+        const tags = await child.getTagRems();
+        if (!tags?.some((t: PluginRem) => t._id === clozeExtractTagId)) return false;
+        const cards = await child.getCards();
+        // Same predicate as the own-cards gate, for the same reasons: a disabled
+        // direction is absent from getCards() entirely, and a never-practiced
+        // cloze carries a real nextRepetitionTime, so a freshly extracted cloze
+        // counts as due — the case that matters most, since the extract would be
+        // giving away an answer the user has never recalled.
+        return cards.some((c) => (c.nextRepetitionTime ?? Infinity) <= now);
+      })
+    );
+    return spoils.some(Boolean);
+  } catch (e) {
+    console.error('[prefetch] cloze-extract child check failed for', rem._id, e);
+    return false;
+  }
+}
+
+/**
  * Decides whether a candidate is still a genuine Incremental Rem, and — when
- * spoiler protection is on — whether showing it now would give away one of its
- * own flashcards.
+ * spoiler protection is on — whether showing it now would give away a flashcard
+ * the queue still owes the user.
  *
  * This is the expensive part — roughly eleven serial SDK round-trips per
  * candidate (hasPowerup, two Daily-Doc resolutions of three calls each, the
@@ -384,29 +461,43 @@ type Verdict =
  * at 114–231ms. It used to run inside GetNextCard, between the decision and the
  * return. Here it runs while the user is reading.
  *
- * The card read is issued CONCURRENTLY with the IncRem verification rather than
- * after it, so spoiler protection costs no additional wall time — only one more
- * in-flight request on a path that already has eleven.
+ * Both spoiler reads — the rem's own cards, and the cloze-extract child walk —
+ * are issued CONCURRENTLY with the IncRem verification rather than after it, so
+ * protection costs no additional wall time, only more in-flight requests on a
+ * path that already has eleven.
  *
- * SCOPE: the rem's OWN cards only. An extract can equally well spoil cards on
- * its descendants, but that needs getDescendants() per candidate, which is a
- * different order of cost and wants a cache of its own. Deliberately left out of
- * this first cut.
+ * SCOPE: the rem's own cards, PLUS the cards of its direct children tagged
+ * `cloze-extract` — the clozes that "Extract as cloze" (Alt+Z) carves out of an
+ * extract and files directly underneath it. Those children quote the parent's
+ * sentence verbatim with one span blanked out, so the parent spoils them exactly
+ * as it spoils its own cards; before this, an IncRem with no cards of its own
+ * sailed through the gate and gave away every cloze extracted from it.
+ *
+ * Deeper descendants and untagged children remain out of scope. The tag is what
+ * makes this affordable: it identifies the spoiling children without walking the
+ * subtree, which would need getDescendants() per candidate — a different order
+ * of cost that wants a cache of its own.
  */
 async function verifyCandidate(
   plugin: ReactRNPlugin,
   candidate: SlimIncRem,
-  checkSpoiler: boolean
+  checkSpoiler: boolean,
+  clozeExtractTagId: RemId | null
 ): Promise<Verdict> {
   try {
     const rem = await plugin.rem.findOne(candidate.remId);
     if (!rem) return 'invalid';
-    const [incRem, cards] = await Promise.all([
+    const now = Date.now();
+    const [incRem, cards, clozeChildSpoils] = await Promise.all([
       getIncrementalRemFromRem(plugin, rem),
       checkSpoiler ? rem.getCards() : Promise.resolve([]),
+      checkSpoiler && clozeExtractTagId
+        ? hasDueClozeExtractChild(rem, clozeExtractTagId, now)
+        : Promise.resolve(false),
     ]);
     if (!incRem) return 'invalid';
     if (!checkSpoiler) return 'ok';
+    if (clozeChildSpoils) return 'spoiler';
 
     // Two things had to be true for this gate to be safe, and both were measured
     // on real rems (debug widget → "Probe Spoiler State") rather than assumed:
@@ -431,7 +522,6 @@ async function verifyCandidate(
     //
     // `?? Infinity` therefore covers only genuinely unscheduled cards, and it
     // fails OPEN: an unrecognised state shows the IncRem rather than hiding it.
-    const now = Date.now();
     return cards.some((c) => (c.nextRepetitionTime ?? Infinity) <= now) ? 'spoiler' : 'ok';
   } catch (e) {
     console.error('[prefetch] verify failed for', candidate.remId, e);
@@ -529,6 +619,11 @@ export async function buildQueuePrefetch(
     // the user is drilling, not being scored by the scheduler.
     const checkSpoiler = deferSpoilers && info.mode === 'normal';
 
+    // Resolved here, once, so the per-candidate child check is a tag-id compare
+    // rather than a lookup. Null when the KB has no cloze-extract tag yet, which
+    // switches the child check off without costing anything per candidate.
+    const clozeExtractTagId = checkSpoiler ? await resolveClozeExtractTagId(plugin) : null;
+
     // Verify from the front in windows, keeping order, until the buffer is full
     // or we run out of candidates. Parallel within a window because these are
     // independent reads and this is off the critical path anyway.
@@ -547,7 +642,7 @@ export async function buildQueuePrefetch(
       }
       cursor += window.length;
       const results = await Promise.all(
-        window.map((c) => verifyCandidate(plugin, c, checkSpoiler))
+        window.map((c) => verifyCandidate(plugin, c, checkSpoiler, clozeExtractTagId))
       );
       window.forEach((candidate, i) => {
         if (results[i] === 'ok') verified.push(candidate);

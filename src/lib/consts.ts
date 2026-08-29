@@ -38,6 +38,20 @@ export const hasImagePowerupCode = 'hasImage';
 // stripped — so this name and the `hasimage` slug in the CSS must stay in step.
 export const hasImagePowerupName = 'HasImage';
 
+// Marks a Rem whose text is ONLY an image — no caption, no prose — AND which is
+// a PDF/HTML highlight, i.e. an *area* highlight: one where RemNote stored the
+// clipped image instead of the selected text.
+//
+// A separate powerup rather than a CSS combination of HasImage + pdf-highlight,
+// because that combination is wrong for the common case of adding a figure to an
+// ordinary TEXT highlight — such a rem holds an image and is a highlight, yet is
+// not an area highlight. "Image and nothing else" is a property of the rem's
+// rich text, which no CSS selector can inspect, so it has to be decided during
+// the scan and written down as a tag.
+export const pdfAreaHighlightPowerupCode = 'pdfAreaHighlight';
+// Slug consumed by the CSS: lowercased, spaces stripped (see hasImagePowerupName).
+export const pdfAreaHighlightPowerupName = 'PdfAreaHighlight';
+
 // settings
 export const initialIntervalId = 'initial-interval';
 export const multiplierId = 'multiplier';
@@ -64,6 +78,12 @@ export const hideCardPriorityTagSettingId = 'hideCardPriorityTag';
 export const showLeftBorderForIncRemsSettingId = 'showLeftBorderForIncRems';
 export const showDismissedIndicatorSettingId = 'showDismissedIndicator';
 export const hideDismissedTagSettingId = 'hideDismissedTag';
+// Gates the coloured rings drawn around reference PINS in the editor, and — when
+// off — also suppresses the priority-band marker that the highlight stylesheet
+// leaks onto those same pin containers. Off by default: the rings only carry
+// meaning once "Tag Rems With Images" has been run, and an unasked-for marker on
+// every pin is exactly the clutter this setting exists to opt into.
+export const showPinRingIndicatorsSettingId = 'showPinRingIndicators';
 export const performanceModeId = 'performanceMode';
 export const flashcardResponseTimeLimitId = 'flashcard_response_time_limit';
 export const enableMasteryDrillId = 'enable-mastery-drill';
@@ -283,9 +303,10 @@ export const currentScopeRemIdsKey = 'current-scope-rem-ids-key';
 export const seenRemInSessionKey = 'seen-rem-in-session-key';
 export const seenCardInSessionKey = 'seen-card-in-session-key';
 export const displayPriorityShieldId = 'display-priority-shield';
-// Spoiler protection: hold back an IncRem whose own rem still has a flashcard
-// due in this session, so the extract cannot give away the answer before the
-// card is graded. See lib/queue_prefetch.
+// Spoiler protection: hold back an IncRem while a card it would give away is
+// still due this session — one on the rem itself, or one on a direct child
+// tagged `cloze-extract` (a cloze carved out of it with Alt+Z) — so the extract
+// cannot hand over the answer before the card is graded. See lib/queue_prefetch.
 export const deferSpoilerIncRemsId = 'defer-spoiler-increms';
 export const displayQueueToolbarPriorityId = 'display-queue-toolbar-priority';
 export const autoFocusQueueDashboardId = 'auto-focus-queue-dashboard';

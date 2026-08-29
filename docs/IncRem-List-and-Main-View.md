@@ -14,6 +14,8 @@ The **IncRem List** popup shows Incremental Rems scoped to the **current documen
 - **Scope:** Only shows IncRems that are descendants of the current document
 - **Use case:** Quick access to all Incremental Rems within the document you're currently reading
 
+![IncRem List Widget under the Document Title](assets/increm-list-widget.png){ width="800" }
+
 ### All Inc Rems (Main View)
 
 The **All Inc Rems** popup shows every Incremental Rem in your entire Knowledge Base. You can open it via a command or clicking the "View All" icon at the right side of the IncRem Counter badge.

@@ -52,6 +52,7 @@ import {
   showPriorityBandsInTablesId,
   showDismissedIndicatorSettingId,
   hideDismissedTagSettingId,
+  showPinRingIndicatorsSettingId,
   enableHideInQueueIntegrationId,
   enableFlashcardPrioritisationId,
   performanceModeId,
@@ -113,6 +114,7 @@ export interface IESettings {
   [showPriorityBandsInTablesId]: boolean;
   [showDismissedIndicatorSettingId]: boolean;
   [hideDismissedTagSettingId]: boolean;
+  [showPinRingIndicatorsSettingId]: boolean;
 
   // Integrations / performance
   [enableHideInQueueIntegrationId]: boolean;
@@ -176,6 +178,7 @@ export const IE_SETTINGS_DEFAULTS: IESettings = {
   [showPriorityBandsInTablesId]: true,
   [showDismissedIndicatorSettingId]: true,
   [hideDismissedTagSettingId]: true,
+  [showPinRingIndicatorsSettingId]: false,
 
   [enableHideInQueueIntegrationId]: false,
   [enableFlashcardPrioritisationId]: false,
@@ -496,9 +499,10 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     group: 'queue',
     title: 'Hold Back Spoiler IncRems',
     description:
-      'When a Rem is both an Incremental Rem and a flashcard, holds the IncRem back while any ' +
-      'of its own cards is still due, so reading the extract cannot give away the answer ' +
-      'before you grade the card. The IncRem returns to the running once the card is graded, ' +
+      'Holds an Incremental Rem back while a flashcard it would give away is still due — ' +
+      'either a card on the Rem itself, or a cloze extracted from it with Alt+Z and filed ' +
+      'directly underneath it. Reading the extract first would hand you the answer before ' +
+      'you grade the card. The IncRem returns to the running once those cards are graded, ' +
       'and is released anyway once nothing else is due. Only applies to the normal queue — ' +
       'Practice All and In Order are unaffected.',
   },
@@ -575,6 +579,19 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     reloadRequired: true,
     title: 'Hide Dismissed Tag in Editor',
     description: 'Hides the "Dismissed" powerup tag to reduce clutter.',
+  },
+  [showPinRingIndicatorsSettingId]: {
+    kind: 'boolean',
+    group: 'editor',
+    reloadRequired: true,
+    helpPath: 'Colour-Coding-Reference/#reference-pin-rings',
+    title: 'Enable Pin Reference Colour Rings',
+    description:
+      'Draws a coloured ring around reference pins saying where each one leads: blue for a Rem ' +
+      'holding an image, yellow for a PDF/web text highlight, and both colours for a PDF area ' +
+      'highlight (a clipped figure). The image states need "Tag Rems With Images" to have been ' +
+      'run. With this off, pins are left unmarked — including the priority-band border that the ' +
+      'highlight styling would otherwise draw on them.',
   },
   [showPriorityBandsInTablesId]: {
     kind: 'boolean',

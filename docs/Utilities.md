@@ -549,6 +549,7 @@ RemNote's search indexes **text**. An image carries no searchable token, so neit
     The popup is **fully keyboard-driven**: `↑`/`↓` move between the two scopes, `Enter` runs the selected one, `Esc` cancels. (`Esc` is ignored *while a scan is running*, so a reflex press can't abort a long run.)
 
     ![The Image Scan popup: the first button names the Rem it would scan, the second offers the whole knowledge base, and the footer lists the keys](assets/tag-rems-with-images-popup.png){ width="700" }
+
 3. Progress is reported live while it runs. **Keep the popup open until it finishes** — the scan runs inside it, so closing it stops the walk. Nothing is corrupted if you do: whatever was already tagged stays correct, and running the command again picks the work up.
 4. When it finishes, the **same popup reports the work done** — Rems scanned, how many hold an image, how many were newly tagged, how many had the tag cleared — and repeats the two ways to use it. **Scan again** goes back to the scope choice; **?** in the header opens this page.
 
@@ -604,7 +605,20 @@ The scopes and keys match the scan's, and it costs the same per tag — clearing
 
 #### Pins that lead to an image are ringed
 
-A **pin** whose target Rem carries the `HasImage` tag is drawn with a **hairline ring**, firming up when you hover it or edit the Rem. Everywhere a pin appears — inside an extract, in a flashcard, in a soft-wrapped list — you can tell at a glance which link leads to a **figure** and which leads to plain text, without following either.
+A **pin** is drawn with a hairline ring saying where it leads, so you can pick the right one without following any of them — useful in an extract, where the plugin leaves both a reference to the parent it came from *and* a pin to the PDF highlight:
+
+| Ring | The pin leads to |
+|------|------------------|
+| **Blue** | a Rem holding an **image** — a figure in your own notes |
+| **Yellow** | a **text highlight** in a PDF or web article — the source passage |
+| **Yellow + blue** | a **PDF area highlight** — a clipped figure from the source |
+| none | an ordinary Rem |
+
+Yellow means *"this leads into a source document"* and blue means *"you will land on an image"*, so an area highlight — which is both — carries both colours, one per edge. The rings brighten when you hover one or edit the Rem.
+
+![Three pins in one document, each labelled: a yellow ring on a pin to a PDF text highlight (its green dotted bottom and right edges carrying the linked highlight's 20s priority band), a blue ring on a pin to a Rem holding an image, and a yellow-and-blue ring on a pin to a PDF area highlight](assets/pin-rings-explanation.png){ width="900" }
+
+> **Off by default.** Turn on **Enable Pin Reference Colour Rings** (Plugin Settings → *Editor Indicators*) to get them. Two of the three states depend on tags this scan writes, so the feature is opt-in rather than something a knowledge base wakes up wearing. With the setting off, pins are left completely unmarked — including the priority-band border the highlight styling would otherwise draw on them. Every colour the plugin uses is catalogued in the [Colour Coding Reference](Colour-Coding-Reference.md).
 
 This is the second thing the [image scan](#filter-a-document-by-images) buys you, and it needs the scan to have run: the ring keys on the tag, so it appears on a pin only once its target has been tagged, and disappears when a re-scan clears the tag from a Rem whose image is gone.
 
@@ -612,7 +626,19 @@ This is the second thing the [image scan](#filter-a-document-by-images) buys you
 
 The pin next to it in that screenshot shows the two markers are independent: the **orange dotted box** is the [priority band](Prioritization-&-Sorting.md) of the linked highlight, the **blue ring** is "leads to an image". A pin can carry both.
 
-The ring is drawn in RemNote's **accent** colour — the same one the app uses for links and selection, which reads correctly on something that *is* a navigation target. It was neutral grey at first, on the theory that hue is already spoken for in this plugin ([priority bands](Prioritization-&-Sorting.md) own the red→green ramp, `#pdfextract` is blue, `#incremental` green); in practice a grey hairline around an 18px icon in running text was invisible until hovered, which is no marker at all. The accent can't be confused with any of those, because this ring is an **outline on an icon** — never a background fill, never a left border — and it appears on nothing but pins. There is no fill either, so a pin sitting inside a highlighted extract never paints over the highlight's own colour, and both colours come from RemNote's own border tokens, so the ring follows light and dark mode.
+**The ring shares its box with the priority band.** Pins to highlights also carry the [priority band](Prioritization-&-Sorting.md) marker of the linked highlight, which sets the **bottom and right** edges. Rather than avoid that, the ring takes the **top and left** — so an extracted highlight's pin shows one box, half band colour and half ring colour, instead of two nested ones. On an area highlight the top edge is yellow and the left is blue for exactly this reason: those are the two edges that survive when a band is present. All three rings are **solid**, keeping them clear of the band marker's dotted and dashed vocabulary.
+
+The blue ring is drawn in RemNote's **accent** colour — the same one the app uses for links and selection, which reads correctly on something that *is* a navigation target. It was neutral grey at first, on the theory that hue is already spoken for in this plugin ([priority bands](Prioritization-&-Sorting.md) own the red→green ramp, `#pdfextract` is blue, `#incremental` green); in practice a grey hairline around an 18px icon in running text was invisible until hovered, which is no marker at all. The accent can't be confused with any of those, because this ring is an **outline on an icon** — never a background fill, never a left border — and it appears on nothing but pins. There is no fill either, so a pin sitting inside a highlighted extract never paints over the highlight's own colour, and both colours come from RemNote's own border tokens, so the ring follows light and dark mode.
+
+**Why an area highlight is worth its own state.** When you clip a *region* of a PDF instead of selecting its text, RemNote stores the **image** on the highlight Rem in place of the text — an **area highlight**. It is a highlight *and* an image, which is why it wears both colours rather than a third one of its own.
+
+What identifies one is that the Rem holds an image **and nothing else** — no caption, no prose. That matters, because *adding* a figure to an ordinary text highlight is common, and such a Rem holds an image and is a highlight, yet is not an area highlight; it keeps the blue ring. The scan decides this and records it as **`PdfAreaHighlight`**, since "image and nothing else" is a property of the Rem's text that no filter or stylesheet can inspect on its own.
+
+![Two reference pins on a document title, each ringed yellow and blue because their target is a PDF area highlight — confirmed by the PdfAreaHighlight tag in the hover preview](assets/ring-pdf-area-highlight.png){ width="800" }
+
+**The two tags are mutually exclusive.** An area highlight carries `PdfAreaHighlight` and *not* `HasImage`; every other Rem holding an image carries `HasImage`. Tagging area highlights with both would make `HasImage` a complete list of every figure, which is tidier to filter — but RemNote collapses two or more tags into a **"N tags" chip** that no rule can hide without also hiding your own tags, and that clutter is not worth a filter you would rarely run on a highlights document. So: filter `HasImage` for figures in your notes, `PdfAreaHighlight` for clippings from a source. `PdfAreaHighlight`'s chip is hidden from the tag bar exactly like `HasImage`'s.
+
+Two consequences worth knowing: caption an area highlight and the next scan swaps its tags — `PdfAreaHighlight` off, `HasImage` on — and the ring turns blue; and a Rem holding only an image that did **not** come from a PDF, a figure pasted into your own notes, gets `HasImage` and stays blue, since the yellow means "this leads into the source document".
 
 > **Only image pins.** Pins to ordinary Rems are left alone. Ringing *every* pin was tried and says nothing — a marker that appears on all of them carries no information.
 
@@ -620,7 +646,7 @@ The ring is drawn in RemNote's **accent** colour — the same one the app uses f
 
 ## Queue Display Utilities
 
-A collection of powerups and commands incorporated into Incremental RemNote (originally from the standalone **Hide in Queue** plugin), plus two new powerups — **Remove Parent** and **Remove Grandparent** — that improve how parent/ancestor Rems are rendered during queue review.
+A collection of powerups and commands incorporated into Incremental RemNote (originally from the standalone **Hide in Queue** plugin), plus three new powerups — **Remove Parent**, **Remove Grandparent** and **Hide Front Extras** — that improve how parent/ancestor Rems and card details are rendered during queue review.
 
 ---
 
@@ -630,7 +656,7 @@ The 5 powerups originally from the Hide in Queue plugin (Hide in Queue, Remove f
 
 > ⚠️ **Important.** Only enable this setting if you do **NOT** have the standalone Hide in Queue plugin installed. The powerup codes are identical, and RemNote throws a fatal `Duplicated powerup` error if both plugins try to register the same code — Incremental RemNote will fail to load. If you currently use the standalone plugin, uninstall it first, then enable the setting and reload RemNote.
 
-The two new powerups — **Remove Parent** and **Remove Grandparent** — are always registered regardless of the setting, because the [Cloze](IR-Flow--Reading-Extracting-and-Clozing.md) and [Extract](IR-Flow--Reading-Extracting-and-Clozing.md) creators apply Remove Parent automatically to newly-created Rems.
+The three new powerups — **Remove Parent**, **Remove Grandparent** and **Hide Front Extras** — are always registered regardless of the setting. They have no equivalent in the standalone plugin, so they cannot collide with it; and the [Cloze](IR-Flow--Reading-Extracting-and-Clozing.md) and [Extract](IR-Flow--Reading-Extracting-and-Clozing.md) creators apply Remove Parent automatically to newly-created Rems.
 
 ---
 
@@ -751,11 +777,57 @@ Apply via the **Remove Grandparent** command or `/rgp`.
 
 ---
 
+### Hide Front Extras (`hfe`) — New { #hide-front-extras }
+
+Hides the **table properties displayed on the front** of the tagged flashcard. They still appear on the back.
+
+#### Where "front extras" come from
+
+There is only one way a RemNote card ends up with extra content on its question side: a **table** whose column has **flashcard generation enabled**, configured with **Extra Properties to Show on Front of Card**. Those properties are then printed above the question of *every* card that column generates — one row's worth per card.
+
+![](assets/hide-front-extras-table-extras-config.png)
+
+The setting lives in the column's ⋮ menu → **Flashcard Configuration → Configure Cards**. In the screenshot, the *Definition* column (how RemNote shows the backside of the rem in tables) generates the cards, and **Book**, **Context** and **Hint** were chosen to show on the front (with *Extra*, *Mnemonic recall*, *Page* and *Chapter* on the back).
+
+By far the most common way to end up with such a table is the **Anki importer** with **"Import notes with multiple fields into a table"** enabled: each Anki field becomes a column, and the context fields (Book, Source, Chapter, Hint…) are naturally mapped to the front of the card.
+
+![](assets/hide-front-extra-anki-imports-multiple-fields.png)
+
+#### The problem it solves
+
+The front-extras setting is made **per column**, so it applies to every row alike. That is usually what you want — until one row's property happens to *be* the answer:
+
+![](assets/hide-front-extra-sample-use-case-before.png)
+
+Here the *Book* property, shown for context, prints `MSC.192(79), 2004` right above a question asking **which** IMO resolution that is. Turning the setting off on the column would strip the useful context from all the other rows.
+
+#### Applying it
+
+Tag the **flashcard Rem itself** (the table row) — from the queue or the editor, via the **Hide Front Extras (Table Properties)** command, `/hfe`, or the tag menu:
+
+![](assets/hide-front-extras-omnibar-command.png)
+
+Only that card is affected. Every other card from the same table keeps showing its front properties.
+
+#### Result
+
+The properties are gone from the question stage…
+
+![](assets/hide-front-extra-sample-use-case-after-front.png)
+
+…and come back when you press **Show Answer**, so you keep the context while grading:
+
+![](assets/hide-front-extra-sample-use-case-after-back.png)
+
+> **Why No Hierarchy doesn't do this.** Front extras are not ancestors. They render as their own block beside the question, so [No Hierarchy](#no-hierarchy-nh) — which hides the content of the ancestor Rems — leaves them fully visible. The two powerups are complementary and can be applied to the same card.
+
+---
+
 ### Queue Support
 
 All commands above can be triggered directly while reviewing a flashcard in the Queue, without needing to switch to the editor:
 
-- **No Hierarchy, Hide Parent, Hide Grandparent, Remove Parent, Remove Grandparent:** automatically apply the powerup directly to the current card.
+- **No Hierarchy, Hide Parent, Hide Grandparent, Remove Parent, Remove Grandparent, Hide Front Extras:** automatically apply the powerup directly to the current card.
 - **Hide in Queue and Remove from Queue:** since these are designed to be applied to *parent/ancestor* Rems rather than the flashcard itself (applying them to the current card would make the card vanish), triggering them in the queue opens a confirmation prompt offering to apply the powerup to the card's parent instead.
 
 ---

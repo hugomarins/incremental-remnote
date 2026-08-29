@@ -15,6 +15,7 @@ Displayed immediately below flashcards in the queue, this widget shows the card'
 ![Card Stats with FSRS DSR](assets/DSR-stats.png){ width="900" }
 
 **Features:**
+
 - **(1) Priority Indicator**: Shows the card's priority value (explicit, inherited, or default) with a color-coded badge.
 - **(2) Card Priority Shield**: A real-time counter showing how many of your highest-priority cards are still due. See [Priority Shield](Prioritization-&-Sorting.md#priority-shield) for details.
 - **(3) Weighted Shield**: An exponential priority-weighted metric (if enabled in settings) showing the fraction of your total learning workload that has been processed. Clicking it opens a detailed percentile bucket breakdown. See [Weighted Shield](Prioritization-&-Sorting.md#weighted-shield) for details.
@@ -84,6 +85,7 @@ A detailed popup for regular flashcards, enriched with FSRS analytics. Open it v
 ![Flashcard Repetition History Popup](assets/flashcard-rep-history.png){ width="900" }
 
 **Features:**
+
 - **Rem Name Header**: Identifies the parent Rem holding the flashcard, plus Card ID and Rem ID.
 - **Total Reviews & Time**: Aggregate review count, cumulative time spent, **card age**, **coverage** (time from first to next scheduled review), and **cost** (ignoring any reviews that occurred before a manual Date Reset).
 - **Date Summaries**: Next repetition scheduled, optimum next repetition (Last practice + Stability), date the card becomes stale (Last practice + 2× Interval), and current interval with stability ratio.
@@ -148,6 +150,7 @@ The session's end time cannot be in the future. Its **early/late status** is com
 *(Right Sidebar)*
 
 A distinct widget that serves as a **chronological log** of all your Incremental activity — unlike the popups above which show *per-item review details*, this widget tracks *what you saw and when*, now including creation and dismissal events.
+
 - Tracks up to 200 items, filtered by the current Knowledge Base.
 - Shows a unified timeline of **review sessions**, **creation events**, and **dismissals** sorted chronologically (most recent first).
 - Each entry shows a color-coded pill badge: 🟢 **Created** (the Rem was first made Incremental), 🟣 **Reviewed** (a review session), or 🔴 **Dismissed** (the Rem was dismissed).
@@ -229,6 +232,7 @@ A zero-lag alternative that opens instantly by skipping expensive KB-wide calcul
 A combined popup that appears automatically when a new Incremental Rem is created, letting you set both its **priority** and its **first review interval** in a single step.
 
 **Features:**
+
 - **Rem Name Header**: Confirms which rem you just created (truncated, with full tooltip on hover).
 - **Priority Slider** (auto-focused): Same color-coded gradient slider as the Light Priority Widget; supports ↑/↓ arrow acceleration.
 - **Interval Input**: Orange number field (same style as the Reschedule widget) specifying how many days until the first queue appearance. Defaults to your configured **Initial Interval** setting and shows a live "Next review: [date]" preview.
@@ -263,10 +267,12 @@ Controls three aspects of your queue algorithm: **IncRem Randomness** (how stric
 Tracks every practice session with a real-time live view and a full history table.
 
 **Live Dashboard** (active during a queue session):
+
 - Current speed (CPM and s/card), retention rate, card age, cost, and interval for the card on screen.
 - Separate breakdowns for Flashcards and Incremental Rems.
 
 **History Table** (completed sessions):
+
 - Aggregated stats for Today, Yesterday, This Week, Last Week, and custom ranges.
 - Per-session detail: total time, card count, flashcard/IncRem split, speed, retention.
 - Click a session to open its source document in the Editor.
@@ -288,6 +294,7 @@ A filterable popup that summarizes your **Incremental, Dismissed, and Flashcard 
 **Tabs:** *Summary & Hierarchy* and *Graphs*. The filters sit above the tabs, so the context and period apply to both.
 
 **Filters:**
+
 - **Context:** *Global* (whole KB) or *Document* (rem-rooted).
 - **Scope** (Document only): *Descendants Only* or *Comprehensive* (matches the plugin's standard comprehensive scope — descendants, portals, folder queue, sources recursively, referencing rems, PDF extracts).
 - **Period:** Today / Yesterday / Week / This Week / Last Week / Month / This Month / Last Month / Year / This Year / Last Year / All, plus explicit Start/End date inputs for custom ranges.
@@ -336,11 +343,13 @@ These graphs are also embedded at the top of generated [Priority Review Document
 Plots your daily [Priority Shield](Prioritization-&-Sorting.md#priority-shield) values over time, helping you identify trends in your capacity to process high-priority material.
 
 **Features:**
+
 - **Logical Organization**: Graphs are grouped into **Document-level** (IncRem & Card) and **Knowledge Base-wide** scopes.
 - **Visual Separator**: A horizontal divider clearly distinguishes between Document and KB-wide data for better scanability.
 - **Interactive Drag-to-Zoom**: Click and drag horizontally on any graph to zoom into a specific date range. A **Reset Data Range** button appears in the top-right corner to return to the full view.
 - **Optimize Priorities Zoom**: A dedicated button automatically scales the absolute and relative priority Y-Axes to perfectly frame the visible data in your current zoom window. Highly beneficial for viewing subtle metric changes over time!
 - **Scoped Scaling**: The Y-axis (Universe Size) for each chart automatically scales based on the visible data range, ensuring a clear view of your progress even in the Knowledge Base charts.
+- **Card universe is per card**: on the Card charts each card counts as one item, so a Rem owning N cards contributes N — the same universe the [Weighted Shield](Prioritization-&-Sorting.md#weighted-shield) and its popup use, and cards in a paused deck are included. Points stored before v1.0.65 used a per-Rem-with-cards universe, so expect a one-time step on the day you upgraded to it. The IncRem charts are Rem-based by design.
 - **Dismissed Rems Tracking (IncRem Graphs):** The IncRem shield graphs track your process progression with a stacked area chart:
     - **Green Line**: Your active Incremental Rems universe.
     - **Black Dashed Line**: Your *Total Universe* (IncRems + items marked with the `dismissed` powerup).
@@ -366,6 +375,7 @@ A feature-rich table of all your Incremental Rems with two entry points:
 - **All Inc Rems (Main View)** — shows every IncRem across your entire Knowledge Base.
 
 **Features:**
+
 - Filter by Rem type (PDF, PDF Highlight, HTML, YouTube, Video, Rem), status (All / Due / Scheduled), priority range, and text search.
 - **Date filter bar**: Three independent date fields (Due, Last Review, Created) each with six comparison operators (*is*, *is before*, *is after*, *is on/before*, *is on/after*, *is between*). Inputs accept `MM/DD/YYYY`, `MM/DD` (current year), or `N` (days ago). A calendar button (📅) opens the native date picker. Invalid values show a red border.
 - Sort by **Priority**, **Next Rep Date**, **Last Review Date**, **Created At**, **Total Time**, or **Review Count**.
@@ -418,6 +428,7 @@ Allows you to register a review of an Incremental Rem directly from the editor, 
 ![Execute Repetition Popup](assets/review-in-editor.png){ width="500" }
 
 **Features:**
+
 - **Modernized Interface**: Features a clean card-based layout with a header bar showing the document name and a footer bar displaying keyboard shortcut tips. It integrates the shared priority slider and ancestor badges.
 - **Ahead-of-Schedule Info Banner**: Displays an amber warning banner if you review an item before its due date.
 - **Scheduling Conflict Warning**: Shows a dialog if confirming would schedule a date earlier than currently planned, with options to Keep Current Date, Use New Date, or Custom Interval.
@@ -433,6 +444,7 @@ A **floating** picker (it doesn't cover the editor like a popup) that finds Rems
 ![The Find Rem — Reference or Open picker](assets/find-rem-widget.png)
 
 **Features:**
+
 - **Insert a reference** (Enter / click) at the cursor, **insert it as a pin** — link chip without text — (Ctrl/Cmd+Enter or Ctrl/Cmd+click), or **open the Rem in a new pane** (Shift+Enter / Shift+click) to reach Rems the normal search buries.
 - **Alias-aware:** matches a Rem by its **aliases** too (shown with an `ALIAS` badge); picking one inserts a reference to the owning Rem that renders the alias text — like native `[[`.
 - **Cloze-aware insertion:** a reference inserted while the cursor/selection is inside a cloze stays *inside* the cloze instead of breaking it.
@@ -447,6 +459,7 @@ A **floating** picker (it doesn't cover the editor like a popup) that finds Rems
 A centered **modal** popup that renders the **PDF or web article behind a hovered reference pin** inside RemNote's own reader — *without navigating away*. It's built for review: clicking a pin directly opens the source in the editor and **kills the queue** (losing your position and rating ability), whereas this popup floats the source on top of the live queue. Close it (`✕` / Esc / click outside) to return exactly where you were.
 
 **Features:**
+
 - **Source-aware:** only opens for **PDF/HTML highlights**, **PDF source documents**, and **HTML article sources**. Hovering a plain Rem and pressing the key does nothing (just a toast), so it's always safe to trigger.
 - **Auto-scroll to highlight:** for highlights, the embedded reader scrolls to the highlighted passage once it mounts (retried a few times while the PDF engine initializes).
 - **🔖 Scroll to Highlight button** in the header re-centers on the highlight after you've scrolled around the document.
@@ -460,6 +473,7 @@ A centered **modal** popup that renders the **PDF or web article behind a hovere
 The **non-blocking** sibling of 6.5: the *same* reader, but opened as a **floating window on the right portion of the screen (≈48% width)** instead of a centered modal. Because it has no backdrop, the **card/editor stays visible beside it** — built for the case where you want to glance back and forth between the source and the card without the close/reopen churn a modal forces.
 
 **Differences from the modal (6.5):**
+
 - **Stays open while you use the PDF:** clicking into the reader to **highlight, select text, or click existing highlights** does **not** dismiss it (the click-outside-to-close behavior is disabled — clicks land in the reader's iframe).
 - **Auto-closes on card advance:** when the queue loads the next card, the floating window closes itself so a previous source never lingers.
 - **Esc closes it without closing the queue:** the plugin "steals" the Esc key while the float is open, so RemNote's queue doesn't act on it. (When focus is inside the PDF iframe, the reader handles Esc itself; use `✕` there.)
@@ -477,6 +491,7 @@ A side-by-side popup that opens before any restructure change is applied. It re-
 ![Restructure Outline by Headings demo](assets/restructure-outline-by-headings.png)
 
 **Features:**
+
 - **Left panel (Before):** the current state of the selected subtree.
 - **Right panel (After):** the proposed restructured tree. Rows that would move are highlighted.
 - **⏷ Preserve / ⏵ Flatten toggle:** opt in/out of pulling each non-heading subtree into the candidate flow.
@@ -514,7 +529,11 @@ The confirmation *and* the report for the image scan, in one popup that stays op
 ### 6.10. Incremental RemNote Panel
 *(Left Sidebar)*
 
-The plugin's hub, at the bottom of the left sidebar. Header controls: **⚙** opens the [IE Settings](Plugin-Settings-Reference.md) popup, **?** opens this documentation, **✕** hides the panel for the session — it returns on the next start, and the **Show Incremental RemNote Panel** command brings it back sooner. Three shortcut buttons: **⌨** ([Keyboard Shortcuts](Keyboard-Shortcuts.md)), **Sorting** ([Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)), and **Priority Review** — which creates a [Priority Review Document](Priority-Review-Document.md) scoped to the document you currently have open, naming that scope under the button.
+The plugin's hub, at the bottom of the left sidebar. Header controls: **⌨** ([Keyboard Shortcuts](Keyboard-Shortcuts.md)), **⚙** opens the [IE Settings](Plugin-Settings-Reference.md) popup, **?** opens this documentation, **✕** hides the panel for the session — it returns on the next start, and the **Show Incremental RemNote Panel** command brings it back sooner.
+
+Two action buttons: **Sorting** ([Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)), and a **Priority Review** group of three — the label creates a [Priority Review Document](Priority-Review-Document.md) scoped to the document you currently have open (naming that scope under the button), **👁** opens the **Priority Review Queue** Rem that lists every review document you have built, and **🧹** runs [Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document).
+
+![The Incremental RemNote panel in the sidebar](assets/panel-hub.png){ width="700" }
 
 Below the shortcuts it shows **one onboarding tip per session**, with **I Got It** (retires the tip permanently, per knowledge base), **✕** (returns it to the pile; the panel also goes quiet for two hours) and **Learn More** (opens the tip's documentation section). Either answer closes the tip area until the next start — it never chains into a second tip.
 
@@ -539,10 +558,11 @@ Scan, review and delete in one popup — but deliberately in **two stages**, bec
 Two stages, like the Empty Extra Card Detail popup and for the same reason: the scan writes nothing, and you confirm against real counts before any Rem is deleted.
 
 - **Stage one — the scan** runs as soon as the popup opens and is read-only. It reads every document tagged *Priority Review Queue* and works out which of its entries still have something due.
-- **Stage two — review.** One row per document, most recently built first: **still due / reviewed / total entries**, the date it was built, and a note of anything being kept back. **Show** expands the row into the entries themselves, by name and with their `INC` / `FC` tag, split into *To remove*, *Reviewed, but kept*, and *Still due, staying*.
+- **Stage two — review.** One row per document, most recently built first: **flashcards due / incremental entries held / reviewed / total entries**, the date it was built, and a note of anything being kept back. **Show** expands the row into the entries themselves, by name and with their `INC` / `FC` tag, split into *To remove*, *Reviewed, but kept*, and *Still due, staying*.
 - **Tick the documents to clean.** Every document with work to do starts ticked; untick to leave one alone. The button counts what you have selected and estimates how long it will take.
-- **`Enter` is inert here** — the red **Remove N entries** button has to be clicked. `Esc` is ignored while the scan or the deletion runs.
-- **The report stays on screen**: how many entries were removed, and which documents are left holding nothing due at all — those are finished and can be deleted.
+- **Delete the documents with no flashcards left due** — a checkbox above the buttons, ticked by default. A review document with no flashcard due in it is finished, so the document itself goes, taking any still-due `INC` entries with it (counted in the checkbox line first — the Rems themselves are untouched). One holding writing of your own never goes, and the row says why. Doomed documents are struck through in the list.
+- **`Enter` is inert here** — the red button has to be clicked. `Esc` is ignored while the scan or the deletion runs.
+- **The report stays on screen**: how many entries were removed, which documents were deleted (and how many still-due incremental entries went with them), and which have no flashcards due but were kept.
 - **The console holds the full readout**: a table per document with every entry's status, kind, name and Rem ID, which is the quickest way to see what a review document is still carrying.
 
 📖 **Full documentation:** [Cleaning a Review Document](Priority-Review-Document.md#cleaning-a-review-document)

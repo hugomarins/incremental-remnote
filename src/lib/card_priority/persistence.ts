@@ -63,6 +63,7 @@
 import { RNPlugin, RemId } from '@remnote/plugin-sdk';
 import { allCardPriorityInfoKey } from '../consts';
 import { CardPriorityInfo, PrioritySource } from './types';
+import { getPausedRemIds } from '../paused_decks';
 
 /**
  * Bump to invalidate every stored copy after a shape change.
@@ -126,7 +127,17 @@ export async function writeCardPriorityCache(
   plugin: RNPlugin,
   infos: CardPriorityInfo[]
 ): Promise<void> {
-  await plugin.storage.setSession(allCardPriorityInfoKey, infos);
+  // Stamp paused-deck membership here rather than in the two build paths: this
+  // is the one place every CardPriorityInfo list reaches session storage, so
+  // warm and cold builds cannot disagree about which rems are suppressed.
+  // Cheap — one storage read, then a Set lookup per rem.
+  const pausedRemIds = await getPausedRemIds(plugin);
+  const stamped = pausedRemIds
+    ? infos.map((info) =>
+        pausedRemIds.has(info.remId) ? { ...info, paused: true } : info
+      )
+    : infos;
+  await plugin.storage.setSession(allCardPriorityInfoKey, stamped);
 }
 
 // ── Dirty set ───────────────────────────────────────────────────────────────

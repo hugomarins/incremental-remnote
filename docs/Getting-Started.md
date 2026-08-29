@@ -9,6 +9,7 @@ Welcome to **Incremental RemNote**! This guide will walk you through the basics 
 Incremental learning transforms how you acquire knowledge. Instead of reading a book from cover to cover or watching a full lecture, you break content into smaller pieces and review them over time—interleaved with flashcards and other material.
 
 **Key Benefits:**
+
 - **Process 1000+ sources in parallel** without losing track
 - **Prioritize ruthlessly** to focus on what matters most
 - **Build lasting knowledge** by converting passive reading into active flashcards
@@ -29,19 +30,29 @@ For a deeper understanding, see [What is Incrementalism?](What-is-Incrementalism
 
 Once installed, the plugin adds a small **Incremental RemNote** 🌐 panel at the bottom of the left sidebar. It is the one fixed place to reach the plugin from, and where the onboarding tips live.
 
+![The Incremental RemNote panel in the sidebar: header controls, the Sorting button, the Priority Review group with its eye and broom actions, the scope line, and one onboarding tip](assets/panel-hub.png){ width="700" }
+
 **In the header:**
 
 | Control | What it does |
 |---------|--------------|
+| ⌨ | Opens the [Keyboard Shortcuts](Keyboard-Shortcuts.md) page |
 | ⚙ | Opens the plugin's [settings popup](Plugin-Settings-Reference.md) — every setting the plugin owns, grouped |
 | ? | Opens this documentation, at the home page |
 | ✕ | Hides the panel **for this session** — it is back next time you open RemNote. To bring it back sooner, run the **Show Incremental RemNote Panel** command |
 
-**Shortcut buttons:**
+**Action buttons:**
 
-- **⌨** — the [Keyboard Shortcuts](Keyboard-Shortcuts.md) page.
 - **Sorting** — the [flashcard/incremental mix and randomness](Prioritization-&-Sorting.md#sorting-criteria) for your queue.
-- **Priority Review** — creates a [Priority Review Document](Priority-Review-Document.md), scoped to the document you currently have open. This is the same as using **Create Priority Review Document** in the document menu, without having to open the menu; the scope it will use is named under the button. With no document open, it falls back to the whole knowledge base.
+- **Priority Review** — three actions on [Priority Review Documents](Priority-Review-Document.md), grouped into one control:
+
+| Button | What it does |
+|--------|--------------|
+| **Priority Review** | Creates a review document scoped to the document you currently have open. The same as **Create Priority Review Document** in the document menu, without opening the menu; the scope it will use is named under the button, and with no document open it falls back to the whole knowledge base |
+| 👁 | Opens the **Priority Review Queue** Rem — every review document you have built is tagged with it, so its references are the list of them. Go there to study from one you made earlier |
+| 🧹 | Runs [Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document) — strips the entries you have already reviewed and offers to delete the documents that are finished |
+
+The 👁 button says so if you have no review documents yet: the tag is created by the first one.
 
 ### Tips { #tips }
 
@@ -102,6 +113,7 @@ When you enter the queue, your Incremental Rems appear alongside your flashcards
 ### The "One Memory, One Action" Principle
 
 Before clicking "Next," always perform at least one productive action:
+
 - **Extract** a key sentence as a new Incremental Rem
 - **Create** a flashcard from important information
 - **Rephrase** a confusing passage
@@ -130,6 +142,7 @@ When you've fully processed an item and extracted all valuable knowledge:
 ![Yellow left border visual indicator for dismissed Rems](assets/visual-feedback-editor.png){ width="600" }
 
 **Visual Settings:**
+
 - **Show Yellow Left Border for Dismissed Rems** — Toggle the visual indicator (default: on)
 - **Hide Dismissed Tag in Editor** — Reduce clutter by hiding the tag (default: on)
 
@@ -144,6 +157,7 @@ If you want to review a dismissed item again:
 3. A **"Made Incremental"** marker is added to distinguish the new learning session
 
 This allows you to:
+
 - See your complete learning journey across multiple sessions
 - Resume where you left off with preserved context
 - Analyze your long-term engagement with material
@@ -159,6 +173,7 @@ The plugin offers two powerful views to analyze your learning progress: the **Si
 Gives you detailed insights into your review history for any specific Incremental Rem.
 
 **What it shows:**
+
 *   **Stats Row:** Total reps, total time spent, age since first review
 *   **Next Review:** Scheduled date with days late/early indicator
 *   **History Table:** Date, time spent, interval, priority, and status for each repetition
@@ -170,6 +185,7 @@ Gives you detailed insights into your review history for any specific Incrementa
 Gives you a high-level overview of progress stats for a Rem and **all its descendants**. Perfect for checking your progress on a specific book, course, or topic.
 
 **What it shows:**
+
 *   **Tree-View Hierarchy:** Displays a hierarchical tree of your Incremental Rems, sorted exactly as they appear in your document.
 *   **Aggregated Metrics:** Shows total repetitions, time spent, and item counts for the current selection **plus** all its descendants.
 
@@ -183,12 +199,14 @@ There is a single unified command: **Open IncRem Repetition History**.
 *   **In the Queue:** Click the 📊 icon in the Answer Buttons info bar
 
 **Smart Behavior:**
+
 *   If you select an **Incremental Rem** (or one with history), it opens the **Single History View**.
 *   If you select a **Folder** (that has Incremental descendants), it automatically opens the **Aggregated History View**.
 
 ### Switching Views
 
 You can easily toggle between views using the button in the window header:
+
 *   Click **"Show Aggregated"** from the Single View to see the tree stats.
 *   Click **"Show Single"** from the Aggregated View to focus on the specific item.
 

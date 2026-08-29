@@ -228,6 +228,7 @@ Above the Sessions Summary table you'll find a **Refresh Statistics** button alo
 **Why it exists:** event-listener tracking can miss sessions when the queue is interrupted without firing `QueueExit` (tab closed, page navigated, plugin reloaded), and can over- or under-count IncRem time in certain engagement edge cases. The authoritative recompute reconciles the Summary against the same data RemNote uses for its own statistics.
 
 **How it works:**
+
 - A chunked progress bar shows progress through cards → IncRems → Dismissed rems. The recompute is cancellable at any time.
 - After the first recompute, the Summary is sourced from authoritative aggregates. Live listener data continues to fill the **gap after the recompute timestamp**, so today's ongoing session still updates the totals in real time.
 - Listener data is **never deleted**. Both the raw recent-session list and the rolled-over older buckets remain intact and continue to power the per-session History log below the Summary.

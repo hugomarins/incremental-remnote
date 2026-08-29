@@ -33,6 +33,8 @@ import {
   autoAssignCardPriority,
   calculateCardRemPercentilesFromCards,
   expandCardInfosToCards,
+  isPerCardDue,
+  PerCardShieldItem,
   getCardPriority,
   setCardPriority,
   PrioritySource,
@@ -54,6 +56,7 @@ import {
   isIncRemDue,
   isCardDue,
   isCardDueOverdue,
+  isPerCardDueOverdue,
   VerifyOptions,
 } from '../lib/shield_history';
 import { resetQueueSession, clearSeenItems, calculateDueIncRemCount } from '../lib/session_helpers';
@@ -207,18 +210,32 @@ export function registerQueueExitListener(
         console.warn('[QueueExit] Skipping KB IncRem shield save because cache was incomplete');
       }
 
-      // Card KB shield: use isCardDueOverdue + live verification with startOfToday threshold
+      // Card KB shield: recorded over the PER-CARD universe, the same one the
+      // queue's shield and the Weighted Shield popup use. It used to be recorded
+      // over CardPriorityInfo[] — one entry per Rem-with-cards — so the stored
+      // series described a different population from the one on screen: 45,350
+      // against 67,597, and a weighted shield several points apart.
       const startOfToday = dayjs().startOf('day').valueOf();
-      const cardVerifyOptions: VerifyOptions<CardPriorityInfo> = {
-        getCards: async (info) => {
-          const rem = await plugin.rem.findOne(info.remId);
+      const allCardItems = expandCardInfosToCards(allCardInfos);
+      const cardVerifyOptions: VerifyOptions<PerCardShieldItem> = {
+        getCards: async (item) => {
+          const rem = await plugin.rem.findOne(item.remId);
           return rem ? await rem.getCards() : [];
         },
         dueThreshold: startOfToday,
       };
 
       if (shouldSaveCard) {
-        await saveKBShield(plugin, allCardInfos, isCardDueOverdue, seenCardIds, cardPriorityShieldHistoryKey, 'Card', displayWeighted, cardVerifyOptions);
+        await saveKBShield(
+          plugin,
+          allCardItems,
+          (item) => isPerCardDueOverdue(item, startOfToday),
+          seenCardIds,
+          cardPriorityShieldHistoryKey,
+          'Card',
+          displayWeighted,
+          cardVerifyOptions
+        );
       } else {
         console.warn('[QueueExit] Skipping KB Card shield save because cache was incomplete');
       }
@@ -288,9 +305,9 @@ export function registerQueueExitListener(
         if (shouldSaveCard && scopeUsable.card) {
           await saveDocumentShield(
             plugin,
-            allCardInfos,
+            allCardItems,
             docScopeRemIds,
-            isCardDueOverdue,
+            (item) => isPerCardDueOverdue(item, startOfToday),
             seenCardIds,
             documentCardPriorityShieldHistoryKey,
             historyKey,
@@ -523,8 +540,12 @@ export function registerQueueEnterListener(
       // × Memory Analytics tab.
       const seenCardIdsSet = new Set(seenCardIds_ws);
       const nowMs_ws = Date.now();
-      const perCardDue = (item: { remId: string; nextRepetitionTime?: number | null }) =>
-        (item.nextRepetitionTime ?? Infinity) <= nowMs_ws && !seenCardIdsSet.has(item.remId);
+      const perCardDue = (item: {
+        remId: string;
+        nextRepetitionTime?: number | null;
+        paused?: boolean;
+      }) =>
+        isPerCardDue(item, nowMs_ws) && !seenCardIdsSet.has(item.remId);
 
       if (allCardInfos.length > 0) {
         const allCardItems = expandCardInfosToCards(allCardInfos);

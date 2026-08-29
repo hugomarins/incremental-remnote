@@ -9,7 +9,7 @@ import {
   removeImageTags,
   scanAndTagImages,
 } from '../lib/image_scan';
-import { hasImagePowerupName } from '../lib/consts';
+import { hasImagePowerupName, pdfAreaHighlightPowerupName } from '../lib/consts';
 import { IE_DOCS_BASE_URL } from '../lib/settings';
 
 const DOCS_PATH = 'Utilities/#filter-a-document-by-images';
@@ -254,8 +254,9 @@ export function ImageScanPopup() {
           <div className="text-sm" style={{ color: 'var(--rn-clr-content-primary)' }}>
             {mode === 'remove' ? (
               <>
-                Takes <span className="font-semibold">#{hasImagePowerupName}</span> off every Rem
-                that carries it, so a knowledge base full of tags can be cleared in one go.{' '}
+                Takes <span className="font-semibold">#{hasImagePowerupName}</span> and{' '}
+                <span className="font-semibold">#{pdfAreaHighlightPowerupName}</span> off every Rem
+                that carries them, so a knowledge base full of tags can be cleared in one go.{' '}
                 <span className="font-semibold">Nothing is lost</span> — the tag is derived from
                 the images themselves, so{' '}
                 <span className="font-semibold">Tag Rems With Images</span> rebuilds it exactly.
@@ -265,7 +266,11 @@ export function ImageScanPopup() {
                 Scans for images in each Rem's <span className="font-semibold">front and back
                 text</span> and tags every one that holds an image with{' '}
                 <span className="font-semibold">#{hasImagePowerupName}</span>. Rems inside the
-                scanned scope that carry the tag but no longer hold an image lose it.
+                scanned scope that carry the tag but no longer hold an image lose it. A highlight
+                holding <span className="font-semibold">only</span> a clipped image — a PDF area
+                highlight — gets{' '}
+                <span className="font-semibold">#{pdfAreaHighlightPowerupName}</span> instead, which
+                rings its reference pins yellow.
               </>
             )}
           </div>
@@ -403,6 +408,14 @@ export function ImageScanPopup() {
             <div>
               ➖ <span className="font-bold">{result.untagged}</span> cleared (no image any more)
             </div>
+            {(result.areaHighlights > 0 || result.areaUntagged > 0) && (
+              <div title={`A highlight whose text is the clipped image alone — no caption, no prose. These carry #${pdfAreaHighlightPowerupName} INSTEAD of #${hasImagePowerupName}, never both, and their reference pins are ringed yellow rather than blue.`}>
+                ✂️ <span className="font-bold">{result.areaHighlights}</span> PDF area
+                highlight{result.areaHighlights === 1 ? '' : 's'}
+                {result.areaTagged > 0 && <> (+{result.areaTagged} newly marked)</>}
+                {result.areaUntagged > 0 && <> (−{result.areaUntagged} no longer image-only)</>}
+              </div>
+            )}
             {result.failed > 0 && (
               <div style={{ color: '#ef4444' }}>
                 ⚠ <span className="font-bold">{result.failed}</span> failed to write — see the console

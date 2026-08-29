@@ -1,8 +1,19 @@
 import { ReactRNPlugin } from '@remnote/plugin-sdk';
 
 /* Powerup codes — applied to a Rem via rem.addPowerup(<code>).
-   RemNote slugifies the camelCase code to kebab-case in the rendered
-   data attribute (e.g. `hideInQueue` → `data-queue-rem-container-tags~="hide-in-queue"`). */
+
+   IMPORTANT: the slug that lands in `data-queue-rem-container-tags` /
+   `data-rem-tags` is derived from the powerup's NAME, not its code —
+   lowercased, with spaces turned into hyphens. Every powerup below happens to
+   have a name and a code that slugify to the same string ("No Hierarchy" /
+   `noHierarchy` → `no-hierarchy`), which hides the distinction; a powerup whose
+   name and code differ in wording does NOT — 'Hide Front Extras' was briefly
+   named 'Hide Front Extra Details' while keeping the code `hideFrontExtras`,
+   and rendered as `hide-front-extra-details`, matching nothing.
+   Confirmed 2026-08-29 against live DOM, which also shows RemNote's own tags
+   following the same rule ("Anki Card - Standard Mono" → `anki-card--standard-mono`,
+   "CardPriority" → `cardpriority`).
+   So: always write CSS selectors against the slugified NAME. */
 
 /* CORE — always registered. The Cloze and Extract creators apply Remove Parent
    to newly-created rems, so the powerup must always exist. Remove Grandparent
@@ -10,6 +21,13 @@ import { ReactRNPlugin } from '@remnote/plugin-sdk';
    Queue plugin, so they cannot collide with it. */
 export const REMOVE_PARENT_POWERUP_CODE = 'removeParent';
 export const REMOVE_GRANDPARENT_POWERUP_CODE = 'removeGrandparent';
+
+/* CORE — net-new to this plugin (no equivalent in the standalone Hide in Queue
+   plugin, so it cannot collide with it). Hides the front-side Extra Card
+   Details of the tagged flashcard. Name 'Hide Front Extras' ⇒ the CSS below
+   matches `hide-front-extras` (see the name-vs-code note above). Kept short
+   because the tag renders as a pill in the editor. */
+export const HIDE_FRONT_EXTRAS_POWERUP_CODE = 'hideFrontExtras';
 
 /* LEGACY — registered only when the user enables the Hide-in-Queue integration
    setting. Codes match the standalone Hide in Queue plugin exactly, so users
@@ -86,6 +104,22 @@ const CORE_CSS = `
 .rn-queue__content .indented-rem:has(> .indented-rem > .rn-question-rem[data-queue-rem-container-tags~="remove-grandparent"]),
 .rn-queue__content .indented-rem:has(> .indented-rem > .rn-question-rem[data-queue-rem-container-tags~="removegrandparent"]) {
   margin-left: 0px !important;
+}
+
+/* ===== Hide Front Extras =====
+   Slots a table/template is configured to show on the FRONT of its cards render
+   as ".extra-card-detail" INSIDE the ancestor ".indented-rem", as a sibling of
+   the question rem — so "no-hierarchy" never touches them (it only hides the
+   ancestor's own "> .rn-queue-rem"), and a slot like "Book — <chapter title>"
+   can give the answer away.
+
+   The back-side extras are a separate ".extra-card-detail" block that sits
+   outside the hierarchy tree and only enters the DOM once the answer is
+   revealed. Gating on "--answer-hidden" therefore hides the front block on the
+   prompt while leaving BOTH blocks visible on the answer. */
+.rn-queue__content--answer-hidden:has(.rn-question-rem[data-queue-rem-container-tags~="hide-front-extras"]) .extra-card-detail,
+.rn-queue__content--answer-hidden:has(.rn-question-rem[data-queue-rem-container-tags~="hidefrontextras"]) .extra-card-detail {
+  display: none !important;
 }
 
 /* ===== Preserved History (tombstones) =====
@@ -234,6 +268,16 @@ export async function registerCoreQueueDisplayPowerups(plugin: ReactRNPlugin) {
     code: REMOVE_GRANDPARENT_POWERUP_CODE,
     description:
       'Completely removes the grandparent of the tagged Rem from the queue (front and back, no placeholder).',
+    options: { slots: [] },
+  });
+
+  await plugin.app.registerPowerup({
+    name: 'Hide Front Extras',
+    code: HIDE_FRONT_EXTRAS_POWERUP_CODE,
+    description:
+      'Hides the table properties shown on the FRONT of the tagged flashcard — the ones a card-generating ' +
+      'table column is configured to print on the question side. They still appear on the back. Use it when ' +
+      'that context gives the answer away on one particular row — "No Hierarchy" does not hide these.',
     options: { slots: [] },
   });
 

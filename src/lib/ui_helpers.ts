@@ -16,6 +16,8 @@ import {
   pdfHighlightBordersReloadKey,
   showPriorityBandsInTablesId,
   hasImagePowerupName,
+  pdfAreaHighlightPowerupName,
+  showPinRingIndicatorsSettingId,
 } from './consts';
 import { getIESetting } from './settings';
 
@@ -328,6 +330,14 @@ export async function registerHasImageCSS(plugin: ReactRNPlugin) {
     [data-rem-tags~="${slug}" i] [data-test="Tag Bar"] .hierarchy-editor__tag-bar__tag:has(.rem-powerup-icon) {
       display: none;
     }
+
+    /* PdfAreaHighlight is the same kind of bookkeeping and is hidden the same way. */
+    [data-test="Applied Powerup Pill ${pdfAreaHighlightPowerupName}"].hierarchy-editor__tag-bar__tag {
+      display: none;
+    }
+    [data-rem-tags~="${pdfAreaHighlightPowerupName.toLowerCase()}" i] [data-test="Tag Bar"] .hierarchy-editor__tag-bar__tag:has(.rem-powerup-icon) {
+      display: none;
+    }
   `;
   await plugin.app.registerCSS('has-image-tag-hide', css);
 }
@@ -368,22 +378,162 @@ export async function registerHasImageCSS(plugin: ReactRNPlugin) {
  * `.dark` branch.
  */
 export async function registerPinReferenceCSS(plugin: ReactRNPlugin) {
+  // Off by default. The rings only say anything once "Tag Rems With Images" has
+  // run, so drawing them unasked would put a marker on every pin in a knowledge
+  // base that has no idea what it means.
+  if (!(await getIESetting(plugin, showPinRingIndicatorsSettingId))) {
+    // Not merely "emit nothing": the highlight stylesheet draws a band-coloured
+    // border and padding on any element carrying a highlight's tags, and a
+    // reference container carries the REFERENCED rem's tags — so a pin to a
+    // banded highlight is marked whether or not this feature is on. That leak
+    // predates the rings and is what the user is opting into here, so switching
+    // the setting off has to clear it too, or "off" would still show a box.
+    //
+    // Scoped to pins alone: a full [[reference]] to the same highlight keeps its
+    // marker, where the padding was designed for a passage of running text.
+    await plugin.app.registerCSS(
+      'pin-reference-styling',
+      `
+    /*
+       SPECIFICITY, not just !important. The band marker rules in
+       buildHighlightBandCSS match three attribute selectors — 0,3,0 — and carry
+       !important of their own, so a 0,2,0 rule loses however loudly it shouts.
+       Four qualifiers (0,4,0) settle it outright, which also makes the result
+       independent of stylesheet order — and ordering between separate
+       registerCSS calls is not guaranteed. Every attribute used here is present
+       on a pin container: data-test, data-rem-reference-id, data-rem-tags and
+       data-rem-reference-pin itself.
+    */
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-reference-id][data-rem-tags],
+    .rem-reference-container[data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-reference-id] {
+      border: none !important;
+      padding: 0 !important;
+    }
+  `
+    );
+    return;
+  }
+
   const slug = hasImagePowerupName.toLowerCase();
+  const areaSlug = pdfAreaHighlightPowerupName.toLowerCase();
   const css = `
-    [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i] {
-      border: 1px solid var(--rn-clr-border-accent, #3B82F6);
+    /* A pin's ring says where it leads:
+         blue           — a Rem holding an image (a figure in your own notes)
+         yellow         — a TEXT highlight: the source passage
+         yellow + blue  — a PDF AREA highlight: a clipped figure from the source
+
+       All three are SOLID, which keeps them clear of the priority-band marker's
+       dotted/dashed vocabulary.
+
+       Drawn as a BORDER, sharing the box with that marker rather than nesting
+       outside it. A reference container carries the REFERENCED rem's tags, so on
+       a pin to a banded highlight the band rules in registerPdfHighlightCSS set
+       border-bottom and border-right on this very element, with !important. That
+       is not a conflict to avoid but a division of labour: their declarations
+       win on the two edges they name, ours hold the other two, and the result is
+       ONE box reading half band-colour, half ring-colour. An outline was tried
+       instead and is worse — it adds a second concentric box around an already
+       marked pin, which on an extracted highlight (the common case in this
+       plugin's flow) is pure clutter. */
+    [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i],
+    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i],
+    [data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i]:not([data-rem-tags~="${areaSlug}" i]),
+    [data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i]:not([data-rem-tags~="${areaSlug}" i]) {
+      border: 1.5px solid var(--rn-clr-border-accent, #3B82F6);
       border-radius: 4px;
       padding: 0 1px;
       margin: 0 1px;
+      /* Centre the box on the line instead of standing it on the baseline.
+
+         RemNote sizes the pin glyph relative to the font (~1.22em) while pinning
+         line-height at 24px, so in a 20px Rem the icon is ALREADY 24.5px — over
+         the line before any ring is drawn. The 1.5px border takes the box to
+         27.5px, and with vertical-align: baseline every one of those 3.5px
+         overflows UPWARD, into the line above.
+
+         Middle splits the same overflow evenly above and below, roughly halving
+         what any one line sees. It does not shrink the box: only an inset
+         box-shadow could do that, and that would cost the per-edge colours the
+         area-highlight ring and the band edge-sharing both depend on. Measured
+         at 16px the box is 22.5px and fits the line with room to spare, which is
+         why this only ever showed up in larger Rems. */
+      vertical-align: middle;
       transition: border-color 120ms ease;
     }
 
-    /* Hover and edit-mode: step up to the selected-border token. RemNote already
-       paints its own light-accent background on a hovered reference, so the ring
-       only has to stay legible on top of it rather than supply the whole cue. */
+    /* Keep the box square when a priority band is also drawn on it.
+
+       registerPdfHighlightCSS (and the band tint built on it) style a highlight
+       as a passage of running text: padding-bottom 2.7px, padding-left 4px and a
+       3px right bar, so the marker clears the descenders and reads down a wrapped
+       paragraph. A reference container inherits those declarations along with the
+       tags, and on an 18px pin the result is a box that is lopsided and visibly
+       larger than the plain pins beside it.
+
+       Only the SIZE is reset — the band's colour and its dashed/dotted style
+       carry the information and are left alone.
+
+
+       SPECIFICITY, not just !important. The band marker rules in
+       buildHighlightBandCSS match three attribute selectors — 0,3,0 — and carry
+       !important of their own, so a 0,2,0 rule loses however loudly it shouts.
+       Four qualifiers (0,4,0) settle it outright, which also makes the result
+       independent of stylesheet order — and ordering between separate
+       registerCSS calls is not guaranteed. Every attribute used here is present
+       on a pin container: data-test, data-rem-reference-id, data-rem-tags and
+       data-rem-reference-pin itself. */
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-reference-id][data-rem-tags~="pdf-highlight" i],
+    [data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-reference-id][data-rem-tags~="html-highlight" i],
+    .rem-reference-container[data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i],
+    .rem-reference-container[data-test="Rem Reference Container"][data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i] {
+      padding: 0 1px !important;
+      border-right-width: 1.5px !important;
+      border-bottom-width: 1.5px !important;
+    }
+
+    /* Hover and edit-mode on the blue state: step up to the selected-border
+       token. RemNote already paints its own light-accent background on a hovered
+       reference, so the ring only has to stay legible on top of it. */
     [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i]:hover,
     .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="${slug}" i] {
       border-color: var(--rn-clr-border-selected, #1d4ed8);
+    }
+
+    /* TEXT highlights — the pin opens the source passage. */
+    [data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i]:not([data-rem-tags~="${areaSlug}" i]),
+    [data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i]:not([data-rem-tags~="${areaSlug}" i]) {
+      border-color: #eab308;
+    }
+
+    /* AREA highlights are both things at once — a highlight (yellow) AND an
+       image (blue) — so they carry both colours, per edge.
+
+       The order matters: TOP is yellow and LEFT is blue precisely because those
+       are the two edges the band marker leaves alone, so both colours survive on
+       a banded pin. Right and bottom repeat the pair for an unbanded one, giving
+       an alternating box rather than a half-empty ring.
+
+       Per-edge colours rather than a linear-gradient: a gradient needs
+       border-image, which paints all four edges from one image and is NOT
+       overridden by the band's border-color, so it would erase the band marker
+       on bottom/right — losing exactly the edge-sharing this design rests on.
+       It also drops border-radius, and a yellow-to-blue blend across ~1.5px of
+       line reads as muddy green at this size. */
+    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
+      border-color: #eab308 #3B82F6 #eab308 #3B82F6;
+    }
+
+    /* Both yellow states brighten together — this has to gain contrast in dark
+       mode too, where a deeper amber would sink into the background. */
+    [data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i]:not([data-rem-tags~="${areaSlug}" i]):hover,
+    [data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i]:not([data-rem-tags~="${areaSlug}" i]):hover,
+    .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="pdf-highlight" i]:not([data-rem-tags~="${areaSlug}" i]),
+    .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="html-highlight" i]:not([data-rem-tags~="${areaSlug}" i]) {
+      border-color: #facc15;
+    }
+    [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i]:hover,
+    .rem-text:focus-within [data-rem-reference-pin="true"][data-rem-tags~="${areaSlug}" i] {
+      border-color: #facc15 #60a5fa #facc15 #60a5fa;
     }
   `;
   await plugin.app.registerCSS('pin-reference-styling', css);
@@ -512,3 +662,27 @@ export function clearQueueUI(plugin: ReactRNPlugin): void {
   plugin.app.registerCSS(queueCounterId, '');
   plugin.app.registerCSS(hideIncEverythingId, '');
 }
+
+
+/**
+ * Fill colour for a "% processed / % done" bar.
+ *
+ * The old rule turned green only at EXACTLY 100%, so a bucket at 99.8% — every
+ * card but one — was painted the same amber as a bucket at 50%. Nobody reads a
+ * bar that precisely; the colour is meant to answer "am I on top of this?", and
+ * at 99.8% the answer is yes. Green therefore starts at 95%, with a lime step
+ * so "nearly there" still reads differently from "done".
+ *
+ * Shared by the Weighted Shield breakdown and the Card Priority × Memory
+ * Analytics table so the same percentage never gets two different colours.
+ */
+export function doneBarColor(pct: number): string {
+  if (!Number.isFinite(pct)) return '#ef4444';
+  if (pct >= 95) return '#22c55e';
+  if (pct >= 80) return '#84cc16';
+  if (pct >= 50) return '#eab308';
+  return '#ef4444';
+}
+
+/** A bar this close to full should have both ends rounded. */
+export const isBarFull = (pct: number): boolean => pct >= 99.5;

@@ -80,6 +80,7 @@ There are several ways to set priorities in Incremental RemNote, each designed f
 This is the fully-featured priority interface. Access it by pressing `Opt+P` or clicking the "Change Priority" button in the queue.
 
 It displays detailed context, including:
+
 1.  **Absolute Priority Value:** The number (0-100) stored in the Rem.
 2.  **Relative Priority:** Where this item stands compared to the rest of your knowledge base (as a percentile).
 3.  **Visual Slider:** A slider for absolute value, giving you both precise control and intuitive visual ranking. The color of the slider indicates the absolute priority, while the color of the selector circle indicates the relative priority.
@@ -105,6 +106,7 @@ It displays detailed context, including:
 **Shortcut:** `Ctrl+Opt+P`
 
 Designed for speed. This popup opens instantly and provides just the essentials:
+
 *   A slider for the **Incremental Rem** priority or/and
 *   A slider for the **Flashcard** priority.
 
@@ -120,6 +122,7 @@ It works exactly like the main popup but skips the heavy calculations (like chec
 
 ### Quick Priority Shortcuts
 **Shortcuts:** 
+
 *   `Ctrl+Opt+Up Arrow`: **Increase** priority number (make **less** important). E.g., 10 → 15 with the default step of 5.
 *   `Ctrl+Opt+Down Arrow`: **Decrease** priority number (make **more** important). E.g., 20 → 15 with the default step of 5.
 
@@ -141,6 +144,7 @@ The step in which priorities will increase or decrease can be configured in the 
 **Location:** Right side of the editor (when a Incremental Rem or a Card is focused) or potentially inline.
 
 This widget provides a persistent visual indicator of the item's priority.
+
 *   **Clicking it** opens the full priority popup.
 *   **Expanding it** reveals quick `+` / `-` buttons to adjust priority by 1 or 10 points directly.
 
@@ -206,10 +210,12 @@ A powerful table view for unified priority management across an entire document 
 Designed specifically for **Flashcards**. You can now assign `CardPriority` to hundreds of rems at once, based on a tag.
 
 **Use Cases:**
+
 *   **Topic Prioritization:** When you have a specific topic or exam tag (e.g., `#Exam1`) and want to ensure all related flashcards are prioritized highly.
 *   **System Migration:** If you used to use tags to prioritize your cards (like `#important!`, `#P1`, `#P2`), you can convert your old manual system to the new one in bulk.
 
 **Features:**
+
 *   **Smart Randomization:** Assigns random priorities within a specific range (e.g., 20-40). This distributes the load so important cards don't all pile up on the same day.
 *   **Intelligent Handling:** Capable of checking if the item is also an Incremental Rem, allowing you to use its existing IncRem priority as the Card Priority.
 *   **Safety:** Safely updates rems that already have `manual` priorities by requiring explicit "Overwrite" confirmation.
@@ -473,6 +479,7 @@ While the standard Priority Shield identifies the *single* most important item y
 ![Weighted Shield](assets/shield-weighted-card.png){ width="1000" }
 
 **How it works:**
+
 * Each item is weighted exponentially by its priority percentile. High-priority items carry significantly more weight than low-priority items (a top-priority item carries approximately 10× the weight of a bottom-priority item).
 * As you process items, your shield percentage increases.
 * Processing high-priority items gives a much larger boost to your shield than processing low-priority items.
@@ -545,10 +552,10 @@ When both Incremental Rems and Cards groups are present, the wide popup exposes 
 20 columns are organized into four groups, with hover tooltips explaining each one:
 
 *   **Identity** — bucket label and the raw priority range it covers.
-*   **Population** *(always-current — not affected by the period filter)* — `Items` (every card record in the bucket), `Unsched` (cards RemNote will never surface), `Paused` (cards inside a paused deck), `Active` = `Items − Unsched − Paused`, `Due` (active cards with `nextRepetitionTime ≤ now`), `Done`, `%New` (cards never graded), `%Stale` (cards overdue by > 2× their last interval). **`Active` is the denominator** for `Done`, `%New`, `%Stale` and the FSRS averages: a card that cannot be practised is not "done", and is not a new card you could learn. See [Suppressed cards](#suppressed-cards).
+*   **Population** *(always-current — not affected by the period filter)* — `Items` (every card record in the bucket), `Unsched` (cards RemNote will never surface), `Paused` (cards inside a paused deck), `Active` = `Items − Unsched − Paused`, `Due`, `Done`, `%New` (cards never graded), `%Stale` (cards overdue by > 2× their last interval). **The denominator is `Items − Unsched`**: unscheduled cards are not work at all, so they are excluded, but **paused cards still count** as Due, New and Stale — pausing defers work rather than cancelling it, and leaving them out would make pausing a deck read as progress. `Active` is shown for context: what the queue could serve today. See [Suppressed cards](#suppressed-cards).
 *   **Throughput** *(period-filtered)* — total / avg `Reps`, total / avg `Time`, `CPM`, `t/rep`, and per-card `Cost`. `Cost` is lifetime-coverage `totalMinutes / coverageYears` when the period is "All", and annualized `time-in-period / period-length` when the period is finite.
 *   **Outcome** *(period-filtered)* — `Lapses` (per non-new card), `Retention` = `(gradeable − Again) / gradeable`, `Avg pR`, `R-dev = Retention − Avg pR` in percentage points (positive ⇒ you remember better than FSRS expected; negative ⇒ you forget more), and average `Grade` (1 = Again, 4 = Easy).
-*   **FSRS today** *(always-current)* — average current FSRS Difficulty `D`, Retrievability `R` (as of today), and Stability `S` across all **active** cards reviewed at least once. Suppressed cards are left out: an unpractisable card's retrievability decays toward zero and would drag the bucket down for no actionable reason.
+*   **FSRS today** *(always-current)* — average current FSRS Difficulty `D`, Retrievability `R` (as of today), and Stability `S` across every counted card reviewed at least once, paused decks included: their retrievability really is decaying, and hiding that would make a parked deck look healthier than it is. Only unscheduled cards are excluded.
 
 `Avg pR` is the average FSRS-predicted retrievability at the moment of every gradeable rep in the period, except the first rep of each card / each post-RESET lifetime (the model has no prior state to predict from). For learning and relearning reps where FSRS leaves *r* undefined, the forgetting curve is computed locally from the previous gradeable rep's stability — so `Avg pR` and `Retention` share the same denominator and `R-dev` is meaningful.
 
@@ -561,7 +568,7 @@ To stay aligned with the [Study Dashboard](Study-Dashboard.md) and Practiced Que
 Results are session-cached so reopening the popup in the same session is instant; flipping the toggle or the period re-runs the aggregation (typically a few seconds for tens of thousands of cards) and updates the cache. A "Computed N seconds ago over X cards — Recompute" pill at the top of the tab lets you force a fresh run.
 
 > **Note on Cards bucketing — unified per-card universe:**
-> The Weighted Shield of Flashcards, the standard Priority Shield (cards), the relative percentile shown next to a card's priority, the document-scope percentile, and the percentiles attached to portals in a Priority Review Document are **all computed over the same per-card universe**. Each card is one item, inherits its owning Rem's priority, and its own `nextRepetitionTime` decides whether it counts as due. **Unscheduled cards are excluded from that universe** — a disabled card or one whose cloze was deleted is not material you intend to practise, and leaving it in would push real cards across percentile boundaries. **Cards in a paused deck are kept**: pausing defers a card, it does not demote it, and dropping them would shift every other card's percentile the moment a deck is paused and shift it back on unpause. A Rem that owns 5 cards contributes 5 items at the same priority. A rem's effective percentile is the **mean rank of its cards** within the sorted card population — so the 5-card rem occupies 5 adjacent ranks and lands at the midpoint of its own cluster, while a 1-card rem at the same priority lands at a single rank within the same cluster. This means a rem with more cards weighs slightly more in the percentile ranking, but every shield, every badge and the PRD now read from a single consistent ranking. The PRD itself still produces one portal per due rem (deduplicated) — only the percentile metadata it attaches comes from this unified universe.
+> The Weighted Shield of Flashcards, the standard Priority Shield (cards), the relative percentile shown next to a card's priority, the document-scope percentile, and the percentiles attached to portals in a Priority Review Document are **all computed over the same per-card universe**. Each card is one item, inherits its owning Rem's priority, and its own `nextRepetitionTime` decides whether it counts as due. **Unscheduled cards are excluded from that universe** — a disabled card or one whose cloze was deleted is not material you intend to practise, and leaving it in would push real cards across percentile boundaries. **Cards in a paused deck are kept, and count as due**: pausing defers a card, it does not demote it or cancel its work. Were they dropped, pausing a backlog-heavy deck would raise your shield and shift every percentile, and unpausing would undo it — putting steps into the [Priority Shield History](#priority-shield-history) for a reason that has nothing to do with studying. To take a document out of the statistics altogether, tag it **Disable Descendant Cards**, which says *not at all* where pausing says *later*. A Rem that owns 5 cards contributes 5 items at the same priority. A rem's effective percentile is the **mean rank of its cards** within the sorted card population — so the 5-card rem occupies 5 adjacent ranks and lands at the midpoint of its own cluster, while a 1-card rem at the same priority lands at a single rank within the same cluster. This means a rem with more cards weighs slightly more in the percentile ranking, but every shield, every badge and the PRD now read from a single consistent ranking. The PRD itself still produces one portal per due rem (deduplicated) — only the percentile metadata it attaches comes from this unified universe.
 
 > [!NOTE]
 > Both **Shields** can be toggled on and off the queue toolbar in the plugins [Settings](Plugin-Settings-Reference.md#queue).
@@ -631,6 +638,7 @@ W_A / W_B = e^(k × (p_B − p_A)/100)
 You can track your performance over time by accessing the **"Priority Shield History"** graph from the queue menu (the three-dot icon). This graph plots your daily shield values, helping you identify trends and adjust your workload or priorities accordingly.
 
 **Interactivity & Features:**
+
 *   **Dismissed Rems Tracking:** The IncRem shield graph track your process progression with a stacked area chart: 
     *   The **green line** plots your active Incremental Rems universe.
     *   The **black dashed line** on top plots your *Total Universe* (IncRems + those marked with the `dismissed` powerup).
@@ -643,6 +651,7 @@ You can track your performance over time by accessing the **"Priority Shield His
 *   **Automatic Y-Scaling:** As you zoom or pan, the Universe Size axis adapts to the peak values in your visible range, providing maximum visual resolution.
 
 **Understanding the Metrics:**
+
 *   **Priority Shield:** This metric represents your processing capacity for high-priority items. A higher shield value (closer to 100) means you are successfully reviewing your most important material on time.
 *   **Document Shield:** Shows your priority protection within the current document/folder scope (or original scope for Priority Review Documents). This helps you track how well you're keeping up with the most important items in specific contexts.
 *   **Weighted Shield (⚖️):** Plots the historical trajectory of your Weighted Shield parameter over time. A rising line indicates you are actively clearing out high-priority debt, while a dropping line means high-priority material is accumulating faster than you can review it. Toggle this line on and off using the global "Show Weighted Shield" checkbox at the top of the history widget.
@@ -659,6 +668,7 @@ You can track your performance over time by accessing the **"Priority Shield His
     *   You can increase that number by doing more work, reducing the inflow of new material, deprioritizing less important items, or reducing the randomization degree in your **Sorting Criteria**.
 
 **Understanding Universe Size Changes:**
+
 *   For **Incremental Rems**, observing your layers change over time paints a clear picture of your workflow:
     *   If your **Active Universe (Green)** drops but your **Total Universe (Black)** remains steady and your **Dismissed Area (Yellow)** expands, you are successfully processing and dismissing items faster than you are adding them! You are burning through your backlog!
     *   If your **Active Universe (Green)** increases while the **Dismissed Area (Yellow)** stays flat, you are actively adding new IncRems to your queue without clearing out old ones. This influx expands your active workload, and will likely drop your priority percentiles because each remaining item becomes a smaller percentage of the larger expanding whole.
@@ -684,6 +694,7 @@ Here is a complete breakdown of how the plugin decides which incremental item to
 
 3.  **Applies Controlled Randomness (The "Shuffle")**
     This is where the "Sorting Randomness" setting comes into play. After creating the perfectly sorted list of due items, the plugin applies a degree of "shuffling".
+
     * **At 0% randomness:** No shuffling occurs. The list remains perfectly sorted by priority, and the plugin will deterministically show you the highest-priority due item. *(The default is **20%**, not 0% — see [Incremental Rem Randomness](#1-incremental-rem-randomness) above.)*
     * **At >0% randomness:** The plugin performs a series of random swaps on the items in the sorted list. A higher randomness setting results in more shuffling. This introduces a controlled chance for a lower-priority (but still due) item to appear before a higher-priority one, achieving the aim of preservation of strict priorities with a tiny bit of serendipity. *Note: The randomness slider is built on an exponential curve—reserving the first 50% of the slider dial specifically for safely fine-tuning low amounts of randomness.*
 

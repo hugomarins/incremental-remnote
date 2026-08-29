@@ -172,12 +172,14 @@ export function calculateWeightedShield<T extends { priority: number; remId: str
   const validItems = allItems.filter((item: any) => item.cardCount === undefined || item.cardCount > 0);
   if (validItems.length === 0) return 100;
 
-  // 1. Sort by priority to compute each item's percentile rank
+  // 1. Sort by priority to compute each item's percentile rank.
+  //    Percentile is per ITEM, by its position in the sorted list. It used to be
+  //    stored in a Map keyed by remId, which meant every card of a multi-card
+  //    Rem was overwritten by the last one's rank — so they all shared a
+  //    percentile, a weight, and a bucket. That is what made this table's
+  //    buckets disagree with the Card Priority × Memory Analytics deciles.
   const sorted = [...validItems].sort((a, b) => a.priority - b.priority);
-  const percentileMap = new Map<string, number>();
-  sorted.forEach((item, idx) => {
-    percentileMap.set(item.remId, ((idx + 1) / sorted.length) * 100);
-  });
+  const n = sorted.length;
 
   // 2. Compute total weight and due (unprocessed) weight
   // k = ln(10) ≈ 2.3026 → a 0% item weighs 10× more than a 100% item
@@ -185,8 +187,9 @@ export function calculateWeightedShield<T extends { priority: number; remId: str
   let totalWeight = 0;
   let dueWeight = 0;
 
-  for (const item of validItems) {
-    const p = percentileMap.get(item.remId) ?? 50;
+  for (let idx = 0; idx < n; idx++) {
+    const item = sorted[idx];
+    const p = ((idx + 1) / n) * 100;
     const weight = Math.exp(-k * p / 100);
     totalWeight += weight;
 
@@ -269,12 +272,10 @@ export function computeWeightedShieldBreakdown<T extends { priority: number; rem
   // Pre-filter: Ignore rems that explicitly have 0 cards
   const validItems = allItems.filter((item: any) => item.cardCount === undefined || item.cardCount > 0);
 
-  // Sort and compute percentiles
+  // Sort and compute percentiles. Per ITEM, by index — see the note in
+  // calculateWeightedShield about the remId-keyed map this replaced.
   const sorted = [...validItems].sort((a, b) => a.priority - b.priority);
-  const percentileMap = new Map<string, number>();
-  sorted.forEach((item, idx) => {
-    percentileMap.set(item.remId, ((idx + 1) / sorted.length) * 100);
-  });
+  const n = sorted.length;
 
   // Initialize 10 buckets
   const bucketData: { total: number; processed: number; due: number; weightSum: number; minPriority: number; maxPriority: number }[] =
@@ -290,8 +291,9 @@ export function computeWeightedShieldBreakdown<T extends { priority: number; rem
   // its own due state.
   const dueByItem = new Map<T, boolean>();
 
-  for (const item of validItems) {
-    const p = percentileMap.get(item.remId) ?? 50;
+  for (let idx = 0; idx < n; idx++) {
+    const item = sorted[idx];
+    const p = ((idx + 1) / n) * 100;
     const weight = Math.exp(-k * p / 100);
     const bucketIdx = Math.min(Math.floor(p / 10), 9); // 0-9
     const isDue = isDuePredicate(item);

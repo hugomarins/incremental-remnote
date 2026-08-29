@@ -40,12 +40,14 @@ Everything appears perfect now, right? Well, not exactly. The problem is that th
 ## Incremental Reading can Leverage your Learning in RemNote
 
 Before the advent of incremental reading, you had two extreme alternatives:
+
   - **traditional learning** with high volume of the learning material and dismal retention. This learning can be called High In - High Out (HIHO) as high volumes of knowledge processed on the input are accompanied by equally high volumes of knowledge on the "output" (i.e. lost out to forgetting)
   - **SRS** (Spaced Repetition Softwares, like **RemNote, Anki or SuperMemo**) with a small volume of strategic material remembered for years with a predetermined level of knowledge retention (LILO - Low knowledge input with low forgetting outflow)
 
 Neither alternative provides a complete solution to the problem of forgetting. The balance between the two alternatives was left to the student. The **optimum strategy** was to _use traditional learning to sift the strategic material, and then to memorize mission-critical material with the SRS_.
 
 The confinement of SRS to strategic material was a powerful inhibitory force against their universal adoption:
+
   - The process of selecting the strategic knowledge was not automated
   - The student had to master knowledge structuring skills to make the memorized knowledge truly applicable
   - Passive review was discounted as ineffective and was not used as a knowledge prioritization tool 

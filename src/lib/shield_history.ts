@@ -4,6 +4,7 @@ import * as _ from 'remeda';
 import { calculateVolumeBasedPercentile, calculateWeightedShield } from './utils';
 import { IncrementalRem } from './incremental_rem';
 import { CardPriorityInfo, expandCardInfosToCards } from './card_priority';
+import { isPerCardDue } from './card_priority/types';
 import {
   allCardPriorityInfoKey,
   allIncrementalRemKey,
@@ -448,6 +449,21 @@ export const isCardDue = (card: CardPriorityInfo): boolean => card.dueCards > 0;
 /** Shield-specific: card was due before start of today (filters intraday re-scheduling noise). */
 export const isCardDueOverdue = (card: CardPriorityInfo): boolean => (card.dueCardsOverdue ?? 0) > 0;
 
+/**
+ * Per-CARD version of `isCardDueOverdue`, for the shield history.
+ *
+ * The history used to be recorded over `CardPriorityInfo[]` — one entry per
+ * Rem-with-cards — while the queue's shield and its popup work over the per-card
+ * expansion. Two different universes, so the stored series never matched what
+ * the user saw: a knowledge base showing 67,597 cards recorded a universe of
+ * 45,350 and a weighted shield several points apart. Same predicate as the
+ * Rem-level one — overdue means "due at any point up to the start of today".
+ */
+export const isPerCardDueOverdue = (
+  item: { nextRepetitionTime?: number | null; paused?: boolean },
+  startOfToday: number,
+): boolean => isPerCardDue(item, startOfToday);
+
 export type ItemKind = 'incRem' | 'card';
 export type ScopeKind = 'kb' | 'doc';
 
@@ -593,8 +609,9 @@ export async function computeMonthlyShieldCatchUp(
   let dueCount = 0;
   for (const item of perCard) {
     if (item.priority > monthlyBest) continue;
-    const t = item.nextRepetitionTime;
-    if (t == null || t > now) continue;
+    // Same predicate as every other shield surface: a paused deck's cards keep
+    // a real next time that RemNote will never act on.
+    if (!isPerCardDue(item, now)) continue;
     if (seen.has(item.remId)) continue;
     dueCount++;
   }

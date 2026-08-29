@@ -75,14 +75,16 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   **Use Cases:** Batch decrease priority of a document/branch after a test, or adjust priorities when your interest in a given subject increases or decreases.
 
   **Access:**
-    - Via the **Command Palette**: search for "Batch Priority Change".
-    - From the **Document Menu** (`...` on a Rem) to act on it and its descendants.
+
+  - Via the **Command Palette**: search for "Batch Priority Change".
+  - From the **Document Menu** (`...` on a Rem) to act on it and its descendants.
 
   **Priority Operations:**
-    - **Increase Priority**: Makes items more important by multiplying their priority value.
-    - **Decrease Priority**: Makes items less important.
-    - **Spread Evenly**: Distributes priorities linearly across a range you define.
-    - **Adjust Proportionally**: Remaps priorities to a new range while maintaining relative spacing.
+
+  - **Increase Priority**: Makes items more important by multiplying their priority value.
+  - **Decrease Priority**: Makes items less important.
+  - **Spread Evenly**: Distributes priorities linearly across a range you define.
+  - **Adjust Proportionally**: Remaps priorities to a new range while maintaining relative spacing.
 
   **Advanced Features:** Interactive table with filtering by name/type/priority range, sorting by any column, "Preview Changes" mode, and CSV export.
 
@@ -96,9 +98,10 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   **Use Case:** If you previously used tags to prioritize your cards (e.g., `#important!`, `#P1`, `#P2`, `#P3`) before the Incremental RemNote prioritization system, you can convert your old tagging system to the new one in bulk.
 
   **Features:**
-    - Assign random priorities within a specific range (e.g., 20–40).
-    - Intelligently handles IncRems — use their existing IncRem priority as their Card Priority.
-    - Safely updates rems with existing `manual` or `incremental` priorities by requiring explicit "Overwrite" confirmation, with color-coded badges distinguishing **Manual CP** (amber) from **Incremental CP** (green).
+
+  - Assign random priorities within a specific range (e.g., 20–40).
+  - Intelligently handles IncRems — use their existing IncRem priority as their Card Priority.
+  - Safely updates rems with existing `manual` or `incremental` priorities by requiring explicit "Overwrite" confirmation, with color-coded badges distinguishing **Manual CP** (amber) from **Incremental CP** (green).
 
   **Access:** Focus a tag rem and run the command from the Command Palette, or use the Document Menu.
 
@@ -110,7 +113,7 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   Generate a custom document that compiles your absolute highest priority Rems mixed with standard Flashcards for subset review.
 
 - **[Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document)** — `quick: cprd`
-  Scans every Priority Review Document, finds the entries whose Rem no longer has anything due — reviewed flashcards and Incremental Rems — and removes them after you confirm, per document. Entries you have written notes under are never touched.
+  Scans every Priority Review Document, finds the entries whose Rem no longer has anything due — reviewed flashcards and Incremental Rems — and removes them after you confirm, per document. Documents with **no flashcards left due** are deleted outright, since incremental Rems reach your queue through the sorting criteria without needing a review document. Entries you have written notes under, and documents holding them, are never touched. Also on the **🧹** button of the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel).
 
 - **[Open Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)** — `quick: sort`
   Brings up the Sorting dialog to manipulate the flashcard:increm ratio and queue randomization.
@@ -162,19 +165,27 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Remove Parent** — `quick: rp`
   Hides the immediate parent of the tagged Rem from the queue, on **both front and back** of the card (no "Hidden in queue" placeholder). Used internally by **Create Cloze Deletion** above.
+
 - **Remove Grandparent** — `quick: rgp`
   Same as Remove Parent, one level up.
+
+- **Hide Front Extras (Table Properties)** — `quick: hfe`
+  Hides the [table properties shown on the front](Utilities.md#hide-front-extras) of the tagged flashcard — the ones a card-generating table column is configured to print on the question side. They still show on the back.
 
 **Gated by the *Enable Hide-in-Queue powerups and commands* setting** (default off — see [Utilities → Activation](Utilities.md#activation) for the standalone-plugin warning):
 
 - **Hide in Queue** — `quick: hiq`
   Replaces the tagged Rem's content with a "Hidden in queue" placeholder on the front of descendant flashcards.
+
 - **Remove from Queue** — `quick: rfq`
   Completely removes the tagged Rem from the queue's visual hierarchy. Used internally by **Extract with Priority** above when available.
+
 - **No Hierarchy** — `quick: nh`
   Hides any ancestors on both front and back of the tagged flashcard.
+
 - **Hide Parent** — `quick: hp`
   Hides the immediate parent on the front side of the tagged flashcard (revealed on the back).
+
 - **Hide Grandparent** — `quick: hgp`
   Hides the grandparent on the front side of the tagged flashcard (revealed on the back).
 
@@ -188,18 +199,21 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Tag Rems With Images** — `quick: img`
   Scans for images and tags each Rem that holds one with **`HasImage`** — so RemNote's native document filter can isolate them. Checks **front text and back text**, so an image on the back of a flashcard counts.
+
   - **Popup first:** the [Image Scan popup](Plugin-Widgets-Reference.md#69-image-scan-popup) offers two scopes — the **focused Rem** (or the **open document**), named on the button so you can verify the target, or the **whole knowledge base**.
   - **Reports in place:** the same popup shows live progress and then the result — scanned, holding images, tagged, cleared — alongside how to filter a document and how to build a Search Portal on the tag. It stays open until you close it.
   - **Self-correcting:** Rems inside the scanned scope that carry the tag but no longer hold an image lose it, so a re-run never leaves stale marks. Nothing outside the scope is touched.
   - **Invisible tag:** the `HasImage` chip is hidden from the editor tag bar (your own tags on the same Rem stay visible).
 
   **Use Case:** reviewing all the figures of a chapter, or finding the images you have not yet turned into occlusion cards — neither of which RemNote's search can do, because an image carries no indexed text.
+
   - **Cost:** reading Rems is fast; writing tags is not. The **first** whole-KB run is slow in proportion to the images it finds (~30 min for 23,000 tags on a 413k-Rem knowledge base), and every run after it takes seconds because there is nothing left to write.
 
   📖 See [Utilities → Filter a Document by Images](Utilities.md#filter-a-document-by-images) for the full workflow.
 
 - **Remove `HasImage` Tags** — `quick: rmimg`
   Takes the **`HasImage`** tag off every Rem that carries it, in the focused Rem's subtree (or open document) or across the **whole knowledge base**. Same popup, same scopes and keys as the scan above.
+
   - **Nothing is lost:** the tag is derived from the images themselves, so **Tag Rems With Images** rebuilds it exactly. Re-running the scan *is* the undo — which is why this command has none of its own.
   - **Cost:** the same per tag as applying them, so clearing a whole knowledge base takes as long as tagging it. Prefer the document scope unless you want the tag gone everywhere.
 
@@ -209,6 +223,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Bulletize Inline Selected Text** (`Shift+F8`) — `quick: bul`
   Toggles a `• ` prefix at the start of each line **within a single rem**, across a multi-line selection. Built for restoring bullets that a **PDF highlight flattened** into soft-wrapped text (lines joined by `Shift+Enter`) before turning the highlight into an IncRem.
+
   - **Toggle:** if every non-empty selected line already starts with `• `, all are stripped; otherwise the prefix is added only to the lines that lack it (no double bullets).
   - **Selection modes:** a multi-line text selection acts on every line it touches (partial selections expand back to each line's start); a collapsed cursor bulletizes the rem's entire front text.
   - **Formatting-safe:** preserves highlights, colors, references and other inline nodes; empty lines are skipped; the bullet is inserted as a plain node.
@@ -217,10 +232,12 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Inlinize Detected List** — `quick: inl`
   Detects a list flattened onto one line by a PDF highlight (`… evitá-las: 1 Aumentar… 2 Deixar… 3 O Oficial…`, or bullets run together like `… reconhecidas: • alvos…; • ocorrem…`) and inserts a line break + `• ` before each item, turning it into soft-wrapped bulleted lines **in the same rem**. Enumerated items keep their number; existing `•`/`-`/`*` markers are normalized to `• `. Acts on the **focused rem** (no selection needed) and is `Ctrl+Z`-able — the review checkpoint before breaking to children.
+
   - **Detection:** enumerated lists follow an **ascending chain** (accepts only the next expected value at a word boundary, preferring markers after sentence punctuation), so stray numbers in prose aren't mistaken for markers. Supports decimal (`1`, `1.`, `1)`), lettered (`a)`, `b.`) and roman (`i.`, `ii.`) enumerators, **depth/compound markers** (`1.1`, `1.2`… and mixed `1.a`, `1.b`…, kept as flat siblings), plus **bullet/dash lists** (`•`, `-`, `*`) — a marker must stand alone, and dash/compound lists need a clause boundary (`:`, `;`, `.`) before the first item to rule out parenthetical dashes and inline version numbers.
 
 - **Break Inline List Into Children** — `quick: brl`
   Splits an inline-bulletized list rem into child rems: the caput/title stays on the parent, each `• ` line becomes a child (order preserved, `• ` prefix stripped).
+
   - **PDF-highlight pin follows the caput:** if the rem has a pin to a PDF highlight (toolbar-created *or* pasted as text + pin; the `#pdfextract` tag is optional), it's moved to the end of the caput instead of the last item.
   - **Images & other pins survive:** a trailing image becomes its own **last child item**; other trailing references join the caput; a mid-list image stays with its item.
   - **Undoable:** snapshots the original text + created child IDs to synced storage first, so **Restore List Rem** can reverse it exactly.
@@ -233,6 +250,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Text Case Converter** (`Shift+F3`) — `quick: case`
   Cycles through **Title Case** → **UPPERCASE** → **lowercase**.
+
   - **Smart Detection:** Automatically detects the current case and moves to the next stage.
   - **Rich-Text Safe:** Preserves bold, italic, highlights, and other formatting even across element boundaries.
   - **Multi-Rem:** Select one or more whole rems in the outline and the cycle applies to each rem's text (and the back text of concept/descriptor rems) in one shot.
@@ -244,6 +262,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Restructure Outline by Headings** — `quick: roh`
   Re-nests a flat or mis-pasted document so that paragraphs and lower-level headings sit under their preceding higher-level heading. Opens a side-by-side **Before | After** preview with per-rem **Preserve / Flatten** toggles for non-heading rems with existing children.
+
   - **Scope:** single rem selected → operates on its descendants; multi-rem selected → operates on those rems plus their descendants, slotting the result back into the selection's original position so unselected siblings keep their relative order.
   - **Headings:** supports **H1 through H6**. Heading-level skips (e.g. `H1 → H3` with no `H2` between) are handled — the `H3` nests directly under the `H1`.
   - **Undo:** after applying, an **Outline Restructured** banner appears in the sidebar with an **Undo Restructure** button; also available as the `Revert Last Outline Restructure` command (below). Single-slot, session-scoped.
@@ -255,6 +274,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Set Next Heading Level** — `quick: hn`
   Styles the selected rem(s) as **one heading level deeper than their parent** — e.g. under an `H3` parent the rem becomes `H4`. Reuses the same H1–H6 detection/application as Restructure Outline by Headings, so H4/H5/H6 (stored in the Header powerup's `Size` slot) work too.
+
   - **Direct case:** parent is a heading `Hn` → rem set to `H(n+1)` (clamped at `H6`).
   - **Grandparent fallback:** parent isn't a heading but the grandparent is `Hn` → a confirmation dialog offers to set the **parent** to `H(n+1)` and the **rem** to `H(n+2)` (e.g. grandparent `H2` → parent `H3`, rem `H4`); Cancel leaves both unchanged.
   - **Multi-rem:** select several rems → each is styled relative to its own parent; all grandparent-fallback cases are covered by a **single** confirmation, and a shared parent is promoted only once. Rems with no ancestor heading are skipped (reported in a summary toast).
@@ -263,6 +283,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Apply Heading Levels by Hierarchy (Table of Contents)** — `quick: htoc`
   Assigns heading levels (H1–H6) to the selected outline **by each rem's depth in the hierarchy**, to a level range you choose — a one-shot "table of contents". Never moves rems; only changes their level. Reuses the same H1–H6 detection/application as Restructure Outline by Headings.
+
   - **Selection → forest:** the selection is reduced to its topmost rems (forest roots) = the top level; everything beneath is leveled by depth. Selecting a parent and its descendants together is fine (no double-counting).
   - **Mapping:** pick a **Top level** and **Deepest level** in the preview. Top rems get the Top level, each level deeper adds one up to the Deepest level; rems deeper than the range **keep their current level** (left unchanged).
   - **Preview & undo:** opens a Before | After popup with live Top/Deepest dropdowns and `old → new` badges; after Apply a sidebar **Heading Levels Applied** banner offers undo (own snapshot slot, separate from the restructure banner).
@@ -281,6 +302,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Find Rem (insert reference / open in pane)** (`Opt+Shift+F` / `Alt+Shift+F`) — `quick: fir`
   Opens a floating picker that finds Rems **RemNote's `[[` reference search can't surface** — Rems whose name is made entirely of high-frequency words (e.g. `Navegação Interior`) get out-ranked off RemNote's per-token candidate list, so typing the name never returns them. The picker searches each word separately, unions the results, keeps Rems containing all words, and floats exact-name matches to the top.
+
   - **Enter / click** inserts a reference at the cursor; **Ctrl/Cmd+Enter** (or Ctrl/Cmd+click) inserts it as a **pin** (link chip without text — one keystroke vs. RemNote's right-click → Edit Alias → clear-text trick); **Opt/Alt+Enter** (or Opt/Alt+click) inserts the Rem's **text then a pin** ("Text with Pin" — preserves formatting/images, brings a card's back text after a practice-direction arrow, and marks the source's clozes rather than re-clozing them); **Shift+Enter / Shift+click** opens the Rem in a new pane (to reach "invisible" Rems).
   - **Alias-aware:** also matches a Rem by its **aliases** (`ALIAS` badge); picking one inserts a reference to the owning Rem that renders the alias text.
   - **Cloze-aware:** inserting inside a cloze keeps the reference inside it instead of breaking it.
@@ -290,6 +312,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Open Hovered Source in Popup** (`Opt+O` / `Alt+O`)
   Opens the **PDF or web article behind a hovered reference pin in a centered modal popup — without leaving the queue.** Clicking a pin directly navigates away and tears down the queue (losing your position and rating ability); this command shows the source on top of the queue instead. **Hover** the pin, then press the shortcut.
+
   - **Source-only:** acts on PDF/HTML **highlights** (auto-scrolls to the highlight), **PDF source docs**, and **HTML sources**. A plain Rem with no PDF/HTML source does nothing (just a toast) — default behavior is untouched.
   - **Why hover, not right-click:** RemNote exposes a *hover* event for references but **no right-click event**, and the navigating left-click can't be intercepted — so the queue-safe path is hover-to-identify + a shortcut you own.
   - **Scroll to Highlight:** the header has a **🔖 Scroll to Highlight** button to re-center on the highlight after scrolling around.
@@ -298,6 +321,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Open Hovered Source in Floating Window** (`Opt+Shift+O` / `Alt+Shift+O`)
   Same source viewer as above, but opened as a **non-blocking floating window on the right (~48% width)** instead of a centered modal — so the **card/editor stays visible beside it** for peeking back and forth without close/reopen. **Hover** the pin, then press the shortcut.
+
   - **Stays open while you use the PDF:** highlighting, selecting, or clicking highlights in the reader does **not** dismiss it (outside-click-to-close is disabled).
   - **Auto-closes on card advance**, so a previous card's source never lingers over the next.
   - **Esc closes it without closing the queue:** the float "steals" the Esc key while open. (Inside the PDF iframe, use `✕`.)
@@ -310,6 +334,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Delete Empty Extra Card Detail Rems** — `quick: decd`
   Finds Rems tagged **Extra Card Detail** that hold **nothing at all** and deletes them after you confirm the count. Two scopes, as above: the focused Rem (or open document), or the whole knowledge base.
+
   - **Scan first, delete second:** the scan writes nothing. It reports the full funnel (Rems walked → blank → blank *and* ECD → deletable), how many it kept and **why**, and a sample of what will go listed by the Rem each blank sits under. Only then is the delete button offered — and `Enter` deliberately does not trigger it.
   - **A high bar for "empty":** must be a **plain Rem** — not a **portal** (which has no text of its own but displays other Rems), Concept, Descriptor, slot or property — with no text or back text (an image, Rem reference, LaTeX, audio or annotation counts as content; cosmetic formatting on nothing does not), **no children**, nothing displayed portal-style, no tag or powerup beyond Extra Card Detail, nothing referencing it, no cards, no source, no alias. Anything failing a check is kept and counted with its reason.
   - **Backed up first:** a JSON manifest of every Rem id and the Rem it sits under is saved to the device and offered as a file download **before** anything is deleted; if it cannot be written, the run stops. Every id is also logged to the developer console.
@@ -331,6 +356,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
 - **Import Incremental Rems with History**
   Bulk-imports Incremental Rems from a **JSON payload** — including each rem's **full repetition history**, priority and next-repetition date. Built for migrating an external study log (e.g. a spreadsheet with years of study sessions) into the plugin's native history format.
+
   - **Input:** a version-1 JSON file following the format documented below. What matters is the JSON contract — how you produce the file is up to you. The repository ships `scripts/convert_study_log.py` **only as a sample** (an Excel → JSON converter tailored to one specific spreadsheet layout, with source-specific adjustments hardcoded); use it as a starting point, not as the reference.
   - **Structure created:** a root document (name configurable in the popup) → one document per book → one child rem per chapter. A book with a top-level `history` becomes Incremental itself; chapters are always Incremental.
   - **History entries** carry date, review time (`reviewTimeSeconds`, feeding the total-time-spent stats), interval, and free-form notes — displayed in the Repetition History popup like natively-recorded reps. A `madeIncremental` marker is appended **after** the imported reps, so the scheduler restarts interval counting at the import (counting hundreds of historical reps would explode the classic exponential scheduler's next interval).
@@ -380,12 +406,14 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
   Crucial maintenance task. Recursively processes every flashcard and tagged Rem in your knowledge base, pre-computing and propagating `cardPriority` tags so that the queue loads instantly on startup.
 
   After the update completes, if any **"Rem not found"** errors were detected, the command automatically offers to **remove orphan cards** — flashcards whose parent Rem has since been deleted. The cleanup flow:
+
   - Shows a summary of all orphan cards found (count + affected Rem IDs)
   - **Offers to preserve cards with review history.** Orphan cards are split by whether they carry a `repetitionHistory` (past reviews and time-spent records, which still feed some RemNote statistics even after the parent Rem is gone). When any orphan has history, you choose:
-    - **Delete only cards without history** — keep the reviewed ones so their stats remain retrievable, or
-    - **Delete all** — remove everything, including reviewed cards (a second confirmation warns that their review/time-spent records will be lost).
+  - **Delete only cards without history** — keep the reviewed ones so their stats remain retrievable, or
+  - **Delete all** — remove everything, including reviewed cards (a second confirmation warns that their review/time-spent records will be lost).
 
     If no orphan has any history, this prompt is skipped and all are removed.
+
   - **Every dialog states what would be lost:** the number of reviews and the total time spent — for the whole batch in the overview, and per Rem (and per card, when one Rem has several) in the detail pages. Cards with nothing recorded read `no review history`. Time is summed from each rep's `responseTime`, capped at your **Flashcard Response Time Limit** setting so one walked-away review can't inflate the figure — the same convention the [Study Dashboard](Study-Dashboard.md) uses.
   - Presents the list in pages of **12 Rems at a time** so the dialog always fits on screen
   - Double-checks each candidate live before removal (transient errors are skipped)
@@ -403,6 +431,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
   Deletes a rem's content the way native delete does (the rem **and its whole subtree**), but first **rescues all repetition history** in that subtree so your study stats survive. Normally, deleting a flashcard / Incremental / Dismissed rem discards its reviews and time-spent — and the [Study Dashboard](Study-Dashboard.md) total silently drops. This command prevents that.
 
   Works both in the **editor** (on the focused rem) and in the **queue** (on the rem/card currently under review). It will:
+
   - **Consolidate every review in the subtree** — flashcard `repetitionHistory`, Incremental powerup history, and Dismissed powerup history — onto the rem's own **Dismissed** powerup, chronologically. Flashcard reviews are converted to history entries (review time preserved and capped like the Dashboard's flashcard limit; the grade is kept). Reviews with no response time are skipped.
   - **Delete the descendants and remove the flashcards**, then **scrub the rem's content** to a `🪦 Preserved history — content removed` tombstone and hide it from the editor and queue (via the always-on `Preserved History` powerup) so the stale text stops polluting your documents and search.
   - **Clean up the tombstone's tags:** its **Incremental** and **CardPriority** powerups are removed (it holds no cards and is no longer an inheritance anchor), leaving just **Dismissed** + **Preserved History**.
@@ -439,6 +468,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
   Recomputes the band tags behind both the [table-cell badges](Prioritization-&-Sorting.md#priorities-in-tables) and the [PDF highlight badges](Prioritization-&-Sorting.md#priorities-on-pdf-highlights). Bands are kept current by every priority write, so this is for the **first run after enabling the feature** and for repairing drift.
 
   Runs in two phases, reported separately in the developer console:
+
   1. **Table badges** — walks every IncRem and every Rem with a card priority. Only Rems that can appear as a table row (tagged with a non-powerup tag that defines slots) are banded. Links are harvested along the way for phase 2.
   2. **Highlight badges** — takes each highlight and pulls from every Rem referencing it, averaging where several link to one highlight and falling back to dismissed Rems only when nothing live does.
 

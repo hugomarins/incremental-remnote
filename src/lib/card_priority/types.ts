@@ -46,6 +46,14 @@ export interface CardPriorityInfo {
    * matching the Card Priority × Memory Analytics tab.
    */
   cardsNextRep?: (number | null)[];
+  /**
+   * The owning Rem sits under a PAUSED deck. Its cards keep real
+   * `nextRepetitionTime` values — pausing does not clear them — so due-ness has
+   * to be suppressed explicitly or the queue's shields will count cards RemNote
+   * refuses to serve. Stamped at cache-write time from the paused-deck scan
+   * (`lib/paused_decks.ts`); undefined when no scan has run.
+   */
+  paused?: boolean;
 }
 
 /** Per-card item shape consumed by `calculateWeightedShield` and
@@ -57,6 +65,30 @@ export interface PerCardShieldItem {
   remId: string;
   /** Card's own nextRepetitionTime; null/undefined for disabled or never-scheduled cards. */
   nextRepetitionTime?: number | null;
+  /** Inside a paused deck: counts toward the ranking, never toward due. */
+  paused?: boolean;
+}
+
+/**
+ * The one due predicate for per-card shield items.
+ *
+ * A card in a paused deck IS due when its date has passed. Pausing defers the
+ * work; it does not cancel it, and it does not un-forget the card. Suppressing
+ * due-ness here would mean pausing a backlog-heavy deck instantly improved
+ * every statistic that counts it — the shield, its history, the percentiles —
+ * and unpausing would undo the improvement, so a metric meant to be tracked
+ * over time would move for a reason that has nothing to do with studying.
+ * Measured on a live KB: unpausing one deck moved the Cards shield 42.2% →
+ * 39.7% and the top bucket's weight share 24.4% → 22.9%.
+ *
+ * Only `nextRepetitionTime === null` takes a card out — an unscheduled card is
+ * not deferred work, it is not work at all.
+ */
+export function isPerCardDue(
+  item: Pick<PerCardShieldItem, 'nextRepetitionTime' | 'paused'>,
+  now: number,
+): boolean {
+  return (item.nextRepetitionTime ?? Infinity) <= now;
 }
 
 /**
@@ -193,7 +225,12 @@ export function expandCardInfosToCards(infos: CardPriorityInfo[]): PerCardShield
         // deck is paused and shift back when it is unpaused — priority drifting
         // as a side effect of a scheduling decision. See CARD_STATE_REFERENCE.md.
         if (nextRep === null || nextRep === undefined) continue;
-        out.push({ priority: info.priority, remId: info.remId, nextRepetitionTime: nextRep });
+        out.push({
+          priority: info.priority,
+          remId: info.remId,
+          nextRepetitionTime: nextRep,
+          paused: info.paused,
+        });
       }
     } else {
       // Fallback for stale caches: synthesize one item per card. We can't tell
@@ -206,6 +243,7 @@ export function expandCardInfosToCards(infos: CardPriorityInfo[]): PerCardShield
           priority: info.priority,
           remId: info.remId,
           nextRepetitionTime: i < dueCount ? 0 : NOT_DUE_SENTINEL,
+          paused: info.paused,
         });
       }
     }

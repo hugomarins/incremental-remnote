@@ -117,6 +117,7 @@ Both commands automatically assign a **Card Priority** to every new cloze, imple
   - the parent's `#cloze-extract` children (clozes previously extracted from it as siblings of the new one), plus
   - the cards the parent rem owns itself — native cloze markers inside its text and front/back-direction cards if it is a flashcard.
   A first cloze from a plain text extract sees `existingCount = 0` and inherits the parent's priority exactly. A first cloze from a Concept/Descriptor extract (which already has 2 own cards) or from a rem that already contains native clozes starts with a non-zero count, reflecting that the material is already partially cardified.
+
 - **`stepSize`** — how much the number moves per cloze, set by **[Priority Step Size](Plugin-Settings-Reference.md#priority)** (default: `5`). The same setting drives the [Quick Priority shortcuts](Prioritization-&-Sorting.md#quick-priority-shortcuts), so one value defines "one step" everywhere in the plugin.
 - The count is **capped at 10 steps**, so even the 15th cloze from the same extract is only 10 steps below the parent — a long cloze session cannot push a card all the way to priority 100.
 
@@ -172,7 +173,7 @@ RemNote has its own built-in cloze system — marking text with `{curly braces}`
 - **Spoiler protection**: RemNote's scheduler automatically **buries** (hides for ~1 hour) other cards (clozes or front/back) from the same Rem after one is reviewed. This prevents you from accidentally getting spoiled on a related answer you haven't been tested on yet.
 - **Compact**: Multiple clozes live inside a single Rem. No extra Rems are created.
 - **Simpler workflow**: Just highlight and mark — no child Rem is generated.
-- **Best for**: Dense material where multiple facts in a single sentence all need to be tested, and you trust RemNote's bury logic to prevent spoilers.
+- **Best for**: Dense material where multiple facts in a single sentence all need to be tested, and you trust RemNote's bury logic to keep the siblings from spoiling each other.
 
 ### `Alt+Z` SuperMemo-style Clozes
 
@@ -180,13 +181,14 @@ RemNote has its own built-in cloze system — marking text with `{curly braces}`
 - **Prioritized approach**: Each cloze carries its own [Card Priority](Priorities-for-Flashcards.md), and the plugin assigns it for you. Every new cloze taken from the same rem gets a priority **number one step higher** than the one before it — and since [lower numbers mean higher priority](Prioritization-&-Sorting.md#priority-value-absolute-priority), each successive cloze is scheduled as slightly *less* important than its predecessor. That matches how you actually read: the fact you cloze first is the one you judged most worth keeping. One step is the **[Priority Step Size](Plugin-Settings-Reference.md#priority)** setting (default `5`), the same step the [Quick Priority shortcuts](Prioritization-&-Sorting.md#quick-priority-shortcuts) use. The full rule — where the parent's priority comes from, what already counts as an existing cloze, and the 10-step ceiling — is in [Auto-Priority Graduation](#auto-priority-graduation) above.
 - **Atomic by design**: Because the child is a separate Rem, and rewording it won't make you lose content (it already lives in the parent), you are naturally encouraged to make each card as atomic as possible. Over time, you can simplify the child's wording — removing irrelevant context — making it faster to review and easier to memorize.
 - **Full context preserved**: The parent rem will continue to carry the whole content, so you are free to edit the child cloze fearlessly.
+- **The parent will not spoil it**: because the parent still carries the whole sentence, showing it as an extract would hand you the answer. While one of your `Alt+Z` clozes is due, the plugin holds the parent Incremental Rem back until you have graded it — see [Spoiler Protection](Reviewing-Items-in-the-Queue.md#spoiler-protection).
 - **Best for**: The incremental approach, where you return to the same passage over several rounds and go one level deeper each time — the most important fact first, the finer detail later. Creating several clozes in one sitting does **not** put them on equal footing: with a parent at priority 30 and a step of 5, they come out at 30, 35, 40, … so the queue reaches them in the order you judged them, spread across sessions rather than bunched into one.
 
 ### Summary
 
 | | Native RemNote Cloze | `Alt+Z` SuperMemo-style Cloze |
 |---|---|---|
-| Spoiler protection (bury) | Yes | No (each card is independent) |
+| Spoiler protection | Yes — RemNote buries sibling cards for ~1h | Yes — the plugin holds the parent extract back ([Spoiler Protection](Reviewing-Items-in-the-Queue.md#spoiler-protection)); sibling clozes stay independent |
 | Standalone Rem | No | Yes |
 | Incrementally introduced to the Queue | No | Yes |
 | Per-card prioritization | No | Yes |
@@ -196,4 +198,4 @@ RemNote has its own built-in cloze system — marking text with `{curly braces}`
 | Back-reference to source rem | -- | Yes (pin appended) |
 | Visual queue badge | No | Yes (violet ↑ badge) |
 
-The two approaches are **complementary**. Use native clozes for quick, spoiler-safe multi-cloze sentences. Use `Alt+Z` when you are reading incrementally and want each fact to stand on its own: ranked in the order you found it, arriving in the queue according to their priority rather than alongside its siblings, and free to be simplified over time — because the parent still holds the full context, nothing is lost when you cut the card down to its essentials.
+The two approaches are **complementary**. Use native clozes for quick multi-cloze sentences where RemNote's bury keeps the siblings from spoiling each other. Use `Alt+Z` when you are reading incrementally and want each fact to stand on its own: ranked in the order you found it, arriving in the queue according to their priority rather than alongside its siblings, and free to be simplified over time — because the parent still holds the full context, nothing is lost when you cut the card down to its essentials.

@@ -30,7 +30,10 @@ export function WeightedShieldTooltip({
     e.stopPropagation();
     if (!allItems || allItems.length === 0) return;
 
-    const kbBreakdown: WeightedShieldBreakdown = computeWeightedShieldBreakdown(allItems, isDuePredicate);
+    const kbBreakdown: WeightedShieldBreakdown = computeWeightedShieldBreakdown(
+      allItems,
+      isDuePredicate
+    );
     const docBreakdown: WeightedShieldBreakdown | null =
       docItems && docItems.length > 0
         ? computeWeightedShieldBreakdown(docItems, isDuePredicate)
