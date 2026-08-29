@@ -2,6 +2,28 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.68 - August 29th, 2026
+
+### ✨ New - convert markup left by PDF extraction into real rich text
+
+RemNote's PDF highlight extraction copies the page's text layer **verbatim** — it runs no markdown or LaTeX parser at all. So a highlight over a formula arrives as the literal characters `\[C_{WP} = \frac{A_{WP}}{L_{PP}B}\]`, and a bold heading as `**2.3.1. Efeito** *squat*`.
+
+The new **Convert extracted markup to rich text** command (`cem`) turns that markup into real RemNote nodes: display and inline formulas become KaTeX, `**bold**` and `*italic*` become formatting. Focus a Rem and run it — if the Rem has descendants the whole subtree is converted, so you can point it at a chapter or an entire Highlights document in one go.
+
+This pairs with a PDF whose text layer has been rebuilt to carry markup in *source* form. Highlights over such a PDF land as plain characters, and this command finishes the job after the fact.
+
+Rems with nothing to convert are left untouched and never rewritten, so the command is safe to re-run over material you have already processed.
+
+📖 [Convert extracted markup to rich text](Plugin-Commands-Reference.md#convert-extracted-markup-to-rich-text)
+
+#### Technical explanation
+
+The converter walks a Rem's rich text array and only transforms text nodes — raw strings and `i: 'm'` — passing images, Rem references and existing formulas through untouched, so a caption that already holds an image keeps it. A node's own formatting is preserved on the plain runs surrounding an extracted formula.
+
+Delimiters are `\[…\]` and `\(…\)` rather than `$$…$$` / `$…$` deliberately. RemNote unescapes markdown inside dollar-delimited spans **before** the math parser sees them, which strips the backslash from `\,` `\;` `\{` `\}` `\%` `\\`. The formula still renders, just wrongly — a thin space silently becomes a literal comma — which makes the corruption easy to miss. Backslash-bracket delimiters pass through intact, and RemNote normalises them to `$…$` / `$$…$$` on storage, so the stored form looks identical either way; only the surviving backslashes tell the two apart.
+
+Display formulas are matched before inline ones, since a display formula may itself contain parentheses that would otherwise be read as an inline delimiter.
+
 ## v1.0.66 - August 29th, 2026
 
 ### ✨ New - hide the front-side table properties of a single card

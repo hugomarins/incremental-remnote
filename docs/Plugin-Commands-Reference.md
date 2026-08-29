@@ -157,6 +157,14 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
 - **Mastery Drill** — `quick: dri`
   Opens the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill) popup — a focused re-practice queue for cards rated *Forgot* or *Hard*. Cards are added automatically as you review; they leave the drill once rated *Good* or *Easy*.
 
+- **Convert extracted markup to rich text** — `quick: cem`
+  Turns markup left behind by PDF text-layer extraction into real RemNote rich text: `\[…\]` becomes a display formula, `\(…\)` an inline one, `**bold**` and `*italic*` become formatting.
+  RemNote's PDF highlight extraction copies the page's text layer **verbatim** — it runs no markdown or LaTeX parser — so highlights over a PDF whose text layer carries markup in source form arrive as literal characters. This command finishes the conversion afterwards.
+  Focus a Rem and run it. If the Rem has descendants, the **whole subtree** is converted, so it can be pointed at a chapter or an entire Highlights document at once. Images, Rem references and formulas that are already rich text pass through untouched, and Rems with nothing to convert are never rewritten — so it is safe to re-run.
+
+  > [!NOTE]
+  > Write `\[…\]` / `\(…\)`, never `$$…$$` / `$…$`. RemNote unescapes markdown inside dollar-delimited spans before the math parser sees them, which strips the backslash from `\,` `\;` `\{` `\}` `\%` `\\` — the formula still renders, just wrongly (a thin space becomes a literal comma).
+
 ### Queue Display Commands
 
 These commands tag a Rem with one of the [Utilities#queue-display-utilities](Utilities.md#queue-display-utilities) powerups. The tagged Rem then renders differently (or is removed entirely) during queue review. All commands work both from the editor and directly inside the Queue. See the [Utilities](Utilities.md#queue-display-utilities) page for visual examples and full behavior of each powerup.
