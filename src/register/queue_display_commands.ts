@@ -7,6 +7,7 @@ import {
   HIDE_GRANDPARENT_POWERUP_CODE,
   REMOVE_PARENT_POWERUP_CODE,
   REMOVE_GRANDPARENT_POWERUP_CODE,
+  HIDE_FRONT_EXTRAS_POWERUP_CODE,
 } from './queue_display_powerups';
 
 /* Powerup codes that, when applied to the CURRENT card, would hide/remove
@@ -25,6 +26,7 @@ const POWERUP_DISPLAY_NAMES: Record<string, string> = {
   [HIDE_GRANDPARENT_POWERUP_CODE]: 'Hide Grandparent',
   [REMOVE_PARENT_POWERUP_CODE]: 'Remove Parent',
   [REMOVE_GRANDPARENT_POWERUP_CODE]: 'Remove Grandparent',
+  [HIDE_FRONT_EXTRAS_POWERUP_CODE]: 'Hide Front Extras',
 };
 
 /* Ported from the standalone Hide in Queue plugin's `runAddPowerupCommand`.
@@ -112,6 +114,15 @@ export async function registerCoreQueueDisplayCommands(plugin: ReactRNPlugin) {
     description: 'Completely remove the grandparent of the tagged Rem from the queue (front and back).',
     quickCode: 'rgp',
     action: async () => runAddPowerupCommand(plugin, REMOVE_GRANDPARENT_POWERUP_CODE),
+  });
+
+  await plugin.app.registerCommand({
+    id: `${HIDE_FRONT_EXTRAS_POWERUP_CODE}Cmd`,
+    name: 'Hide Front Extras (Table Properties)',
+    description:
+      'Hide the table properties shown on the front of this flashcard (they still show on the back).',
+    quickCode: 'hfe',
+    action: async () => runAddPowerupCommand(plugin, HIDE_FRONT_EXTRAS_POWERUP_CODE),
   });
 }
 

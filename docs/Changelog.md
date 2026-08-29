@@ -2,6 +2,22 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.66 - August 29th, 2026
+
+### ✨ New - hide the front-side table properties of a single card
+
+A table column that generates flashcards can be set to print some of the table's properties on the question side — the usual shape of an Anki import done with *"Import notes with multiple fields into a table"*. The setting is per column, so it applies to every row alike: on most rows that context helps, on one row the property *is* the answer.
+
+The new **Hide Front Extras** powerup hides the table properties shown on the **front** of the card you tag — the back still shows everything. Apply it from the queue or the editor with the **Hide Front Extras (Table Properties)** command (`hfe`). Only the tagged card is affected; the rest of the table is untouched. **No Hierarchy** does not cover this: front extras render outside the ancestor hierarchy it hides, so the two are complementary.
+
+📖 [Hide Front Extras](Utilities.md#hide-front-extras)
+
+#### Technical explanation
+
+Front extras render as an `.extra-card-detail` block inside the ancestor's `.indented-rem`, as a sibling of the question Rem — which is why No Hierarchy, scoped to the ancestor's own `> .rn-queue-rem`, never touched them. The back-side extras are a separate block outside the hierarchy tree that only enters the DOM once the answer is revealed, so the rule gates on `.rn-queue__content--answer-hidden` and needs no back-side exception.
+
+The powerup is always registered — it has no counterpart in the standalone Hide in Queue plugin, so it can't produce a `Duplicated powerup` collision and stays outside the Hide-in-Queue integration setting.
+
 ## v1.0.65 - August 28th, 2026
 
 ### 🐛 Fixed - the Card shield graph was plotting a different universe from the shield itself

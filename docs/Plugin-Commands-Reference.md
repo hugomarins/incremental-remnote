@@ -169,6 +169,9 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 - **Remove Grandparent** — `quick: rgp`
   Same as Remove Parent, one level up.
 
+- **Hide Front Extras (Table Properties)** — `quick: hfe`
+  Hides the [table properties shown on the front](Utilities.md#hide-front-extras) of the tagged flashcard — the ones a card-generating table column is configured to print on the question side. They still show on the back.
+
 **Gated by the *Enable Hide-in-Queue powerups and commands* setting** (default off — see [Utilities → Activation](Utilities.md#activation) for the standalone-plugin warning):
 
 - **Hide in Queue** — `quick: hiq`
