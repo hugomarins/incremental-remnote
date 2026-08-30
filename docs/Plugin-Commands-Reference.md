@@ -158,12 +158,14 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   Opens the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill) popup — a focused re-practice queue for cards rated *Forgot* or *Hard*. Cards are added automatically as you review; they leave the drill once rated *Good* or *Easy*.
 
 - **Convert extracted markup to rich text** — `quick: cem`
-  Turns markup left behind by PDF text-layer extraction into real RemNote rich text: `\[…\]` becomes a display formula, `\(…\)` an inline one, `**bold**` and `*italic*` become formatting.
+  Turns markup left behind by PDF text-layer extraction into real RemNote rich text: `\[…\]` and `$$…$$` become a display formula, `\(…\)` and `$…$` an inline one, `**bold**` and `*italic*` become formatting.
   RemNote's PDF highlight extraction copies the page's text layer **verbatim** — it runs no markdown or LaTeX parser — so highlights over a PDF whose text layer carries markup in source form arrive as literal characters. This command finishes the conversion afterwards.
   Focus a Rem and run it. If the Rem has descendants, the **whole subtree** is converted, so it can be pointed at a chapter or an entire Highlights document at once. Images, Rem references and formulas that are already rich text pass through untouched, and Rems with nothing to convert are never rewritten — so it is safe to re-run.
 
+  A single `$` is matched conservatively, since a lone dollar is more often a price than a formula: the opening `$` may not be followed by a space, the closing one may not be preceded by a space or followed by a digit, the span may not contain another `$` or cross a line break, and `\$` is never a delimiter. So `It costs $5 and $10 more.` is left alone.
+
   > [!NOTE]
-  > Write `\[…\]` / `\(…\)`, never `$$…$$` / `$…$`. RemNote unescapes markdown inside dollar-delimited spans before the math parser sees them, which strips the backslash from `\,` `\;` `\{` `\}` `\%` `\\` — the formula still renders, just wrongly (a thin space becomes a literal comma).
+  > When you **author** a text layer, write `\[…\]` / `\(…\)`, not `$$…$$` / `$…$`. RemNote unescapes markdown inside dollar-delimited spans before the math parser sees them, which strips the backslash from `\,` `\;` `\{` `\}` `\%` `\\` — the formula still renders, just wrongly (a thin space becomes a literal comma). Dollar delimiters are recognised by this command for PDFs you did not author.
 
 ### Queue Display Commands
 

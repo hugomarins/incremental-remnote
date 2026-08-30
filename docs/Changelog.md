@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.72 - August 30th, 2026
+
+### ✨ New - `$` and `$$` recognised as LaTeX delimiters
+
+**Convert extracted markup to rich text** now also converts `$…$` and `$$…$$`, for PDFs whose text layer you did not author. A lone `$` is matched conservatively, so prices are left alone.
+
+📖 [Convert extracted markup to rich text](Plugin-Commands-Reference.md#convert-extracted-markup-to-rich-text)
+
 ## v1.0.71 - August 30th, 2026
 
 ### 🐛 Fixed - queue opened with no plugin widgets

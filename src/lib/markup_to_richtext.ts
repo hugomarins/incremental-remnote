@@ -15,16 +15,27 @@ import { ReactRNPlugin, RichTextInterface } from '@remnote/plugin-sdk';
  *
  * so that this command can turn them into rich text after the fact.
  *
- * Delimiters are \[..\] and \(..\) rather than $$..$$ / $..$ on purpose:
- * RemNote unescapes markdown inside dollar-delimited spans, which silently
- * strips the backslash from \, \; \{ \} \% \\ and corrupts the formula while
- * still rendering it.
+ * Our own rebuilt text layers emit \[..\] and \(..\) rather than $$..$$ / $..$
+ * on purpose: RemNote unescapes markdown inside dollar-delimited spans, which
+ * silently strips the backslash from \, \; \{ \} \% \\ and corrupts the formula
+ * while still rendering it. Dollar delimiters are recognised here anyway, since
+ * text extracted from PDFs we did not rebuild routinely carries them:
+ *
+ *   $$ ... $$  display formula      ->  { i: 'x', text, block: true }
+ *   $ ... $    inline formula       ->  { i: 'x', text }
+ *
+ * Single dollars are matched conservatively (pandoc's rule): the opening $ may
+ * not be followed by whitespace, the closing $ may not be preceded by it or
+ * followed by a digit, and the span may not cross a line break — so prices like
+ * "$5 and $10" are left alone.
  */
 
 type RTNode = any;
 
 const DISPLAY = /\\\[([\s\S]+?)\\\]/;
 const INLINE = /\\\(([\s\S]+?)\\\)/;
+const DISPLAY_DOLLAR = /(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$/;
+const INLINE_DOLLAR = /(?<![\\$])\$(?![\s$])([^\n$]+?)(?<![\s\\])\$(?![\d$])/;
 const BOLD = /\*\*([^*]+?)\*\*/;
 const ITALIC = /(?<!\*)\*([^*\n]+?)\*(?!\*)/;
 
@@ -32,7 +43,9 @@ const ITALIC = /(?<!\*)\*([^*\n]+?)\*(?!\*)/;
 // would otherwise be mistaken for an inline one.
 const RULES: { re: RegExp; make: (body: string, attrs: any) => RTNode }[] = [
   { re: DISPLAY, make: (b) => ({ i: 'x', text: b.trim(), block: true }) },
+  { re: DISPLAY_DOLLAR, make: (b) => ({ i: 'x', text: b.trim(), block: true }) },
   { re: INLINE, make: (b) => ({ i: 'x', text: b.trim() }) },
+  { re: INLINE_DOLLAR, make: (b) => ({ i: 'x', text: b.trim() }) },
   { re: BOLD, make: (b, a) => ({ i: 'm', ...a, text: b, b: true }) },
   { re: ITALIC, make: (b, a) => ({ i: 'm', ...a, text: b, l: true }) },
 ];
