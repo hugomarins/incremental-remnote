@@ -2,6 +2,28 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.69 - August 30th, 2026
+
+### ✨ New - All Tips
+
+A fourth button on the sidebar tip opens the whole pile: acknowledged ones first, newest at the top with the date you answered them, then the ones still to come. Each row has its own **Learn More**, and each unanswered one its own **I Got It**. When no tip is on screen the panel shows a **💡 All tips** link instead.
+
+![The sidebar tip with its four buttons: I Got It, Learn More and All Tips, and the ✕ in the corner](assets/panel-hub-2.png){ width="700" }
+
+📖 [All Tips](Getting-Started.md#all-tips)
+
+### 🐛 Fixed - the same tips kept coming back
+
+Two causes. Tips were drawn at random, so with a few left in the pile the same one recurred; they are now offered in rotation, least recently seen first. And "one tip per session" only held while the sidebar stayed put — RemNote remounts it as you use the app, and each remount drew again.
+
+📖 [Tips](Getting-Started.md#tips)
+
+#### Technical explanation
+
+Acknowledgements were never lost, but lived in synced storage alone — what lost the Card shield history in the storage overhaul. They are now mirrored locally, read as the union of both, and merged before writing, so an un-hydrated `getSynced` can neither resurrect a retired tip nor overwrite a full record with one id. Existing ones are copied to the mirror on the next panel mount. An acknowledgement made before `getCurrentKnowledgeBaseData()` resolved used to land in a `default` bucket no later read consulted; that bucket is now folded into the current knowledge base.
+
+`pickTip` takes a last-shown map (never-shown first, then oldest, random tie-breaks); the drawn tip is held in session storage. Both are local — pacing, not decisions. New **Onboarding Tips State** section in the Debug popup: every store and partition, per-tip presence in each, rotation order, and a reset.
+
 ## v1.0.68 - August 29th, 2026
 
 ### ✨ New - convert markup left by PDF extraction into real rich text

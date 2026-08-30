@@ -533,11 +533,20 @@ The plugin's hub, at the bottom of the left sidebar. Header controls: **⌨** ([
 
 Two action buttons: **Sorting** ([Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)), and a **Priority Review** group of three — the label creates a [Priority Review Document](Priority-Review-Document.md) scoped to the document you currently have open (naming that scope under the button), **👁** opens the **Priority Review Queue** Rem that lists every review document you have built, and **🧹** runs [Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document).
 
-![The Incremental RemNote panel in the sidebar](assets/panel-hub.png){ width="700" }
+![The Incremental RemNote panel in the sidebar](assets/panel-hub-2.png){ width="700" }
 
-Below the shortcuts it shows **one onboarding tip per session**, with **I Got It** (retires the tip permanently, per knowledge base), **✕** (returns it to the pile; the panel also goes quiet for two hours) and **Learn More** (opens the tip's documentation section). Either answer closes the tip area until the next start — it never chains into a second tip.
+Below the shortcuts it shows **one onboarding tip per session**, with **I Got It** (retires the tip permanently, per knowledge base), **✕** (returns it to the pile; the panel also goes quiet for two hours), **Learn More** (opens the tip's documentation section) and **All Tips** (opens the full list). Either answer closes the tip area until the next start — it never chains into a second tip, and never swaps the tip for another one mid-session. Tips still in the pile are offered in rotation, least recently seen first, so none repeats until the others have had their turn.
 
 📖 **Full documentation:** [The Incremental RemNote Panel](Getting-Started.md#the-incremental-plugin-panel)
+
+### 6.10.1. All Tips Popup
+**Trigger:** the **All Tips** button on a tip, or the **💡 All tips** link the panel shows when no tip is on screen
+
+The whole tip pile in one list: acknowledged tips first with the date you answered them (newest at the top), then the ones still to come, in the order the panel will offer them. Each row carries its own **Learn More**, and unacknowledged rows carry their own **I Got It** — which retires the tip exactly as the panel's button does.
+
+`↑`/`↓` move, `Home`/`End` jump to either end, `Enter` acknowledges, `Space` opens the documentation, `Esc` closes.
+
+📖 **Full documentation:** [All Tips](Getting-Started.md#all-tips)
 
 ### 6.11. Empty Extra Card Detail Popup
 **Trigger:** `Delete Empty Extra Card Detail Rems` command (quick code `decd`)

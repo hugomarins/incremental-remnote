@@ -158,8 +158,47 @@ export const pluginHubWidgetId = 'plugin_hub';
  * to: `{ [kbId]: { acknowledged: string[] } }`.
  */
 export const onboardingTipsStateKey = 'onboarding-tips-state';
+/**
+ * Device-local mirror of the same record, in the same shape.
+ *
+ * Synced storage has lost this plugin's data before (the shield history went
+ * blank when RemNote reworked its storage layer), and an acknowledgement that
+ * evaporates is the one failure the user actually notices: the tip they retired
+ * comes back. The mirror is written on every acknowledgement and unioned into
+ * every read, so a synced value that returns empty — wiped, or simply not
+ * hydrated yet when the sidebar mounts — cannot resurrect a retired tip, and
+ * cannot be written back over the good record either.
+ */
+export const onboardingTipsLocalMirrorKey = 'onboarding-tips-state-local';
 /** Local timestamp until which the tip panel stays quiet after a ✕ dismissal. */
 export const onboardingTipsSnoozeKey = 'onboarding-tips-snooze-until';
+/**
+ * Set once a tip has been answered in this session, in **session** storage.
+ *
+ * "One tip per session" was previously enforced only by the hub component not
+ * re-drawing while it stayed mounted, which is not the same thing: the sidebar
+ * slot remounts as the app is used, and each remount re-ran the draw. With most
+ * of a category acknowledged the pool is small, so those re-draws land on the
+ * same two or three tips and read as a tip you already answered coming back.
+ */
+export const onboardingTipsAnsweredSessionKey = 'onboarding-tips-answered-session';
+/**
+ * The tip drawn in this session, so a remount re-shows THAT tip rather than
+ * drawing another. Without it "one tip per session" only held once the tip was
+ * answered — before that, every remount rolled again.
+ */
+export const onboardingTipsDrawnSessionKey = 'onboarding-tips-drawn-session';
+/**
+ * Local, KB-partitioned record of when each tip was last put on screen:
+ * `{ [kbId]: { [tipId]: epochMs } }`. Feeds the least-recently-shown draw.
+ *
+ * Local rather than synced on purpose. This is pacing, not a decision the user
+ * made — it does not deserve sync traffic on every panel mount, and a tip seen
+ * on the desktop this morning is not one the phone needs to skip tonight.
+ */
+export const onboardingTipsLastShownKey = 'onboarding-tips-last-shown';
+/** Popup widget id for the "All Tips" list behind the tip card's third button. */
+export const onboardingTipsWidgetId = 'onboarding_tips';
 /**
  * The user closed the hub panel. **Session** storage on purpose: closing it is
  * "not now, I need the room", not a preference — it comes back on the next
