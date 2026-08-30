@@ -2,6 +2,12 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.71 - August 30th, 2026
+
+### 🐛 Fixed - queue opened with no plugin widgets
+
+The right sidebar and every plugin widget sometimes failed to appear on queue entry, until you clicked the Practiced Queues tab by hand.
+
 ## v1.0.70 - August 30th, 2026
 
 ### ✨ New - Card Enablement Audit

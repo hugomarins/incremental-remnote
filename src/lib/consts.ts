@@ -365,6 +365,10 @@ export const autoFocusQueueDashboardId = 'auto-focus-queue-dashboard';
 // can't run after removeCurrentCardFromQueue in the widget, which by then has
 // been torn down. See refocus flow in lib/incremental_rem + register/events.
 export const pendingQueueDashboardRefocusKey = 'pending-queue-dashboard-refocus-at';
+// Session mount marker written by the practiced_queues widget. Read by
+// lib/queue_dashboard as both a "did the tab come up?" acknowledgement and as
+// the canary target for its wedged-channel watchdog.
+export const practicedQueuesVisibleKey = 'practiced_queues_visible';
 export const priorityShieldHistoryKey = 'priority-shield-history-key';
 export const priorityShieldHistoryMenuItemId = 'priority-shield-history-menu-item-id';
 export const documentPriorityShieldHistoryKey = 'document-priority-shield-history-key';
