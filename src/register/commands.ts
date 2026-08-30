@@ -41,6 +41,7 @@ import {
   enableMasteryDrillId,
   enableFlashcardPrioritisationId,
   hasImagePowerupName,
+  cardEnablementAnchorKey,
 } from '../lib/consts';
 import { computeWeightedShieldBreakdown, formatDuration } from '../lib/utils';
 import {
@@ -1166,6 +1167,28 @@ export async function registerCommands(plugin: ReactRNPlugin) {
 
       // Open the batch card priority widget
       await plugin.widget.openPopup('batch_card_priority');
+    },
+  });
+
+  // Card Enablement Audit. The batch form of the debug widget's single-Rem
+  // "Probe Card Enablement": it takes an anchor Rem and asks every Rem in its
+  // orbit whether it actually produces flashcards, then fixes the two states a
+  // flag can fix. Opens on ANY focused Rem — unlike the card-priority batch
+  // above, "nothing is tagged with this" is not a reason to refuse, since the
+  // panel's descendants scope does not need a tag at all.
+  plugin.app.registerCommand({
+    id: 'card-enablement-audit',
+    name: 'Audit Card Enablement (tagged / referencing / descendants)',
+    description:
+      'Find Rems that generate no flashcards — direction set to none, cards switched off — and fix them in bulk.',
+    action: async () => {
+      const focused = await plugin.focus.getFocusedRem();
+      if (!focused) {
+        await plugin.app.toast('Please focus on a rem first');
+        return;
+      }
+      await plugin.storage.setSession(cardEnablementAnchorKey, focused._id);
+      await plugin.widget.openPopup('card_enablement_audit');
     },
   });
 

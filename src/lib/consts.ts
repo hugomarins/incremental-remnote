@@ -267,6 +267,16 @@ export const suppressionReportKey = 'suppression-report';
  *  Ids only — the actionable set is a couple of hundred, far inside the
  *  per-key budget. */
 export const verifiedSuppressedRemsKey = 'verified-suppressed-rems';
+
+/** Session: the anchor Rem the Card Enablement Audit panel opened on. Set by
+ *  the command / document-menu item before the popup mounts, exactly as the
+ *  batch card-priority panel does with its own anchor. */
+export const cardEnablementAnchorKey = 'card-enablement-anchor-rem';
+
+/** Session: the last Card Enablement Audit apply's before-state, so the panel
+ *  can offer an undo after a bulk write. Session rather than synced — an undo
+ *  belongs to the run that is still on screen. */
+export const cardEnablementSnapshotKey = 'card-enablement-last-snapshot';
 export const fsrsCalibrationLastPeriodKey = 'fsrs-calibration-last-period';
 export const studyDashboardLastPeriodKey = 'study-dashboard-last-period';
 /**

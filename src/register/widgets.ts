@@ -80,6 +80,13 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
     },
   });
 
+  plugin.app.registerWidget('card_enablement_audit', WidgetLocation.Popup, {
+    dimensions: {
+      width: 1100,
+      height: 1100,
+    },
+  });
+
   plugin.app.registerWidget('reschedule', WidgetLocation.Popup, {
     dimensions: {
       width: '100%',
