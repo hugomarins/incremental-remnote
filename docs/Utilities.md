@@ -915,6 +915,82 @@ The **scan is quick**, even across a whole knowledge base: reading every Rem tak
 
 ---
 
+### Card Enablement Audit { #card-enablement-audit }
+
+**`Audit Card Enablement (tagged / referencing / descendants)`** takes one anchor Rem, asks every Rem in its orbit whether it actually produces flashcards, and lets you switch the broken ones back on in bulk.
+
+#### The problem it solves
+
+A Rem can look exactly like a flashcard — a front, a back, a cloze — and generate **nothing**. There are several ways that happens, and RemNote shows none of them in the outline:
+
+* the **flashcard direction** is set to `none`, so neither the forward nor the backward card exists;
+* **Enable Cards** is off on the Rem itself;
+* an ancestor carries **Disable Descendant Cards**;
+* the Rem is a **table** or sits inside one — RemNote ships table rows with cards off;
+* the cards were switched off **one at a time** in the queue.
+
+The one that arrives in bulk is the first. An **Anki import** can land hundreds of Rems at `enablePractice=true, practiceDirection=none` — they read as perfectly ordinary flashcards and are simply never scheduled.
+
+!!! warning "These Rems are invisible to every other tool"
+    A Rem whose direction was set to `none` before any card was made owns **no card records at all**. It therefore produces no rows in the card table, which is what the [Suppressed Cards](Prioritization-&-Sorting.md#suppressed-cards) breakdown is built from — so no amount of filtering there will ever show it. RemNote's own search cannot express the question either, because there is no text to match on.
+
+    This audit works the other way round: it starts from a **set of Rems** and asks each one what it generates. A Rem with no cards at all is a result, not an absence.
+
+#### Choosing what to audit
+
+The anchor is the focused Rem (or the document you ran the command from). Four checkboxes decide the population, and they combine freely:
+
+* **Tagged with it** — every instance of the anchor used as a tag.
+* **Referencing it** — every Rem whose text links to the anchor.
+* **Its descendants** — the anchor itself and everything underneath it.
+* **Expand each match** — add every match's own subtree.
+
+That last one is usually what reaches an imported deck: the tag or the reference sits on the container, while the Rems that own the cards are its children.
+
+#### Reading the results
+
+Each Rem gets one **verdict**, shown as a coloured chip you can click to filter the list. The panel opens showing the two that are worth hunting.
+
+| Verdict | Meaning | Fixable here |
+| --- | --- | --- |
+| `dir=none` | Has card material, practice is on, no direction enabled | ✅ |
+| `practice off` | **Enable Cards** is off on the Rem | ✅ |
+| `table` | The Rem is a table or sits in one | ✅ |
+| `ancestor off` | An ancestor carries **Disable Descendant Cards** | ❌ — untag the ancestor |
+| `paused deck` | Inside a paused deck | ❌ — unpause the deck |
+| `not surfaced` | Nothing surfaces and no Rem-level flag explains it | ❌ — a per-card switch, or the markup is gone |
+| `no material` | No back side, no clozes, no card records | ❌ — not a flashcard |
+| `OK` | Producing cards | — |
+
+Every row shows both the cards currently **surfaced** and the card **records** that exist, as `surfaced/records`. Those two numbers are what separate a Rem whose cards were switched off from one that never had any — `rem.getCards()` alone cannot tell them apart.
+
+The verdicts are ordered by what a fix would actually accomplish, so a Rem under a disabling ancestor is reported as `ancestor off` rather than `dir=none`: setting a direction there writes the flag and still produces nothing.
+
+#### Fixing them
+
+Tick the rows you want — the panel pre-selects exactly the fixable ones in the default filter — pick an action, and apply.
+
+* **Set flashcard direction** → `forward` (the default), `both`, `backward` or `none`.
+* **Switch cards ON** / **Switch cards OFF**.
+
+`↑`/`↓` move, `Space` selects, `A` selects everything shown, `Enter` applies, `Esc` closes.
+
+!!! danger "Enabling cards creates cards"
+    A Rem at `direction=none` that never had a card gets a **brand-new one**, with no repetition history and a due date of *now*. Fixing three hundred imported rows drops three hundred new cards straight into your queue.
+
+    The **card priority** field beside the action exists for this: tick it and every Rem the run enables also gets that priority, so the new cards enter the queue where you chose instead of wherever they would have inherited from. See [Priorities for Flashcards](Priorities-for-Flashcards.md).
+
+After the run the panel reports how many cards **actually appeared** — read back from the Rems, not predicted, since whether a direction change revives an old card record or mints a new one is RemNote's decision.
+
+#### Undoing
+
+The current state of every Rem — its **Enable Cards** flag and its **direction** — is captured *before* the first write, offered as a JSON download, and restorable with **Undo last apply** in the panel.
+
+!!! tip "Try a handful first"
+    Select five rows and apply. The report tells you exactly how many cards that produced, which is the honest way to find out what a run over the whole deck will do to your queue before you commit to it.
+
+---
+
 ## Under the Hood
 
 Not a utility — infrastructure that several of the commands above depend on.

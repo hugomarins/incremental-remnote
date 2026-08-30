@@ -2,6 +2,38 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.70 - August 30th, 2026
+
+### ✨ New - Card Enablement Audit
+
+A Rem can look exactly like a flashcard and generate nothing. The new **Audit Card Enablement** command takes one anchor Rem, asks every Rem tagged with it, referencing it or descended from it whether it actually produces cards, and switches the broken ones back on in bulk — with a card priority for the ones it enables, and an undo.
+
+The case it was built for is an **Anki import**: hundreds of Rems arrive with the flashcard direction set to `none`. They read as ordinary cards and are never scheduled — and because they own **no card records at all**, no card-driven tool can see them and RemNote's search cannot express the question.
+
+📖 [Card Enablement Audit](Utilities.md#card-enablement-audit)
+
+#### Technical explanation
+
+The walk is Rem-driven rather than card-driven, which is the whole point: a Rem at `direction=none` produces zero rows in `card.getAll()`, so the Suppressed Cards breakdown is structurally blind to it however it is filtered. Verdicts follow `CARD_STATE_REFERENCE.md` and are ordered by what a fix would accomplish — a disabling ancestor outranks the Rem's own direction, since setting a direction under one writes the slot and produces nothing.
+
+Three things make it usable at scale, where the single-Rem debug probe is not: the card table is fetched once and indexed by `remId` instead of once per Rem; ancestor chains are memoised per parent id, so the hundreds of rows of an imported deck resolve one shared chain and get their breadcrumb from the same walk; and plain-string rich text is joined locally rather than paying a `normalize` + `toString` round trip per Rem. Writes are sequential under a suppression lease, and the cards created are counted by reading back afterwards rather than predicted.
+
+### ✨ New - remove card priorities in bulk
+
+The **Batch Card Priority** panel can now take priorities off the same selection it assigns them to. Undoable, with the before-state downloaded as JSON, and the table badge goes with the priority.
+
+It counts only Rems that physically carry the tag — a Rem with no tag still *resolves* an inherited priority, but there is nothing there to remove. No knowledge-base-wide sweep is needed afterwards: the removal prunes exactly those Rems from the cache, and *Update all inherited Card Priorities* would re-tag the ones just cleared. What does go stale is descendants, and a cascade from the removed Rems fixes those.
+
+📖 [Removing card priorities in bulk](Priorities-for-Flashcards.md#removing-card-priorities)
+
+### 🐛 Fixed - one "slot which doesn't exist" toast per Rem during a bulk priority removal
+
+Removing priorities from 223 Rems produced 223 toasts. The removals themselves worked.
+
+#### Technical explanation
+
+`clearRawCardPriority` cleared both priority slots unconditionally, the retired visible one included. Its rejection was caught, but RemNote raises the host-level warning before the promise reaches that catch. The read path already skipped the retired slot; this is the same guard on the write side, keyed on retirement rather than migration — a migrated KB whose visible slot is still registered can hold a stale value that must still be cleared. `stripCardPriorityTag` threads the plugin handle through, and the popup realm warms the retired-slot memo once per run instead of asking per Rem.
+
 ## v1.0.69 - August 30th, 2026
 
 ### ✨ New - All Tips

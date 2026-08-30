@@ -578,6 +578,20 @@ Two stages, like the Empty Extra Card Detail popup and for the same reason: the 
 
 ---
 
+### 6.13. Card Enablement Audit Popup
+**Trigger:** `Audit Card Enablement (tagged / referencing / descendants)` command, or the **Document Menu** (⋯) of any Rem
+
+Finds the Rems in an anchor's orbit that generate no flashcards, and fixes the two states a flag can fix.
+
+- **Scope checkboxes** at the top — tagged / referencing / descendants / expand each match — with a **Rescan** button. Scope changes are explicit, since the walk can cover thousands of Rems.
+- **Verdict chips** with counts, click to show or hide. Opens on the two worth hunting (`dir=none`, `practice off`) and pre-selects exactly the rows a bulk write can actually change.
+- **One row per Rem** — front → back, breadcrumb, **Practice** flag, **Direction**, and `surfaced/records` — clicking the text opens the Rem in a browser tab.
+- **Action bar:** set flashcard direction, switch cards on or off, an optional **card priority** for whatever the run enables, **Apply**, and **Undo last apply** once a run has happened.
+- **Reports what actually happened:** how many Rems changed and how many cards **appeared**, read back from the Rems rather than predicted.
+- **Keyboard-driven:** `↑`/`↓` move, `Space` selects, `A` selects everything shown, `Enter` applies, `Esc` closes — ignored mid-write so a reflex press cannot lose the undo snapshot.
+
+📖 **Full documentation:** [Card Enablement Audit](Utilities.md#card-enablement-audit)
+
 ## 7. Mastery Drill
 
 ### 7.1. Mastery Drill Popup
