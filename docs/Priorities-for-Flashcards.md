@@ -159,7 +159,7 @@ The confirmation splits the selection into `manual` / `incremental` and derived 
 
 ##### Do you need to run "Update all inherited Card Priorities" afterwards?
 
-**No — and it would partly undo the removal.**
+**No.**
 
 * **The cache is already correct.** The removal drops exactly those Rems from the in-memory index and the saved copy, leaving every other row intact. That is a complete update, not an approximation, so there is nothing for a rebuild to fix.
 * **The sweep is the *rebuild*, not the *refresh*.** [It walks the whole knowledge base and tags every card-bearing Rem that lacks a priority](#manual-full-kb-sweep-update-all-inherited-card-priorities) with a derived value — the Rems you just cleared included.

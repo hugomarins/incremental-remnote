@@ -22,7 +22,7 @@ Three things make it usable at scale, where the single-Rem debug probe is not: t
 
 The **Batch Card Priority** panel can now take priorities off the same selection it assigns them to. Undoable, with the before-state downloaded as JSON, and the table badge goes with the priority.
 
-It counts only Rems that physically carry the tag — a Rem with no tag still *resolves* an inherited priority, but there is nothing there to remove. No knowledge-base-wide sweep is needed afterwards: the removal prunes exactly those Rems from the cache, and *Update all inherited Card Priorities* would re-tag the ones just cleared. What does go stale is descendants, and a cascade from the removed Rems fixes those.
+It counts only Rems that physically carry the tag — a Rem with no tag still *resolves* an inherited priority, but there is nothing there to remove.
 
 📖 [Removing card priorities in bulk](Priorities-for-Flashcards.md#removing-card-priorities)
 
