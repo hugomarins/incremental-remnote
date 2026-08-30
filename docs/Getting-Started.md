@@ -30,7 +30,7 @@ For a deeper understanding, see [What is Incrementalism?](What-is-Incrementalism
 
 Once installed, the plugin adds a small **Incremental RemNote** 🌐 panel at the bottom of the left sidebar. It is the one fixed place to reach the plugin from, and where the onboarding tips live.
 
-![The Incremental RemNote panel in the sidebar: header controls, the Sorting button, the Priority Review group with its eye and broom actions, the scope line, and one onboarding tip with its I Got It, Learn More and All Tips buttons](assets/panel-hub-2.png){ width="700" }
+![The Incremental RemNote panel in the sidebar: header controls, the Sorting button, the Priority Review group with its eye and broom actions, the scope line, and one onboarding tip with its I Got It, Learn More and All Tips buttons](assets/panel-hub-2.png){ width="400" }
 
 **In the header:**
 

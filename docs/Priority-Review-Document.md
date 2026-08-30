@@ -40,7 +40,7 @@ You can create a review document from anywhere in RemNote:
 
 * **Sidebar Panel:** The **Priority Review** button in the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel), which names the scope it will use underneath it. The two buttons beside it are the other half of the workflow — **👁** opens the **Priority Review Queue** Rem, where every document you have built is listed, and **🧹** runs [Clean Priority Review Documents](#cleaning-a-review-document).
 
-![The Incremental RemNote panel: the Priority Review button with its eye and broom actions, and the scope it is about to use named underneath](assets/panel-hub-2.png){ width="700" }
+![The Incremental RemNote panel: the Priority Review button with its eye and broom actions, and the scope it is about to use named underneath](assets/panel-hub-2.png){ width="400" }
 
 ### 2. Configure Your Session
 A popup will appear allowing you to tailor the session:

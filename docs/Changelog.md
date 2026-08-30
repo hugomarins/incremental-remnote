@@ -8,7 +8,7 @@ This page documents the major changes and improvements for each version of the I
 
 A fourth button on the sidebar tip opens the whole pile: acknowledged ones first, newest at the top with the date you answered them, then the ones still to come. Each row has its own **Learn More**, and each unanswered one its own **I Got It**. When no tip is on screen the panel shows a **💡 All tips** link instead.
 
-![The sidebar tip with its four buttons: I Got It, Learn More and All Tips, and the ✕ in the corner](assets/panel-hub-2.png){ width="700" }
+![The sidebar tip with its four buttons: I Got It, Learn More and All Tips, and the ✕ in the corner](assets/panel-hub-2.png){ width="400" }
 
 📖 [All Tips](Getting-Started.md#all-tips)
 
