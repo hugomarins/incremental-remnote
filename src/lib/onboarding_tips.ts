@@ -188,6 +188,13 @@ export const ONBOARDING_TIPS: OnboardingTip[] = [
     body: 'The ⚙ above opens them: grouped, and each one linked to the page explaining it.',
     docsPath: 'Plugin-Settings-Reference/',
   },
+  {
+    id: 'review-queue-in-sidebar',
+    category: 'basics',
+    title: 'Your queue, on your phone',
+    body: 'Priority Review Queue is pinned to your sidebar — where the plugin panel does not reach.',
+    docsPath: 'Priority-Review-Document/#the-priority-review-queue-in-your-sidebar',
+  },
 
   // --- Utilities -------------------------------------------------------
   // Drawn only once every `basics` tip has been acknowledged.

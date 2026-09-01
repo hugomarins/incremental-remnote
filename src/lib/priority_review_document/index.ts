@@ -11,6 +11,7 @@ import { CardPriorityInfo, calculateCardRemPercentilesFromCards } from '../card_
 import { calculateAllPercentiles } from '../utils';
 import { buildComprehensiveScope } from '../scope_helpers';
 import { saveReviewGraphData } from './graph_data';
+import { ensureReviewQueueTagPinnedOnce } from './sidebar_pin';
 import { safeRemTextToString } from '../pdfUtils';
 import * as _ from 'remeda'; // Ensure remeda is imported for uniqBy if available, or use custom
 
@@ -569,7 +570,19 @@ Created: ${timestamp}`;
 
   // 8. Create portals in the document
   const reviewQueueTag = await findOrCreateTag(plugin, 'Priority Review Queue');
-  if (reviewQueueTag) { await reviewDoc.addTag(reviewQueueTag); }
+  if (reviewQueueTag) {
+    await reviewDoc.addTag(reviewQueueTag);
+    // Also live under the tag Rem, rather than at the top level of the knowledge
+    // base. This changes nothing the user sees — RemNote lists a review document
+    // under its tag as an instance ("All Tagged Bullets") whether or not it is
+    // also a child, and a document queue already gathers a tag's instances with
+    // their descendants — but it keeps the review documents together instead of
+    // scattering one more timestamped top-level document per session.
+    await reviewDoc.setParent(reviewQueueTag);
+    // The tag Rem is the one door to every review document ever built, so it
+    // earns a permanent sidebar slot — offered once, then left to the user.
+    await ensureReviewQueueTagPinnedOnce(plugin, reviewQueueTag);
+  }
 
   for (const item of mixedItems) {
     // Create a regular rem that will contain the portal reference

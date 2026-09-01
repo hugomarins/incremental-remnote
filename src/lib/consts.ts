@@ -501,6 +501,12 @@ export const popupDocumentIdKey = 'popup-document-id';
 // iframe dies during the layout reorg, so the scroll must run in main-process.
 export const pendingScrollRequestKey = 'pending-scroll-request';
 
+// SYNCED: set once the plugin has pinned the "Priority Review Queue" tag Rem to
+// the left sidebar, so the pin is offered exactly once per knowledge base. A
+// user who unpins it afterwards keeps it unpinned — see
+// priority_review_document/sidebar_pin.ts.
+export const prqTagSidebarPinnedKey = 'prq-tag-sidebar-pinned';
+
 // Priority Review Graph
 export const priorityGraphPowerupCode = 'priority_review_graph';
 // Hidden slot on the graph Rem holding that graph's data as serialized JSON.

@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.73 - September 1st, 2026
+
+### ✨ New - Priority Review Queue pinned to your sidebar
+
+The `#Priority Review Queue` tag Rem is pinned to your sidebar the first time a review document is built — once, and never again if you unpin it — so the queue is reachable on mobile, where the plugin panel is not. Review documents are now created under that tag Rem instead of at the top level.
+
+📖 [The Priority Review Queue in your sidebar](Priority-Review-Document.md#the-priority-review-queue-in-your-sidebar)
+
 ## v1.0.72 - August 30th, 2026
 
 ### ✨ New - `$` and `$$` recognised as LaTeX delimiters

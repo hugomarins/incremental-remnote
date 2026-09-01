@@ -81,6 +81,18 @@ The plugin will generate a new document tagged `#Priority Review Queue` and auto
 
 ---
 
+## The Priority Review Queue in your sidebar
+
+Every review document is tagged `#Priority Review Queue`, and that tag Rem is the index of all of them: open it and the **All Tagged Bullets** table lists every review document you have built, on desktop and on your phone alike.
+
+The first time the plugin builds a review document, it **pins that tag Rem to your left sidebar**. This happens once per knowledge base, ever. If you unpin it, it stays unpinned — the plugin will not put it back.
+
+The reason is mobile. The plugin panel and the hub, which are where you would normally click through to the queue, are not rendered on a phone at all; the sidebar is. A pinned Priority Review Queue is one tap away from anywhere, which is what makes a review document you built at your desk practicable on the train.
+
+Review documents themselves are **not** pinned — that would add a timestamped sidebar entry per session, and the tag already lists them. They are created as children of the tag Rem, so they stay together instead of scattering one more top-level document per session. Nothing about how you find or practise them changes: they are listed as instances of the tag exactly as before, and practising the tag Rem still gathers every instance with its descendants.
+
+---
+
 ## How Items Are Selected
 
 The plugin uses a sophisticated selection process to ensure you see the right material:
