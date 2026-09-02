@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.74 - September 2nd, 2026
+
+### ✨ New - Priority Review Documents no longer hand you a parent's answer
+
+A due flashcard whose parent or grandparent is also due is held back, and the blocking ancestor takes its place in the document — practise it now, and the descendant is free next time.
+
+📖 [Ancestor Spoiler Protection](Priority-Review-Document.md#ancestor-spoiler-protection)
+
 ## v1.0.73 - September 1st, 2026
 
 ### ✨ New - Priority Review Queue pinned to your sidebar
