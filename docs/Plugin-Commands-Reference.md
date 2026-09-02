@@ -263,7 +263,7 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
 
   - **Smart Detection:** Automatically detects the current case and moves to the next stage.
   - **Rich-Text Safe:** Preserves bold, italic, highlights, and other formatting even across element boundaries.
-  - **Acronyms:** Title Case keeps acronyms and initialisms uppercase (`(ab)` → `(AB)`), from a built-in list plus your own in **IE Settings → Other → Title Case Acronyms**.
+  - **Acronyms & numerals:** Title Case keeps acronyms and initialisms uppercase (`(ab)` → `(AB)`), from a built-in list plus your own in **IE Settings → Other → Title Case Acronyms**, and recognises Roman numerals used as numbering (`seção ii` → `Seção II`).
   - **Multi-Rem:** Select one or more whole rems in the outline and the cycle applies to each rem's text (and the back text of concept/descriptor rems) in one shot.
   - **Inspired by:** This feature was inspired by Toshi's ["Text Case Converter"](https://github.com/hitsu3r/remnote-text-case-converter) plugin.
 

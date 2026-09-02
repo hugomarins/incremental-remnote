@@ -40,14 +40,16 @@ const LETTER_RE = /\p{L}/u;
 // Words that are uppercase by nature and must survive Title Case intact:
 // "arqueação bruta (ab)" → "Arqueação Bruta (AB)", never "(Ab)".
 //
-// Three signals, checked in this order:
+// Four signals, checked in this order:
 //   1. The acronym list — BUILT_IN_ACRONYMS plus whatever the user added under
 //      Settings → Other → "Title Case Acronyms". This is the only signal that
 //      survives a round trip through lowercase, so domain terms belong here.
 //   2. Dotted initialisms ("u.s.a.", "e.u.") and single initials ("A. Silva"),
 //      minus the handful of dotted abbreviations that are conventionally
 //      lowercase ("e.g.", "i.e.").
-//   3. Caps already present in the source: a run of 2+ uppercase letters inside
+//   3. Roman numerals used as numbers ("Seção II", "Capítulo V") — see the
+//      note above ROMAN_RE for what counts as being used as a number.
+//   4. Caps already present in the source: a run of 2+ uppercase letters inside
 //      text that is NOT entirely uppercase is taken at its word and preserved.
 //      Switched off for all-caps input, where existing caps say nothing.
 //
@@ -61,15 +63,17 @@ const BUILT_IN_ACRONYMS = new Set([
     'GT', 'NT', 'GRT', 'NRT', 'DWT', 'TPB', 'AB', 'LOA', 'TEU', 'FEU',
     'IMO', 'MMSI', 'AIS', 'ECDIS', 'GMDSS', 'EPIRB', 'SART', 'VHF', 'MF', 'HF',
     'SOLAS', 'MARPOL', 'STCW', 'COLREG', 'COLREGS', 'UNCLOS', 'ISM', 'ISPS',
-    'MLC', 'PSC', 'SAR', 'MOB', 'OOW', 'ETA', 'ETD',
+    'MLC', 'PSC', 'SAR', 'OOW', 'ETA', 'ETD',
     'LNG', 'LPG', 'VLCC', 'ULCC', 'FPSO', 'ROV', 'AUV',
     'IALA', 'IHO', 'ILO', 'ITF', 'USCG', 'ANTAQ', 'DPC', 'NORMAM', 'VDR',
-    // Institutional / geographic
-    'EU', 'UN', 'UK', 'USA', 'EUA', 'ONU', 'NASA', 'NATO', 'OTAN',
+    // Institutional / geographic. Note the absences: "EU" would capitalise every
+    // Portuguese "eu", as "MOB" and "RAM" would every "mob" and "ram". Entries
+    // that collide with a real word belong in the user's own list, not here.
+    'UN', 'UK', 'USA', 'EUA', 'ONU', 'NASA', 'NATO', 'OTAN',
     'CPF', 'CNPJ', 'CEP', 'IBGE', 'INSS',
     'ISO', 'IEC', 'IEEE', 'ANSI', 'GMT', 'UTC',
     // Technical
-    'API', 'ASCII', 'CPU', 'GPU', 'RAM', 'CSS', 'CSV', 'DNS', 'DOI', 'DPI',
+    'API', 'ASCII', 'CPU', 'GPU', 'CSS', 'CSV', 'DNS', 'DOI', 'DPI',
     'FAQ', 'GPS', 'HTML', 'HTTP', 'HTTPS', 'JSON', 'JPG', 'OCR', 'PDF', 'PNG',
     'RGB', 'SQL', 'SVG', 'URL', 'USB', 'UUID', 'XML', 'YAML',
 ]);
@@ -89,6 +93,59 @@ const DOTTED_RE = /^[^\p{L}]*(?:\p{L}\.){2,}[^\p{L}]*$/u;
 // A single initial: one letter followed by a period ("A." in "A. Silva").
 // Without this the article rules would lowercase "a." and "o." mid-title.
 const INITIAL_RE = /^[^\p{L}\p{N}]*\p{L}\.[^\p{L}\p{N}]*$/u;
+
+// ─── Roman numerals ──────────────────────────────────────────────────────────
+// "seção ii" must come out as "Seção II", not "Seção Ii". A numeral is only
+// obvious in context, though: "vi", "li" and "mi" are Portuguese words, "cm",
+// "ml" and "cc" are units, and all of them are valid Roman numerals. So a
+// numeral is uppercased when either
+//   · the word before it names a numbered thing ("Seção", "Chapter", "Papa"), or
+//   · it is two or more letters long and is not one of the ambiguous ones below.
+// Single letters (I, V, X, L, C, D, M) need the lead word — nothing else could
+// tell "Capítulo V" from an ordinary "v".
+
+const ROMAN_RE = /^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
+
+/** Valid numerals that are also words, units or common abbreviations. */
+const AMBIGUOUS_ROMAN = new Set([
+    'VI', 'LI', 'MI', 'DI', 'CI', 'MIX',   // words (PT "vi", "li"; EN "mix")
+    'CM', 'MM', 'ML', 'CL', 'DL', 'CC',    // units
+    'CD', 'CV', 'DC', 'MC', 'MD',          // abbreviations
+]);
+
+/** Words that introduce a number, in Portuguese and English. */
+const NUMBERING_LEAD_WORDS = new Set([
+    // Portuguese
+    'secao', 'subsecao', 'capitulo', 'parte', 'volume', 'tomo', 'livro', 'titulo',
+    'anexo', 'apendice', 'artigo', 'art', 'regra', 'item', 'fase', 'etapa', 'nivel',
+    'classe', 'tipo', 'grau', 'figura', 'tabela', 'quadro', 'emenda', 'edicao',
+    'capitulos', 'secoes', 'guerra', 'seculo', 'papa', 'rei', 'rainha', 'dom',
+    'imperador', 'luis', 'joao', 'pedro', 'henrique',
+    // English
+    'section', 'subsection', 'chapter', 'part', 'book', 'title', 'annex', 'appendix',
+    'article', 'rule', 'phase', 'stage', 'level', 'class', 'type', 'grade', 'figure',
+    'table', 'edition', 'amendment', 'war', 'century', 'king', 'queen', 'pope',
+    'chapters', 'sections', 'volumes',
+]);
+
+/** Lowercased and stripped of accents, for the lead-word lookup. */
+function leadWordKey(raw: string): string {
+    return raw
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .replace(/[^\p{L}]/gu, '')
+        .toLowerCase();
+}
+
+/**
+ * True when the word is a Roman numeral used as a number here — see the note
+ * above for what counts as sufficient indication.
+ */
+function isRomanNumeral(key: string, prevWord: string | undefined): boolean {
+    if (key.length === 0 || !ROMAN_RE.test(key)) return false;
+    if (prevWord && NUMBERING_LEAD_WORDS.has(leadWordKey(prevWord))) return true;
+    return key.length >= 2 && !AMBIGUOUS_ROMAN.has(key);
+}
 
 /** Letters/digits only, uppercased — the lookup key for the acronym lists. */
 function acronymKey(raw: string): string {
@@ -147,7 +204,7 @@ function isAllUpper(text: string): boolean {
 interface AcronymContext {
     /** Extra acronyms from the user setting, as returned by parseAcronymList. */
     extra?: Set<string>;
-    /** Whether the surrounding text is entirely uppercase (signal 3 off). */
+    /** Whether the surrounding text is entirely uppercase (signal 4 off). */
     allUpperSource?: boolean;
 }
 
@@ -158,9 +215,16 @@ interface AcronymContext {
  *   'full'   — every letter uppercase ("AB", "U.S.A.")
  *   'plural' — every letter uppercase except the trailing "s" ("GTs")
  */
-function acronymCasing(rawWord: string, ctx: AcronymContext): 'full' | 'plural' | null {
+function acronymCasing(
+    rawWord: string,
+    ctx: AcronymContext,
+    prevWord?: string
+): 'full' | 'plural' | null {
     const key = acronymKey(rawWord);
-    if (key.length < 2) return INITIAL_RE.test(rawWord) ? 'full' : null;
+    if (key.length < 2) {
+        if (INITIAL_RE.test(rawWord)) return 'full';
+        return isRomanNumeral(key, prevWord) ? 'full' : null;
+    }
 
     const listed = (k: string) => BUILT_IN_ACRONYMS.has(k) || ctx.extra?.has(k) === true;
 
@@ -171,6 +235,7 @@ function acronymCasing(rawWord: string, ctx: AcronymContext): 'full' | 'plural' 
 
     if (DOTTED_RE.test(rawWord) && !isLowercaseDotted(rawWord)) return 'full';
     if (INITIAL_RE.test(rawWord)) return 'full';
+    if (isRomanNumeral(key, prevWord)) return 'full';
 
     if (
         !ctx.allUpperSource &&
@@ -230,7 +295,11 @@ export function detectCase(text: string, extraAcronyms?: Set<string>): CaseState
         // Acronyms are title-consistent when written the way Title Case would
         // write them; without this an "(AB)" would make the whole line read as
         // untitled and the cycle could never leave Title Case.
-        const casing = acronymCasing(raw, { extra: extraAcronyms, allUpperSource: false });
+        const casing = acronymCasing(
+            raw,
+            { extra: extraAcronyms, allUpperSource: false },
+            wordMatches[idx - 1]?.[0]
+        );
         if (casing) {
             const body = casing === 'plural' ? wordLetters.slice(0, -1) : wordLetters;
             const tail = casing === 'plural' ? wordLetters.slice(-1) : [];
@@ -293,7 +362,7 @@ function buildTitleCaseMap(fullText: string, extraAcronyms?: Set<string>): boole
         const isLast = idx === words.length - 1;
 
         // Acronyms are uppercase throughout, whatever position they sit in.
-        const casing = acronymCasing(raw, acronymCtx);
+        const casing = acronymCasing(raw, acronymCtx, words[idx - 1]?.raw);
         if (casing) {
             const letterPositions: number[] = [];
             for (let i = start; i < end; i++) {

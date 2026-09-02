@@ -56,15 +56,16 @@ Title Case follows **Chicago/APA style**:
 
 #### Acronyms and initialisms
 
-Words that are uppercase by nature stay that way through Title Case — `arqueação bruta (ab)` becomes **Arqueação Bruta (AB)**, never *(Ab)*. Three signals are used, in this order:
+Words that are uppercase by nature stay that way through Title Case — `arqueação bruta (ab)` becomes **Arqueação Bruta (AB)**, never *(Ab)*. Four signals are used, in this order:
 
-1. **The acronym list.** Common maritime (*GT, NT, AB, TPB, DWT, LOA, IMO, MMSI, SOLAS, MARPOL, STCW, ECDIS, GMDSS…*), institutional (*EU, ONU, ISO, CNPJ, IBGE…*) and technical (*PDF, URL, HTML, API, CSV…*) acronyms are built in. Add your own under **IE Settings → Other → [Title Case Acronyms](Plugin-Settings-Reference.md#other)**, separated by commas or spaces.
+1. **The acronym list.** Common maritime (*GT, NT, AB, TPB, DWT, LOA, IMO, MMSI, SOLAS, MARPOL, STCW, ECDIS, GMDSS…*), institutional (*ONU, UN, ISO, CNPJ, IBGE…*) and technical (*PDF, URL, HTML, API, CSV…*) acronyms are built in. Add your own under **IE Settings → Other → [Title Case Acronyms](Plugin-Settings-Reference.md#other)**, separated by commas or spaces.
 2. **Initialisms and initials.** `u.s.a.` → **U.S.A.**, and a lone initial keeps its capital: `o autor a. silva` → **O Autor A. Silva**. The dotted abbreviations that are conventionally lowercase — *e.g., i.e., cf., a.m., p.m.* — are exempt and behave like the minor words above.
-3. **Capitals already in the text.** A word you wrote with two or more capitals is preserved as typed: `RO-RO`, `P&I`, `COVID-19`, `A/S`. This signal is switched off when the *whole* selection is uppercase, where existing capitals say nothing about which words are acronyms — there, signal 1 does the work, so `ARQUEAÇÃO BRUTA (AB)` still title-cases to **Arqueação Bruta (AB)**.
+3. **Roman numerals used as numbers.** `seção ii` → **Seção II**, `capítulo iv` → **Capítulo IV**, `chapter xl` → **Chapter XL**. See [when a numeral counts as a numeral](#when-a-roman-numeral-counts-as-a-numeral) below.
+4. **Capitals already in the text.** A word you wrote with two or more capitals is preserved as typed: `RO-RO`, `P&I`, `COVID-19`, `A/S`. This signal is switched off when the *whole* selection is uppercase, where existing capitals say nothing about which words are acronyms — there, signal 1 does the work, so `ARQUEAÇÃO BRUTA (AB)` still title-cases to **Arqueação Bruta (AB)**.
 
 A trailing plural `s` stays lowercase: **GTs**, not *GTS*.
 
-> **Why the list matters even though capitals are preserved.** Signal 3 reads what is on screen, so it cannot survive the lowercase step of the cycle — once `GT` has become `gt`, only the list knows to bring it back. Domain terms you cycle through all three stages belong in the setting.
+> **Why the list matters even though capitals are preserved.** Signal 4 reads what is on screen, so it cannot survive the lowercase step of the cycle — once `GT` has become `gt`, only the list knows to bring it back. Domain terms you cycle through all three stages belong in the setting.
 
 ##### Examples
 
@@ -74,7 +75,21 @@ A trailing plural `s` stays lowercase: **GTs**, not *GTS*.
 > `tonelagem de porte bruto (tpb) em nm` *(with `TPB, NM` in the setting)*
 > → **Tonelagem de Porte Bruto (TPB) em NM**
 
+> `SEÇÃO II - DIÁRIO DE NAVEGAÇÃO`
+> → **Seção II - Diário de Navegação**
+
 Acronyms are forced uppercase in the **Title Case** step only. The **UPPERCASE** and **lowercase** steps stay literal, so `Shift+F3` can always take you to a fully lowercase selection.
+
+##### When a Roman numeral counts as a numeral
+
+`VI`, `LI` and `MI` are Portuguese words, `CM`, `ML` and `CC` are units, and every one of them is also a valid Roman numeral — so the numeral has to be recognisable as a number before it is capitalised. Two things make it so:
+
+- **The word before it names a numbered thing** — *seção, capítulo, parte, volume, tomo, livro, título, anexo, artigo, regra, item, fase, classe, figura, tabela, século, guerra, papa, rei*, and their English counterparts (*section, chapter, part, book, annex, article, rule, figure, table, century, war, king, pope…*). This is the only route for a **single letter**, since nothing else distinguishes `Capítulo V` from an ordinary *v*: `anexo vi da marpol` → **Anexo VI da MARPOL**.
+- **The numeral is two letters or longer and is not an ambiguous one** — `II`, `III`, `IV`, `XL`, `XVIII` are taken as numerals anywhere in the text, even as the first word: `ii - diário de navegação` → **II - Diário de Navegação**.
+
+Everything else is left alone, so `eu vi o navio` stays **Eu Vi o Navio** and `o volume em cm e ml` stays **O Volume em Cm e Ml**. If you want one of the ambiguous forms capitalised regardless of context, add it to the **Title Case Acronyms** setting.
+
+> **A word on two-letter entries.** For the same reason, `EU`, `MOB` and `RAM` are deliberately *not* in the built-in list — they would capitalise every Portuguese *eu* and every English *mob* and *ram*. Add them yourself if your notes never use those words.
 
 ---
 
