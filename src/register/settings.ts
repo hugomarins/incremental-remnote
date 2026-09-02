@@ -26,9 +26,29 @@ const HIDE_CARD_PRIORITY_CSS = `
 
 const showLeftBorderForIncRemsId = 'show-left-border-for-increms';
 const SHOW_LEFT_BORDER_CSS = `
+  /* Row-level marker. This is the only one that reaches the queue, portals,
+     hover popups and PDF highlights — none of them build the editor container
+     div the block rule below depends on. */
   .rem[data-rem-tags~="incremental"] {
     border-left: 3px solid green;
     padding-left: 5px;
+  }
+  /* Block-level marker in the editor: the container div's box spans the rem AND
+     its descendants, so bordering it carries the indicator down the whole
+     block. Nothing subtler works here — the editor DOM is flat and absolutely
+     positioned, and a rem's descendants (and even its own indentation-guide
+     div) are root-level siblings of this element, not children, so no
+     descendant or child combinator can reach them. Tailwind's border utilities
+     on the container are !important, so ours has to be too. */
+  [data-rem-container-tags~="incremental"] {
+    border-left: 3px solid green !important;
+  }
+  /* Where the block rule applies, drop the row bar: the two sit a few pixels
+     apart and read as one smeared marker. Descendant rems are unaffected —
+     their container divs are siblings, not descendants, of this one. */
+  [data-rem-container-tags~="incremental"] .rem[data-rem-tags~="incremental"] {
+    border-left: none;
+    padding-left: 0;
   }
   /* Same indicator on the document title. There is no .rem wrapper here; the
      document's tags live in data-document-tags on the .rn-document element. */
@@ -43,6 +63,16 @@ const SHOW_DISMISSED_INDICATOR_CSS = `
   .rem[data-rem-tags~="dismissed"]:not([data-rem-tags~="incremental"]) {
     border-left: 3px solid #f59e0b;
     padding-left: 5px;
+  }
+  /* Block-level marker; see the incremental rules above for why the container
+     div is the only element that spans the block. */
+  [data-rem-container-tags~="dismissed"]:not([data-rem-container-tags~="incremental"]) {
+    border-left: 3px solid #f59e0b !important;
+  }
+  [data-rem-container-tags~="dismissed"]:not([data-rem-container-tags~="incremental"])
+    .rem[data-rem-tags~="dismissed"]:not([data-rem-tags~="incremental"]) {
+    border-left: none;
+    padding-left: 0;
   }
   /* Same indicator on the document title; suppressed when also incremental so
      the green border wins, matching the outline behaviour above. */
