@@ -86,6 +86,8 @@ export const hideDismissedTagSettingId = 'hideDismissedTag';
 export const showPinRingIndicatorsSettingId = 'showPinRingIndicators';
 export const performanceModeId = 'performanceMode';
 export const flashcardResponseTimeLimitId = 'flashcard_response_time_limit';
+/** Custom acronyms the Text Case Converter keeps uppercase in Title Case. */
+export const titleCaseAcronymsId = 'title-case-acronyms';
 export const enableMasteryDrillId = 'enable-mastery-drill';
 /** Pre-inversion id, kept only so the migration can convert stored values. */
 export const legacySkipMasteryDrillId = 'skip_mastery_drill';

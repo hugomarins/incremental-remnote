@@ -114,6 +114,7 @@ import {
   nextCase,
   transformCase,
   transformTitleCase,
+  parseAcronymList,
 } from '../lib/text_case_converter_utils';
 import {
   OUTLINE_SNAPSHOT_KEY,
@@ -150,7 +151,7 @@ import {
   syncAllHighlightBands,
 } from '../lib/priority_bands';
 import { CARD_PRIORITY_CODE } from '../lib/card_priority/types';
-import { batchPriorityTargetRemIdsKey } from '../lib/consts';
+import { batchPriorityTargetRemIdsKey, titleCaseAcronymsId } from '../lib/consts';
 import { getIESetting } from '../lib/settings';
 
 // Opens a priority popup against one or many rems. Single-rem calls behave
@@ -3079,9 +3080,13 @@ export async function registerCommands(plugin: ReactRNPlugin) {
           .map((e: any) => (typeof e === 'string' ? e : e?.text ?? ''))
           .join('');
 
+      // Acronyms the user declared in Settings → Other; they join the built-in
+      // list so Title Case can restore "gt" to "GT" after a lowercase pass.
+      const extraAcronyms = parseAcronymList(await getIESetting(plugin, titleCaseAcronymsId));
+
       const applyNextCase = (richText: any[], fullText: string, next: 'lower' | 'title' | 'upper') =>
         next === 'title'
-          ? transformTitleCase(richText, fullText)
+          ? transformTitleCase(richText, fullText, extraAcronyms)
           : transformCase(
               richText,
               next === 'upper' ? (s) => s.toUpperCase() : (s) => s.toLowerCase()
@@ -3103,7 +3108,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
         const combined = rems
           .map((r) => `${richTextToPlain(r.text as any[])}\n${richTextToPlain(r.backText as any[])}`)
           .join('\n');
-        const next = nextCase(detectCase(combined));
+        const next = nextCase(detectCase(combined, extraAcronyms));
 
         for (const rem of rems) {
           const frontRT = (rem.text || []) as any[];
@@ -3128,7 +3133,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
       }
 
       const fullText = richTextToPlain(textSelection.richText);
-      const next = nextCase(detectCase(fullText));
+      const next = nextCase(detectCase(fullText, extraAcronyms));
       const transformed = applyNextCase(textSelection.richText, fullText, next);
 
       await plugin.editor.delete();
