@@ -147,6 +147,7 @@ This widget provides a persistent visual indicator of the item's priority.
 
 *   **Clicking it** opens the full priority popup.
 *   **Expanding it** reveals quick `+` / `-` buttons to adjust priority by 1 or 10 points directly.
+*   **It also carries the Rem's reading state**, when it has any: a [**📄 PDF Range** panel](PDF-Incremental-Reading-Workflow.md#7-inline-pdf-range-management-priority-editor) for a Rem with a PDF source, and a [**🔖 Read Point** panel](Reviewing-Items-in-the-Editor.md#jumping-to-the-read-point) for one whose reading position lives in its own outline. Collapsed, each is reduced to a compact marker — `p.67–94 (81)` for the PDF, a green bookmark for the read point — so a glance down the document says which chapters you are part-way through.
 
 **When to use:** When editing a document and you want to manage priorities without using keyboard shortcuts.
 

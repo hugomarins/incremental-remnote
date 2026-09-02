@@ -34,6 +34,7 @@ It appears wherever a priority is shown as colour: the **table-cell badges** (`7
 | Text background | **green** `#75f8b2` (dark `#1a5c3a`) | A highlight that is itself an Incremental Rem | — |
 | Dimmed, shrunk text | — | Tagged `#ignore` — archived, still readable | — |
 | Yellow background + red text | — | Source text already used for a cloze (`Opt+Z`) | — |
+| Bookmark glyph in the [Priority Editor](Prioritization-&-Sorting.md#priority-editor-widget) | **green** `#10b981` | The Rem has a [read point](Reviewing-Items-in-the-Editor.md#read-points-for-rem-type-incremental-rems) — expand the widget to see where | — |
 
 ### Reference pin rings
 

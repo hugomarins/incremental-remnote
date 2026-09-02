@@ -507,6 +507,7 @@ The Rem-type analogue of the PDF/HTML Bookmark popup. It lists the **read-point 
 - Click any entry to **navigate to that descendant** rem.
 - The top entry is the **current reading position** — also reachable via the **🔖 Go to Read Point** button on the [Editor Review Timer](Reviewing-Items-in-the-Editor.md#jumping-to-the-read-point) and emphasized (blue box + auto-scroll) in the [in-queue read-only card](Reviewing-Items-in-the-Queue.md#read-point-and-status-emphasis-in-rem-type-cards).
 - Read points are created with the **Set Read Point (Bookmark)** command (`Ctrl+F7`, `srp`).
+- The popup is also reachable **without a command**: the **Read Point History ↗** button in the [Priority Editor](Prioritization-&-Sorting.md#priority-editor-widget)'s Read Point panel opens it for the Rem you are on.
 
 > The same underlying popup, opened on a PDF/HTML highlight, is the **Bookmark popup**; it now also shows the owning Incremental Rem's name under its title.
 

@@ -4,11 +4,11 @@ This page documents the major changes and improvements for each version of the I
 
 ## v1.0.75 - September 2nd, 2026
 
-### ✨ New - the Repetition History popup shows where you stopped reading an outline
+### ✨ New - where you stopped reading an outline, shown next to where you stopped in a PDF
 
-Alongside the PDF progress footer, an Incremental Rem with a [read point](Reviewing-Items-in-the-Editor.md#read-points-for-rem-type-incremental-rems) now shows the path from the Rem down to the bookmarked descendant, with the date it was set and every segment clickable.
+Both surfaces that already reported PDF reading progress now do the same for a [read point](Reviewing-Items-in-the-Editor.md#read-points-for-rem-type-incremental-rems): the **Repetition History** popup gains a footer, and the **Priority Editor** a panel, each showing the clickable path from the Rem down to the bookmarked descendant and the date it was set. The collapsed Priority Editor marks a Rem that has one with a green bookmark.
 
-📖 [IncRem Repetition History](Plugin-Widgets-Reference.md#212-increm-repetition-history-aggregated-view)
+📖 [Read Points](Reviewing-Items-in-the-Editor.md#jumping-to-the-read-point) · [IncRem Repetition History](Plugin-Widgets-Reference.md#212-increm-repetition-history-aggregated-view)
 
 ### ⚡ Improved - Priority Shield History opens on the Knowledge Base graphs
 
