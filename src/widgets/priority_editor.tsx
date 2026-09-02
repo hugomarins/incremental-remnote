@@ -29,7 +29,7 @@ import {
   PageHistoryEntry,
 } from '../lib/pdfUtils';
 import { openAndScrollToHighlight, openAndFocusRem } from '../lib/remHelpers';
-import { getReadPointPath, ReadPointPath } from '../lib/remReadPoint';
+import { getReadPointPath, hasRemReadPoint, ReadPointPath } from '../lib/remReadPoint';
 import { getIESetting } from '../lib/settings';
 
 // Move styles outside component to avoid recreation on every render
@@ -193,6 +193,12 @@ export function PriorityEditor() {
         getIESetting(plugin, priorityEditorDisplayModeId),
       ]);
 
+      // Read-point indicator. One extra property read, and only for IncRems —
+      // see hasRemReadPoint on why this doesn't go through the full resolve.
+      // Riding this tracker (rather than opening another) keeps it inside the
+      // round-trips this widget already makes per Rem.
+      const hasReadPoint = incRemInfo ? await hasRemReadPoint(rem) : false;
+
       // Calculate relative priorities inline
       const incRemRelativePriority = (incRemInfo && allIncRems && allIncRems.length > 0)
         ? calculateRelativePercentile(allIncRems, rem._id)
@@ -210,6 +216,7 @@ export function PriorityEditor() {
         hasPowerup,
         incRemRelativePriority,
         cardRelativePriority,
+        hasReadPoint,
         allPrioritizedCardInfo: allPrioritizedCardInfo || [],
         displayMode: displayMode || 'all',
       };
@@ -244,24 +251,6 @@ export function PriorityEditor() {
   const pdfStats: any = hostData?.pdfStats ?? null;
   const htmlHistory: PageHistoryEntry[] = hostData?.htmlHistory ?? [];
 
-  // Read point (the reading position of a rem-type outline) — resolved only
-  // while the panel is EXPANDED. This widget renders once per visible rem, and
-  // the lookup costs a rem read plus an ancestor walk; paying that for every
-  // badge on screen would feed the query storm the note at the top warns about.
-  // Collapsed, the panel shows nothing about read points by design.
-  const readPoint = useTrackerPlugin(
-    async (rp): Promise<ReadPointPath | null> => {
-      if (!remId || !isExpanded) return null;
-      try {
-        return await getReadPointPath(rp as any, remId);
-      } catch (err) {
-        console.error('[PriorityEditor] Failed to resolve read point:', err);
-        return null;
-      }
-    },
-    [remId, isExpanded]
-  ) ?? null;
-
   const rem = remData?.rem ?? null;
   const incRemInfo = remData?.incRemInfo ?? null;
   const cardInfo = remData?.cardInfo ?? null;
@@ -269,8 +258,28 @@ export function PriorityEditor() {
   const hasCardPriorityPowerup = remData?.hasPowerup ?? false;
   const incRemRelativePriority = remData?.incRemRelativePriority ?? null;
   const cardRelativePriority = remData?.cardRelativePriority ?? null;
+  const hasReadPoint = remData?.hasReadPoint ?? false;
   const allPrioritizedCardInfo = remData?.allPrioritizedCardInfo ?? [];
   const displayMode = remData?.displayMode ?? 'all';
+
+  // Read point (the reading position of a rem-type outline), resolved in full:
+  // the path down to it, and the text of every rem along the way. That costs a
+  // rem read per segment plus an ancestor walk, so it runs only when the panel
+  // is EXPANDED and the cheap `hasReadPoint` flag says there is one to resolve.
+  // Collapsed, the badge above draws from that flag alone.
+  const readPoint = useTrackerPlugin(
+    async (rp): Promise<ReadPointPath | null> => {
+      if (!remId || !isExpanded || !hasReadPoint) return null;
+      try {
+        return await getReadPointPath(rp as any, remId);
+      } catch (err) {
+        console.error('[PriorityEditor] Failed to resolve read point:', err);
+        return null;
+      }
+    },
+    [remId, isExpanded, hasReadPoint]
+  ) ?? null;
+
 
   // IMPORTANT: All hooks must be called unconditionally BEFORE any early returns
   // Optimized: Use useMemo to avoid recalculating these conditions on every render
@@ -492,6 +501,21 @@ export function PriorityEditor() {
               </span>
             );
           })()}
+          {/* Read point — existence only. The path and the rem it points at
+              cost a walk to resolve, so they wait for the expanded panel. */}
+          {hasReadPoint && (
+            <span
+              title="Read point set — expand to see where you stopped reading"
+              style={{
+                fontSize: '10px',
+                lineHeight: 1,
+                color: '#10b981',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🔖
+            </span>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-3">

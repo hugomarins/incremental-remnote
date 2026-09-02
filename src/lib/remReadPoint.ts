@@ -1,6 +1,7 @@
 // lib/remReadPoint.ts
 import { RNPlugin, PluginRem } from '@remnote/plugin-sdk';
 import { addPageToHistory, getPageHistory, PageHistoryEntry } from './pdfUtils';
+import { readRawPdfState } from './pdf_state';
 import { powerupCode, currentIncRemKey, editorReviewTimerRemIdKey } from './consts';
 import { resolveRemTextForBreadcrumb } from './richTextRemRefs';
 
@@ -54,6 +55,36 @@ export const getRemReadPointHistory = async (
   return history
     .filter((h) => h.highlightId)
     .sort((a, b) => b.timestamp - a.timestamp);
+};
+
+/**
+ * Existence-only probe: does this Rem have a read point at all?
+ *
+ * Deliberately does NOT go through getPageHistory/loadPdfState. That path costs
+ * a findOne, two hasPowerup probes to resolve the state host, and — for a Rem
+ * with no state yet, the common case — two legacy-key lookups on top. This
+ * needs one `getPowerupProperty` on a Rem object the caller already holds, and
+ * resolves nothing: no rem texts, no ancestor walk.
+ *
+ * That makes it cheap enough for a per-Rem indicator (the Priority Editor's
+ * collapsed badge renders once per visible Rem). Callers must already know the
+ * Rem carries `powerup` — pass the Dismissed powerup for a dismissed Rem.
+ */
+export const hasRemReadPoint = async (
+  rem: PluginRem,
+  powerup: string = powerupCode
+): Promise<boolean> => {
+  const raw = await readRawPdfState(rem, powerup);
+  // Fast reject: a read point stores the Rem's own id as a source key, so a
+  // blob that never mentions it (a pure PDF reader) can't hold one.
+  if (!raw || !raw.includes(rem._id)) return false;
+  try {
+    const history = JSON.parse(raw)?.bySource?.[rem._id]?.history;
+    // Legacy history shapes are bare page numbers, which carry no read point.
+    return Array.isArray(history) && history.some((h: any) => h?.highlightId);
+  } catch {
+    return false;
+  }
 };
 
 /**
