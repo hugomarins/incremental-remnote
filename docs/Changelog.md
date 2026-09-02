@@ -22,6 +22,12 @@ The four charts were reordered: Knowledge Base first (Card, then IncRem), then t
 
 📖 [Priority Shield Graph](Plugin-Widgets-Reference.md#44-priority-shield-graph)
 
+### ⚡ Improved - the incremental and dismissed left borders span the whole block
+
+The green and amber markers now run down the Rem *and* its descendants instead of stopping at its first line, so an outline reads as one block at a glance; the document you are currently inside keeps its title-only marker.
+
+📖 [Editor colour coding](Colour-Coding-Reference.md#editor)
+
 ## v1.0.74 - September 2nd, 2026
 
 ### ✨ New - Priority Review Documents no longer hand you a parent's answer
