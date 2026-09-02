@@ -187,6 +187,10 @@ After creation, if any items were held back:
 - The document's **metadata code block** includes a `Held back (due ancestor): N flashcard rems, M ancestors swapped in` line.
 - The full list with Rem IDs is printed to the **browser console**.
 
+![The Create Priority Review Document popup after creation, showing the purple panel: six flashcard Rems held back, five blocking ancestors swapped in, each entry naming the parent or grandparent that blocked it](assets/PRD-card-spoiler-protection-notification.png){ width="500" }
+
+Each line reads *what was held back* over *what blocked it* — `P14 diferenças (em relação a IALA-B)` above `blocked by grandparent "Balizamentos de Uso Restrito" — swapped in`. Where an entry says **already in this document**, the blocking ancestor had been selected on its own merits, so nothing needed swapping. That is why the two counts in the header differ: six Rems held back, five ancestors added.
+
 Like the paused-document warning, the popup stays open until you click **Close**.
 
 > [!NOTE]
