@@ -519,7 +519,7 @@ function ReviewDocumentCreator() {
             🎭 {ancestorItems.length} flashcard rem{ancestorItems.length !== 1 ? 's' : ''} held back — a due ancestor would spoil them
           </div>
           <div style={{ color: 'var(--rn-clr-content-secondary)', fontSize: '11px', marginBottom: '8px' }}>
-            Practising these would show a due parent or grandparent — answer included — before that ancestor's own card is asked.
+            Practising these could show a due parent or grandparent — answer included — before that ancestor's own card is asked.
             {ancestorItems.some((i) => i.ancestorAction === 'added')
               ? ` ${ancestorItems.filter((i) => i.ancestorAction === 'added').length} blocking ancestor${ancestorItems.filter((i) => i.ancestorAction === 'added').length !== 1 ? 's were' : ' was'} added in their place, so they are free for your next review document.`
               : ' Their blocking ancestors are already in this document.'}
