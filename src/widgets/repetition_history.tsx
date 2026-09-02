@@ -12,6 +12,7 @@ import {
 } from '../lib/pdfUtils';
 import { getDismissedHistoryFromRem } from '../lib/dismissed';
 import { getReadPointPath, ReadPointPath } from '../lib/remReadPoint';
+import { ReadPointIcon } from '../components/ReadPointIcon';
 import { openAndFocusRem } from '../lib/remHelpers';
 import {
     addExternalSessionRep,
@@ -1333,7 +1334,9 @@ function RepetitionHistoryPopup() {
             {readPointInfo && (
                 <div style={pdfFooterStyle}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>🔖</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', color: '#10b981' }}>
+                            <ReadPointIcon size={12} />
+                        </span>
                         <span style={{ fontWeight: 600 }}>Read point</span>
                         <span style={{ opacity: 0.75 }}>
                             · set {dayjs(readPointInfo.timestamp).format('MMM D, YYYY HH:mm')}

@@ -12,7 +12,7 @@ import { withQueueMutex } from '../lib/mutex';
 import { PriorityDeltaEntry } from '../lib/quick_priority';
 import { IncrementalRem } from '../lib/incremental_rem';
 import { calculateRelativePercentile, formatDuration } from '../lib/utils';
-import { PriorityBadge } from '../components';
+import { PriorityBadge, ReadPointIcon } from '../components';
 import {
   getActivePdfForIncRem,
   setActivePdfForIncRem,
@@ -506,14 +506,9 @@ export function PriorityEditor() {
           {hasReadPoint && (
             <span
               title="Read point set — expand to see where you stopped reading"
-              style={{
-                fontSize: '10px',
-                lineHeight: 1,
-                color: '#10b981',
-                whiteSpace: 'nowrap',
-              }}
+              style={{ display: 'inline-flex', alignItems: 'center', color: '#10b981' }}
             >
-              🔖
+              <ReadPointIcon size={11} />
             </span>
           )}
         </div>
@@ -1049,7 +1044,9 @@ export function PriorityEditor() {
             >
               <div className="flex items-center justify-between mb-2 gap-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs">🔖</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', color: '#10b981' }}>
+                    <ReadPointIcon size={12} />
+                  </span>
                   <span className="text-xs font-semibold" style={{ color: 'var(--rn-clr-content-primary)' }}>Read Point</span>
                 </div>
                 <span
@@ -1106,7 +1103,10 @@ export function PriorityEditor() {
                 }}
                 title="Open the bookmarked descendant and put the cursor in it"
               >
-                🔖 Go to Read Point
+                <span className="inline-flex items-center justify-center gap-1">
+                  <ReadPointIcon size={11} />
+                  Go to Read Point
+                </span>
               </button>
 
               <button
