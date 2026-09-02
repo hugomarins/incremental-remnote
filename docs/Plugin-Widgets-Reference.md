@@ -104,6 +104,7 @@ Two interconnected popups for Incremental Rems, both accessed via `Ctrl+Shift+H`
 - **Single History** — triggered on an individual IncRem (in the queue via the 📊 button, or in the editor via `Ctrl+Shift+H`). Shows the Rem's full repetition log: date, time spent, scheduled interval, priority at the time of review, and event type markers (📅 reschedule, ⌨️ editor review, etc.). Repetition rows carry the wall-clock time under the date, and the event banners (▶ Made Incremental, ⏸ Dismissed, 📅 Rescheduled in Editor, ✏️ Manual Date Reset) show theirs next to it — several lifecycle events on one day stay distinguishable.
   - **📝 Notes & context sub-lines** — entries carrying a [review note](Reviewing-Items-in-the-Queue.md#the-answer-buttons) show it under the row (📝, full text); entries with an automatic **reading-context snapshot** show a compact line like `p.57 of 40–80 · Book.pdf · 🔖 "bookmark…"` — the page you were on **at that rep**, so your reading trajectory across sessions is visible. Event banners (Dismissed, Rescheduled in Editor, …) show their note the same way — a dismissal reason lives right on the dismissal marker.
   - **PDF reading-progress footer** — when the Rem (active *or* dismissed) reads from a PDF with a **page range** set, a footer shows the PDF name, the page range, your current page, the **degree of processing** (`% read`, with a progress bar), and an **estimated remaining time** (extrapolated from the total time spent and the degree of processing reached). The percentage and estimate are omitted for open-ended ranges (`start–∞`), where there's no finite end to measure against.
+  - **🔖 Read-point footer** — when the Rem has a [read point](Reviewing-Items-in-the-Editor.md#read-points-for-rem-type-incremental-rems) set, a footer shows the path from the Rem itself down to the bookmarked descendant (`Chapter › Section › Read point`), with the date it was set. Every segment is clickable and navigates to that Rem. It works for dismissed Rems too, and if the read point has since been moved out of the outline the footer says so and shows its nearest ancestors instead.
   - **➕ Session — recording study done outside RemNote** — see [Recording and correcting records](#recording-and-correcting-records) below.
   - **✏️ / 🗑 per record** — hover any row to edit or delete it; see the same section.
 
@@ -344,8 +345,8 @@ Plots your daily [Priority Shield](Prioritization-&-Sorting.md#priority-shield) 
 
 **Features:**
 
-- **Logical Organization**: Graphs are grouped into **Document-level** (IncRem & Card) and **Knowledge Base-wide** scopes.
-- **Visual Separator**: A horizontal divider clearly distinguishes between Document and KB-wide data for better scanability.
+- **Logical Organization**: Graphs are grouped by scope, **Knowledge Base-wide first** (Card, then IncRem), then **Document-level** (Card, then IncRem) — the widest and most-consulted view opens first, and Cards lead each pair.
+- **Visual Separator**: A horizontal divider clearly distinguishes between KB-wide and Document data for better scanability.
 - **Interactive Drag-to-Zoom**: Click and drag horizontally on any graph to zoom into a specific date range. A **Reset Data Range** button appears in the top-right corner to return to the full view.
 - **Optimize Priorities Zoom**: A dedicated button automatically scales the absolute and relative priority Y-Axes to perfectly frame the visible data in your current zoom window. Highly beneficial for viewing subtle metric changes over time!
 - **Scoped Scaling**: The Y-axis (Universe Size) for each chart automatically scales based on the visible data range, ensuring a clear view of your progress even in the Knowledge Base charts.

@@ -2,6 +2,20 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.75 - September 2nd, 2026
+
+### ✨ New - the Repetition History popup shows where you stopped reading an outline
+
+Alongside the PDF progress footer, an Incremental Rem with a [read point](Reviewing-Items-in-the-Editor.md#read-points-for-rem-type-incremental-rems) now shows the path from the Rem down to the bookmarked descendant, with the date it was set and every segment clickable.
+
+📖 [IncRem Repetition History](Plugin-Widgets-Reference.md#212-increm-repetition-history-aggregated-view)
+
+### ⚡ Improved - Priority Shield History opens on the Knowledge Base graphs
+
+The four charts were reordered: Knowledge Base first (Card, then IncRem), then the document scope — the widest view no longer needs a scroll.
+
+📖 [Priority Shield Graph](Plugin-Widgets-Reference.md#44-priority-shield-graph)
+
 ## v1.0.74 - September 2nd, 2026
 
 ### ✨ New - Priority Review Documents no longer hand you a parent's answer

@@ -647,7 +647,7 @@ You can track your performance over time by accessing the **"Priority Shield His
 *   **Drag-to-Zoom:** Click and drag your mouse horizontally over any chart to zoom into a specific time period. This is helpful for examining detailed progress over short durations.
 *   **Optimize Priorities Zoom:** A button automatically scales the absolute and relative priority Y-Axes to perfectly frame the visible data in your current zoom window. Highly beneficial for viewing subtle metric changes over time!
 *   **Reset Data Range:** A button appears when zoomed in, allowing you to quickly return to the full historical view.
-*   **Scope Organization:** Charts are organized into **Document-level** progress (for your current study context) and **Knowledge Base-wide** progress, separated by a visual divider.
+*   **Scope Organization:** Charts are organized into **Knowledge Base-wide** progress first (Card, then IncRem), followed by **Document-level** progress for your current study context (Card, then IncRem), separated by a visual divider.
 *   **Automatic Y-Scaling:** As you zoom or pan, the Universe Size axis adapts to the peak values in your visible range, providing maximum visual resolution.
 
 **Understanding the Metrics:**
