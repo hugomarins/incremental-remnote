@@ -10,6 +10,12 @@ Both surfaces that already reported PDF reading progress now do the same for a [
 
 📖 [Read Points](Reviewing-Items-in-the-Editor.md#jumping-to-the-read-point) · [IncRem Repetition History](Plugin-Widgets-Reference.md#212-increm-repetition-history-aggregated-view)
 
+### ✨ New - Text Case Converter keeps acronyms uppercase
+
+Title Case no longer flattens an acronym to *(Ab)*: maritime, institutional and technical acronyms are built in, capitals you already typed are preserved, and your own terms go in **IE Settings → Other → Title Case Acronyms**.
+
+📖 [Acronyms and initialisms](Utilities.md#acronyms-and-initialisms)
+
 ### ⚡ Improved - Priority Shield History opens on the Knowledge Base graphs
 
 The four charts were reordered: Knowledge Base first (Card, then IncRem), then the document scope — the widest view no longer needs a scroll.

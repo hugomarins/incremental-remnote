@@ -54,6 +54,30 @@ Title Case follows **Chicago/APA style**:
 
 ---
 
+#### Acronyms and initialisms
+
+Words that are uppercase by nature stay that way through Title Case — `arqueação bruta (ab)` becomes **Arqueação Bruta (AB)**, never *(Ab)*. Three signals are used, in this order:
+
+1. **The acronym list.** Common maritime (*GT, NT, AB, TPB, DWT, LOA, IMO, MMSI, SOLAS, MARPOL, STCW, ECDIS, GMDSS…*), institutional (*EU, ONU, ISO, CNPJ, IBGE…*) and technical (*PDF, URL, HTML, API, CSV…*) acronyms are built in. Add your own under **IE Settings → Other → [Title Case Acronyms](Plugin-Settings-Reference.md#other)**, separated by commas or spaces.
+2. **Initialisms and initials.** `u.s.a.` → **U.S.A.**, and a lone initial keeps its capital: `o autor a. silva` → **O Autor A. Silva**. The dotted abbreviations that are conventionally lowercase — *e.g., i.e., cf., a.m., p.m.* — are exempt and behave like the minor words above.
+3. **Capitals already in the text.** A word you wrote with two or more capitals is preserved as typed: `RO-RO`, `P&I`, `COVID-19`, `A/S`. This signal is switched off when the *whole* selection is uppercase, where existing capitals say nothing about which words are acronyms — there, signal 1 does the work, so `ARQUEAÇÃO BRUTA (AB)` still title-cases to **Arqueação Bruta (AB)**.
+
+A trailing plural `s` stays lowercase: **GTs**, not *GTS*.
+
+> **Why the list matters even though capitals are preserved.** Signal 3 reads what is on screen, so it cannot survive the lowercase step of the cycle — once `GT` has become `gt`, only the list knows to bring it back. Domain terms you cycle through all three stages belong in the setting.
+
+##### Examples
+
+> `o navio de 500 gt e a convenção solas`
+> → **O Navio de 500 GT e a Convenção SOLAS**
+
+> `tonelagem de porte bruto (tpb) em nm` *(with `TPB, NM` in the setting)*
+> → **Tonelagem de Porte Bruto (TPB) em NM**
+
+Acronyms are forced uppercase in the **Title Case** step only. The **UPPERCASE** and **lowercase** steps stay literal, so `Shift+F3` can always take you to a fully lowercase selection.
+
+---
+
 #### Other features
 
 - **Formatting preserved / Formatação preservada:** bold, italic, highlight and all other rich-text styles are kept intact through every transformation.

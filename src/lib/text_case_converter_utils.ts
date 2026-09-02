@@ -63,7 +63,7 @@ const BUILT_IN_ACRONYMS = new Set([
     'SOLAS', 'MARPOL', 'STCW', 'COLREG', 'COLREGS', 'UNCLOS', 'ISM', 'ISPS',
     'MLC', 'PSC', 'SAR', 'MOB', 'OOW', 'ETA', 'ETD',
     'LNG', 'LPG', 'VLCC', 'ULCC', 'FPSO', 'ROV', 'AUV',
-    'IALA', 'IHO', 'ILO', 'ITF', 'USCG', 'ANTAQ', 'DPC', 'NORMAM',
+    'IALA', 'IHO', 'ILO', 'ITF', 'USCG', 'ANTAQ', 'DPC', 'NORMAM', 'VDR',
     // Institutional / geographic
     'EU', 'UN', 'UK', 'USA', 'EUA', 'ONU', 'NASA', 'NATO', 'OTAN',
     'CPF', 'CNPJ', 'CEP', 'IBGE', 'INSS',
