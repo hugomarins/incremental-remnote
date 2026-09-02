@@ -11,6 +11,9 @@ import {
     getIncrementalReadingPosition,
 } from '../lib/pdfUtils';
 import { getDismissedHistoryFromRem } from '../lib/dismissed';
+import { getRemReadPoint } from '../lib/remReadPoint';
+import { resolveRemTextForBreadcrumb } from '../lib/richTextRemRefs';
+import { openAndFocusRem } from '../lib/remHelpers';
 import {
     addExternalSessionRep,
     updateHistoryEntry,
@@ -63,6 +66,75 @@ async function loadPdfPageInfo(plugin: any, rem: any, remId: string): Promise<Pd
         return { pdfName, start, end, currentPage, percentRead };
     } catch (e) {
         console.error('[RepetitionHistoryPopup] Error loading PDF page info:', e);
+        return null;
+    }
+}
+
+interface ReadPointInfo {
+    /** The rem the read point points at (the deepest segment of `path`). */
+    remId: string;
+    /** Display texts, from just below the history-holding rem down to the read point. */
+    path: string[];
+    /** Rem ids parallel to `path`, so any segment can be opened. */
+    pathIds: string[];
+    /** False when the read point no longer sits under the history-holding rem. */
+    withinTarget: boolean;
+    /** When the read point was set. */
+    timestamp: number;
+}
+
+/** Segments longer than this are ellipsized (the full text stays in the tooltip). */
+const READ_POINT_SEGMENT_CHARS = 40;
+
+/**
+ * Resolve the current read point (rem-type bookmark) of `remId` and the chain
+ * of ancestors leading to it, starting just below `remId` itself — the mirror
+ * of the PDF footer's "current page" for outline-type IncRems.
+ *
+ * Read points live under the same synced page-history storage as PDF bookmarks
+ * (keyed (remId, remId), see lib/remReadPoint), so this works for dismissed
+ * rems too. If the bookmarked rem has been moved out of the outline the walk
+ * never meets `remId`; we then keep the last few ancestors and flag it, rather
+ * than dropping the information entirely.
+ */
+async function loadReadPointInfo(plugin: any, remId: string): Promise<ReadPointInfo | null> {
+    try {
+        const entry = await getRemReadPoint(plugin, remId);
+        if (!entry?.highlightId) return null;
+
+        const targetRem = await plugin.rem.findOne(entry.highlightId);
+        if (!targetRem) return null;
+
+        const ids: string[] = [entry.highlightId];
+        let withinTarget = false;
+        let current: any = targetRem;
+        for (let i = 0; i < 50; i++) {
+            const parent = await current.getParentRem();
+            if (!parent) break;
+            if (parent._id === remId) {
+                withinTarget = true;
+                break;
+            }
+            ids.unshift(parent._id);
+            current = parent;
+        }
+
+        // Orphaned read point: no anchor to trim against, so show only the
+        // nearest ancestors instead of the whole path back to the root.
+        if (!withinTarget && ids.length > 4) ids.splice(0, ids.length - 4);
+
+        const path = await Promise.all(
+            ids.map(async (id) => {
+                const r = id === entry.highlightId ? targetRem : await plugin.rem.findOne(id);
+                if (!r) return '…';
+                const text = (await resolveRemTextForBreadcrumb(plugin, r.text)).trim();
+                return text || 'Untitled';
+            })
+        );
+
+        return { remId: entry.highlightId, path, pathIds: ids, withinTarget, timestamp: entry.timestamp };
+    } catch (e) {
+        console.error('[RepetitionHistoryPopup] Error loading read point info:', e);
         return null;
     }
 }
@@ -680,6 +752,10 @@ function RepetitionHistoryPopup() {
             // IncRems and dismissed rems that read from a PDF with a range set).
             const pdfPageInfo = await loadPdfPageInfo(plugin, rem, remId);
 
+            // Read point (rem-type bookmark): the current reading position
+            // inside the rem's own outline, shown as a path from this rem down.
+            const readPointInfo = await loadReadPointInfo(plugin, remId);
+
             // First try to get incremental rem info
             const incRemInfo = await getIncrementalRemFromRem(plugin, rem);
 
@@ -694,6 +770,7 @@ function RepetitionHistoryPopup() {
                     isDismissed: false,
                     dismissedDate: null,
                     pdfPageInfo,
+                    readPointInfo,
                     error: null
                 };
             }
@@ -712,6 +789,7 @@ function RepetitionHistoryPopup() {
                     isDismissed: true,
                     dismissedDate: dismissedInfo.dismissedDate,
                     pdfPageInfo,
+                    readPointInfo,
                     error: null
                 };
             }
@@ -726,6 +804,7 @@ function RepetitionHistoryPopup() {
                 isDismissed: false,
                 dismissedDate: null,
                 pdfPageInfo,
+                readPointInfo,
                 error: null
             };
         } catch (error) {
@@ -869,8 +948,12 @@ function RepetitionHistoryPopup() {
         );
     }
 
-    const { history, remName, remId, nextRepDate, isDismissed, dismissedDate, pdfPageInfo } =
-        data as typeof data & { pdfPageInfo?: PdfPageInfo | null; isIncremental?: boolean };
+    const { history, remName, remId, nextRepDate, isDismissed, dismissedDate, pdfPageInfo, readPointInfo } =
+        data as typeof data & {
+            pdfPageInfo?: PdfPageInfo | null;
+            readPointInfo?: ReadPointInfo | null;
+            isIncremental?: boolean;
+        };
     const isIncremental = (data as any).isIncremental === true;
     // History can only be amended where it is actually stored: on the Incremental
     // powerup, or on the Dismissed powerup of a dismissed rem.
@@ -1295,6 +1378,63 @@ function RepetitionHistoryPopup() {
                                     transition: 'width 0.2s ease',
                                 }}
                             />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {readPointInfo && (
+                <div style={pdfFooterStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🔖</span>
+                        <span style={{ fontWeight: 600 }}>Read point</span>
+                        <span style={{ opacity: 0.75 }}>
+                            · set {dayjs(readPointInfo.timestamp).format('MMM D, YYYY HH:mm')}
+                        </span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px', lineHeight: 1.5 }}>
+                        <span
+                            title={remName}
+                            style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        >
+                            {remName}
+                        </span>
+                        {readPointInfo.path.map((segment, i) => {
+                            const isLast = i === readPointInfo.path.length - 1;
+                            const id = readPointInfo.pathIds[i];
+                            return (
+                                <React.Fragment key={id || i}>
+                                    <span style={{ margin: '0 4px', opacity: 0.6 }}>›</span>
+                                    <span
+                                        title={`${segment}\n\nClick to open this rem`}
+                                        onClick={async () => {
+                                            if (!id) return;
+                                            await plugin.widget.closePopup();
+                                            await openAndFocusRem(plugin, id);
+                                        }}
+                                        style={{
+                                            cursor: 'pointer',
+                                            maxWidth: '260px',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            fontWeight: isLast ? 600 : 400,
+                                            color: isLast ? 'var(--rn-clr-blue, #3b82f6)' : 'inherit',
+                                            textDecoration: 'underline',
+                                            textDecorationStyle: 'dotted',
+                                        }}
+                                    >
+                                        {segment.length > READ_POINT_SEGMENT_CHARS
+                                            ? segment.slice(0, READ_POINT_SEGMENT_CHARS) + '…'
+                                            : segment}
+                                    </span>
+                                </React.Fragment>
+                            );
+                        })}
+                    </div>
+                    {!readPointInfo.withinTarget && (
+                        <div style={{ opacity: 0.75 }}>
+                            ⚠️ This read point is no longer inside this rem — showing its nearest ancestors.
                         </div>
                     )}
                 </div>
