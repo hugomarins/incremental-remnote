@@ -28,7 +28,8 @@ import {
   safeRemTextToString,
   PageHistoryEntry,
 } from '../lib/pdfUtils';
-import { openAndScrollToHighlight } from '../lib/remHelpers';
+import { openAndScrollToHighlight, openAndFocusRem } from '../lib/remHelpers';
+import { getReadPointPath, ReadPointPath } from '../lib/remReadPoint';
 import { getIESetting } from '../lib/settings';
 
 // Move styles outside component to avoid recreation on every render
@@ -44,6 +45,9 @@ const adjustButtonStyle: React.CSSProperties = {
   transition: 'all 0.15s ease',
   textAlign: 'center',
 };
+
+/** Read-point path segments longer than this are ellipsized (full text in the tooltip). */
+const READ_POINT_SEGMENT_CHARS = 28;
 
 export function PriorityEditor() {
   const plugin = usePlugin();
@@ -239,6 +243,24 @@ export function PriorityEditor() {
   const pdfHistory = hostData?.pdfHistory ?? [];
   const pdfStats: any = hostData?.pdfStats ?? null;
   const htmlHistory: PageHistoryEntry[] = hostData?.htmlHistory ?? [];
+
+  // Read point (the reading position of a rem-type outline) — resolved only
+  // while the panel is EXPANDED. This widget renders once per visible rem, and
+  // the lookup costs a rem read plus an ancestor walk; paying that for every
+  // badge on screen would feed the query storm the note at the top warns about.
+  // Collapsed, the panel shows nothing about read points by design.
+  const readPoint = useTrackerPlugin(
+    async (rp): Promise<ReadPointPath | null> => {
+      if (!remId || !isExpanded) return null;
+      try {
+        return await getReadPointPath(rp as any, remId);
+      } catch (err) {
+        console.error('[PriorityEditor] Failed to resolve read point:', err);
+        return null;
+      }
+    },
+    [remId, isExpanded]
+  ) ?? null;
 
   const rem = remData?.rem ?? null;
   const incRemInfo = remData?.incRemInfo ?? null;
@@ -986,6 +1008,92 @@ export function PriorityEditor() {
                   </button>
                 );
               })()}
+            </div>
+          )}
+
+          {/* Read Point Section — the outline counterpart of the PDF panel:
+              where you stopped reading inside this Rem's own descendants. A
+              hybrid IncRem (a PDF source *and* its own outline) shows both,
+              because the two bookmarks point at genuinely different places. */}
+          {readPoint && (
+            <div
+              className="p-3 rounded-lg"
+              style={{
+                backgroundColor: 'var(--rn-clr-background-secondary)',
+                border: '1px solid var(--rn-clr-border-primary)',
+              }}
+            >
+              <div className="flex items-center justify-between mb-2 gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs">🔖</span>
+                  <span className="text-xs font-semibold" style={{ color: 'var(--rn-clr-content-primary)' }}>Read Point</span>
+                </div>
+                <span
+                  className="text-[10px]"
+                  style={{ color: 'var(--rn-clr-content-tertiary)', whiteSpace: 'nowrap' }}
+                  title={`Set on ${new Date(readPoint.timestamp).toLocaleString()}`}
+                >
+                  {new Date(readPoint.timestamp).toLocaleDateString()}
+                </span>
+              </div>
+
+              {/* Path from this Rem down to the bookmarked descendant. The Rem
+                  itself is implicit — the panel is attached to it. */}
+              <div className="text-[10px] leading-relaxed" style={{ color: 'var(--rn-clr-content-secondary)' }}>
+                {readPoint.path.map((segment, i) => {
+                  const isLast = i === readPoint.path.length - 1;
+                  const id = readPoint.pathIds[i];
+                  return (
+                    <span key={id || i}>
+                      {i > 0 && <span style={{ opacity: 0.6, margin: '0 3px' }}>›</span>}
+                      <span
+                        onClick={() => { if (id) openAndFocusRem(plugin as any, id); }}
+                        title={`${segment}\n\nClick to open this rem`}
+                        style={{
+                          cursor: 'pointer',
+                          fontWeight: isLast ? 600 : 400,
+                          color: isLast ? 'var(--rn-clr-blue, #3b82f6)' : 'inherit',
+                          textDecoration: 'underline',
+                          textDecorationStyle: 'dotted',
+                        }}
+                      >
+                        {segment.length > READ_POINT_SEGMENT_CHARS
+                          ? segment.slice(0, READ_POINT_SEGMENT_CHARS) + '…'
+                          : segment}
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+
+              {!readPoint.withinTarget && (
+                <div className="text-[10px] mt-1" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
+                  ⚠️ No longer inside this Rem — showing its nearest ancestors.
+                </div>
+              )}
+
+              <button
+                onClick={() => openAndFocusRem(plugin as any, readPoint.remId)}
+                className="w-full mt-2 py-1 rounded text-[11px] font-semibold transition-colors"
+                style={{
+                  backgroundColor: 'var(--rn-clr-background-secondary)',
+                  color: 'var(--rn-clr-blue, #3b82f6)',
+                  border: '2px solid var(--rn-clr-blue, #3b82f6)',
+                }}
+                title="Open the bookmarked descendant and put the cursor in it"
+              >
+                🔖 Go to Read Point
+              </button>
+
+              <button
+                onClick={() => plugin.widget.openPopup('pdf_bookmark_popup', { mode: 'rem', incRemId: remId })}
+                className="w-full mt-2 py-1 rounded text-[11px] transition-colors"
+                style={{ backgroundColor: 'var(--rn-clr-background-tertiary)', color: 'var(--rn-clr-content-tertiary)', border: '1px solid var(--rn-clr-border-primary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--rn-clr-content-primary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--rn-clr-content-tertiary)'; }}
+              >
+                Read Point History ↗
+              </button>
             </div>
           )}
 
