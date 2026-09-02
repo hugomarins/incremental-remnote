@@ -26,7 +26,7 @@ Displayed immediately below flashcards in the queue, this widget shows the card'
 - **(8) 🔬**: Opens the Flashcard Repetition History popup
 - **(9) Incremental Rem Status Indicator**: An icon displayed on the right border whenever the current card is also an Incremental Rem, providing instant visual feedback of its dual-status.
 
-![Card Info Bar](assets/card-priority-display.png){ width="900" }
+![Card Info Bar](assets/card-info-bar.png){ width="900" }
 
 ![Card Toolbar in the Queue](assets/card-priority-display-full-queue.png){ width="900" }
 
