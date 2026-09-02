@@ -39,8 +39,17 @@ const SHOW_LEFT_BORDER_CSS = `
      positioned, and a rem's descendants (and even its own indentation-guide
      div) are root-level siblings of this element, not children, so no
      descendant or child combinator can reach them. Tailwind's border utilities
-     on the container are !important, so ours has to be too. */
-  [data-rem-container-tags~="incremental"] {
+     on the container are !important, so ours has to be too.
+
+     The :has() guard excludes exactly one thing: the open document's own
+     container, whose box spans the entire document (measured 2901px vs 106px
+     for an ordinary rem) and would otherwise draw a bar down the full page.
+     RemNote renders the document title once, through .rn-doc-title, so the root
+     node renders no .rem row while every other container does — that is the
+     only difference between them, their class lists being identical. Anything
+     scoped on .rn-document / data-document-tags would be wrong here: those sit
+     above the editor and are ancestors of every container equally. */
+  [data-rem-container-tags~="incremental"]:has(.rem[data-rem-tags~="incremental"]) {
     border-left: 3px solid green !important;
   }
   /* Where the block rule applies, drop the row bar: the two sit a few pixels
@@ -66,7 +75,7 @@ const SHOW_DISMISSED_INDICATOR_CSS = `
   }
   /* Block-level marker; see the incremental rules above for why the container
      div is the only element that spans the block. */
-  [data-rem-container-tags~="dismissed"]:not([data-rem-container-tags~="incremental"]) {
+  [data-rem-container-tags~="dismissed"]:not([data-rem-container-tags~="incremental"]):has(.rem[data-rem-tags~="dismissed"]) {
     border-left: 3px solid #f59e0b !important;
   }
   [data-rem-container-tags~="dismissed"]:not([data-rem-container-tags~="incremental"])
