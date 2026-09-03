@@ -10,6 +10,12 @@ Setting a priority right after creation (Alt+Shift+X, the highlight toolbar's **
 
 📖 [Event Markers](Getting-Started.md#event-markers)
 
+### ⚡ Improved - Find Rem marks PDF highlights with their own badge
+
+A highlight carries the same `DEFAULT_TYPE` as any plain Rem, so the picker's type badge couldn't tell one apart from your own note of the same sentence — highlights now show an amber **PDF HIGHLIGHT** badge instead.
+
+📖 [Spotting PDF highlights](Utilities.md#spotting-pdf-highlights)
+
 ## v1.0.75 - September 2nd, 2026
 
 ### ✨ New - where you stopped reading an outline, shown next to where you stopped in a PDF

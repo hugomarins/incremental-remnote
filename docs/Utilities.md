@@ -428,7 +428,7 @@ A floating picker that finds a Rem **by name even when RemNote's own reference s
 
 Run **`Find Rem (insert reference / open in pane)`** (quick code `fir`) or press **`Opt+Shift+F` / `Alt+Shift+F`**. A compact box opens **at your cursor**.
 
-- **Type a name** → results appear as you type, with the best matches floated to the top (an `EXACT` badge marks an exact-name match; an `ALIAS` badge marks a match found through one of the Rem's [aliases](#find-by-alias)). Each row shows the Rem's **type badge**, its **back text** (the definition side of a Concept↔definition card), and a short **breadcrumb** (`root / … / parent`) so you can tell which document it lives in when names collide.
+- **Type a name** → results appear as you type, with the best matches floated to the top (an `EXACT` badge marks an exact-name match; an `ALIAS` badge marks a match found through one of the Rem's [aliases](#find-by-alias)). Each row shows the Rem's **type badge** (see [Spotting PDF highlights](#spotting-pdf-highlights)), its **back text** (the definition side of a Concept↔definition card), and a short **breadcrumb** (`root / … / parent`) so you can tell which document it lives in when names collide.
 - **Enter** or **click** → inserts a reference to the selected Rem at your cursor.
 - **Ctrl+Enter / Cmd+Enter** or **Ctrl/Cmd+click** → inserts the reference as a **pin** (the link chip *without* the referenced text). See [Insert as a pin](#insert-as-a-pin) below.
 - **Opt+Enter / Alt+Enter** or **Opt/Alt+click** → inserts the Rem's **text followed by a pin** — the readable text plus a link chip (RemNote's paste "Text with Pin"). See [Insert text with a pin](#insert-text-with-a-pin) below.
@@ -437,6 +437,10 @@ Run **`Find Rem (insert reference / open in pane)`** (quick code `fir`) or press
 - **Concepts only** checkbox narrows results to Concept-type Rems.
 
 The Rem you triggered the picker from is **excluded from results** — a Rem can't reference itself.
+
+#### Spotting PDF highlights
+
+A PDF highlight carries the same `DEFAULT_TYPE` as any plain Rem, so the type badge alone couldn't tell a highlight apart from your own note of the same sentence — a common collision, since a note is often worded exactly like the passage it came from. Highlights are badged **`PDF HIGHLIGHT`** in amber instead, so you can see at a glance which result is the source passage and which is your note, and reference the one you meant.
 
 #### Why it finds Rems the normal search can't
 

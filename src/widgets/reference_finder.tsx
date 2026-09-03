@@ -1,4 +1,4 @@
-import { renderWidget, usePlugin, useRunAsync, WidgetLocation, RemType, SelectionType, RICH_TEXT_FORMATTING } from '@remnote/plugin-sdk';
+import { renderWidget, usePlugin, useRunAsync, WidgetLocation, RemType, SelectionType, RICH_TEXT_FORMATTING, BuiltInPowerupCodes } from '@remnote/plugin-sdk';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { resolveRemTextForBreadcrumb, buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { sanitizeRichTextForSetText } from '../lib/richTextSanitize';
@@ -105,6 +105,10 @@ interface Candidate {
   score: number; // lower is better
   backText: string;
   breadcrumb: string;
+  // True when the rem is a PDF highlight. Its RemType is DEFAULT_TYPE like any
+  // plain rem, so the badge would say nothing about what it actually is —
+  // resolved in Phase 2 (bounded to the rows we show) and shown as its own badge.
+  isPdfHighlight?: boolean;
   // Set when the rem matched via one of its aliases rather than its primary
   // name. `aliasText` is what we display and insert; `aliasId` stamps the
   // reference so it renders the alias text and links back to this rem.
@@ -456,9 +460,13 @@ function ReferenceFinder() {
             }
           } catch { /* ignore */ }
           const breadcrumb = await buildBreadcrumb(s.r);
+          // Built-in powerup membership isn't enumerable, so probe it directly.
+          const isPdfHighlight = await s.r
+            .hasPowerup(BuiltInPowerupCodes.PDFHighlight)
+            .catch(() => false);
           candidates.push({
             id: s.id, name: s.name, normName: s.normName, type: s.type,
-            times: s.times, score: s.score, backText, breadcrumb,
+            times: s.times, score: s.score, backText, breadcrumb, isPdfHighlight,
             aliasId: s.aliasId, aliasText: s.aliasText, aliasKeys: s.aliasKeys,
             aliasRichText: s.aliasRichText,
           });
@@ -916,12 +924,19 @@ function ReferenceFinder() {
                   fontWeight: 700,
                   padding: '1px 5px',
                   borderRadius: '4px',
-                  backgroundColor: r.type === RemType.CONCEPT ? '#16a34a' : 'var(--rn-clr-background-tertiary)',
-                  color: r.type === RemType.CONCEPT ? 'white' : 'var(--rn-clr-content-secondary)',
+                  backgroundColor: r.isPdfHighlight
+                    ? '#d97706'
+                    : r.type === RemType.CONCEPT
+                    ? '#16a34a'
+                    : 'var(--rn-clr-background-tertiary)',
+                  color:
+                    r.isPdfHighlight || r.type === RemType.CONCEPT
+                      ? 'white'
+                      : 'var(--rn-clr-content-secondary)',
                   whiteSpace: 'nowrap',
                 }}
               >
-                {typeLabel(r.type)}
+                {r.isPdfHighlight ? 'PDF HIGHLIGHT' : typeLabel(r.type)}
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
