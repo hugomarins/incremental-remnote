@@ -1,4 +1,4 @@
-import { renderWidget, usePlugin, useRunAsync, WidgetLocation, RemType, SelectionType, RICH_TEXT_FORMATTING, BuiltInPowerupCodes } from '@remnote/plugin-sdk';
+import { renderWidget, usePlugin, useRunAsync, WidgetLocation, RemType, SelectionType, RICH_TEXT_FORMATTING, BuiltInPowerupCodes, MoveUnit } from '@remnote/plugin-sdk';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { resolveRemTextForBreadcrumb, buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { sanitizeRichTextForSetText } from '../lib/richTextSanitize';
@@ -145,6 +145,9 @@ function ReferenceFinder() {
   const [selected, setSelected] = useState(0);
   const [conceptsOnly, setConceptsOnly] = useState(false);
   const [searching, setSearching] = useState(false);
+  // True when the picker was opened over selected text. Gates the "pin at end"
+  // hint in the footer so the key list stays short in the ordinary case.
+  const [openedFromSelection, setOpenedFromSelection] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const reqIdRef = useRef(0);
   // The rem the picker was triggered from, captured by the command before focus
@@ -200,6 +203,10 @@ function ReferenceFinder() {
       const init = await plugin.storage.getSession<string>('reference-finder-initial-query');
       await plugin.storage.setSession('reference-finder-initial-query', '');
       if (typeof init === 'string' && init.trim()) {
+        // A seeded query means the command found selected text, which is exactly
+        // when "pin at end" is worth offering — it's the mode that leaves that
+        // selection alone.
+        setOpenedFromSelection(true);
         setQuery(init.trim());
         requestAnimationFrame(() => inputRef.current?.select());
       }
@@ -493,7 +500,7 @@ function ReferenceFinder() {
   }, [floatingWidgetId, plugin]);
 
   const pick = useCallback(
-    async (picked: Candidate | undefined, mode: 'ref' | 'pin' | 'textPin' = 'ref') => {
+    async (picked: Candidate | undefined, mode: 'ref' | 'pin' | 'textPin' | 'pinEnd' = 'ref') => {
       if (!picked) return;
       let cand: Candidate = picked;
 
@@ -505,6 +512,9 @@ function ReferenceFinder() {
       let sawSelection = false;
       let insertErr: any = null;
       let targetRemId: string | undefined;
+      // Set when 'pinEnd' could not trust the caret after moving it (see below);
+      // the pin is then appended by rewriting the rem's text instead.
+      let caretLeftTheRem = false;
       try {
         const sel = await plugin.editor.getSelection();
         if (sel) {
@@ -543,9 +553,12 @@ function ReferenceFinder() {
             (sel as any).range &&
             (sel as any).range.start !== (sel as any).range.end;
           try {
-            const ts = await plugin.editor.getSelectedText();
+            // 'pinEnd' appends past the end of the text, so it must NOT inherit a
+            // cloze id — that would drag the pin inside a cloze that happens to
+            // sit at the end of the rem.
+            const ts = mode === 'pinEnd' ? undefined : await plugin.editor.getSelectedText();
             clozeId = findClozeId(ts?.richText);
-            if (!clozeId && sel.type === SelectionType.Text && (sel as any).remId) {
+            if (mode !== 'pinEnd' && !clozeId && sel.type === SelectionType.Text && (sel as any).remId) {
               const rem = await plugin.rem.findOne((sel as any).remId);
               const offset = (sel as any).range?.start ?? 0;
               clozeId = clozeIdAtOffset(rem?.text, offset);
@@ -553,8 +566,29 @@ function ReferenceFinder() {
           } catch { /* best-effort cloze detection */ }
 
           // If text is selected, replace it with the reference (mimics RemNote's
-          // [[ ]] behaviour where the selected text becomes the link).
-          if (hasTextRange) {
+          // [[ ]] behaviour where the selected text becomes the link) — except in
+          // 'pinEnd', whose whole point is to KEEP the selected text and hang the
+          // pin off the end of the rem. There, collapse to the end of the selection
+          // and walk the caret to the end of the line: that keeps us inside the
+          // field the selection was in, so a back-side selection appends to the
+          // back rather than the front.
+          if (mode === 'pinEnd') {
+            await plugin.editor.collapseSelection('end');
+            await plugin.editor.moveCaret(1, MoveUnit.LINE);
+            // Guard: MoveUnit.LINE is "to the end of the line" for us, but if it
+            // ever behaves as "one line down" the caret would now sit in the NEXT
+            // rem — and the pin would be appended to a rem the user never picked.
+            // Confirm we're still in the same rem; if not, append through setText
+            // below instead of inserting at a caret we no longer trust.
+            try {
+              const afterMove = await plugin.editor.getSelection();
+              if (!afterMove || (afterMove as any).remId !== targetRemId) {
+                caretLeftTheRem = true;
+              }
+            } catch {
+              caretLeftTheRem = true;
+            }
+          } else if (hasTextRange) {
             await plugin.editor.delete();
           }
           // Build the rich text to insert:
@@ -645,11 +679,24 @@ function ReferenceFinder() {
             // id isn't touched by the sanitizer.
             const sanitizedSource = sanitizeRichTextForSetText(sourceParts as any);
             toInsert = [...(sanitizedSource as any[]), ' ', makeRef(true)];
+          } else if (mode === 'pinEnd') {
+            // A space keeps the chip off the last word.
+            toInsert = [' ', makeRef(true)];
           } else {
             toInsert = [makeRef(mode === 'pin')];
           }
           try {
-            await plugin.editor.insertRichText(toInsert);
+            if (mode === 'pinEnd' && caretLeftTheRem) {
+              // Caret-free path: append the pin to the rem's own text. Deterministic
+              // (no dependence on where the caret ended up) and it keeps the selected
+              // text untouched, which is the whole point of this mode.
+              const targetRem = targetRemId ? await plugin.rem.findOne(targetRemId) : undefined;
+              if (!targetRem) throw new Error('pin at end: lost the rem the picker was opened from');
+              const existing: any[] = Array.isArray(targetRem.text) ? (targetRem.text as any[]) : [];
+              await targetRem.setText([...existing, ...toInsert] as any);
+            } else {
+              await plugin.editor.insertRichText(toInsert);
+            }
             inserted = true;
           } catch (insErr) {
             // insertRichText can reject some node types inline (images/audio/latex
@@ -826,10 +873,13 @@ function ReferenceFinder() {
       setSelected((s) => Math.max(s - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      // Ctrl/Cmd+Shift+Enter appends a PIN at the END of the rem, leaving any
+      // selected text in place — tested first, since it also carries Shift;
       // Shift+Enter opens the rem in a new pane; Ctrl/Cmd+Enter inserts a PIN
       // (reference without its text); Opt/Alt+Enter inserts the text followed by
       // a pin ("Text with Pin"); plain Enter inserts a normal reference.
-      if (e.shiftKey) open(results[selected]);
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey) pick(results[selected], 'pinEnd');
+      else if (e.shiftKey) open(results[selected]);
       else if (e.altKey) pick(results[selected], 'textPin');
       else pick(results[selected], e.ctrlKey || e.metaKey ? 'pin' : 'ref');
     } else if (e.key === 'Escape') {
@@ -904,7 +954,13 @@ function ReferenceFinder() {
               onMouseEnter={() => setSelected(i)}
               title="Click: insert reference · Ctrl/Cmd+click: insert pin (no text) · Opt/Alt+click: text then pin · Shift+click: open in new pane"
               onClick={(e) =>
-                e.shiftKey ? open(r) : e.altKey ? pick(r, 'textPin') : pick(r, e.ctrlKey || e.metaKey ? 'pin' : 'ref')
+                (e.ctrlKey || e.metaKey) && e.shiftKey
+                  ? pick(r, 'pinEnd')
+                  : e.shiftKey
+                  ? open(r)
+                  : e.altKey
+                  ? pick(r, 'textPin')
+                  : pick(r, e.ctrlKey || e.metaKey ? 'pin' : 'ref')
               }
               style={{
                 display: 'flex',
@@ -1021,6 +1077,33 @@ function ReferenceFinder() {
             {s.label}
           </span>
         ))}
+        {/* Only offered when the picker was opened over selected text: this is the
+            mode that keeps that text and hangs the pin off the end of the rem.
+            Clickable as well as typed — the click lands in this iframe, so the
+            editor's selection survives it. */}
+        {openedFromSelection && (
+          <span
+            role="button"
+            tabIndex={-1}
+            onMouseDown={(e) => e.preventDefault()} /* keep editor focus/selection */
+            onClick={() => pick(results[selected], 'pinEnd')}
+            title="Insert a pin at the end of the Rem, keeping the selected text"
+            style={{
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+              padding: '1px 6px',
+              borderRadius: '4px',
+              backgroundColor: 'var(--rn-clr-background-tertiary)',
+              color: 'var(--rn-clr-content-secondary)',
+            }}
+          >
+            📌{' '}
+            <strong style={{ color: 'var(--rn-clr-content-secondary)', fontWeight: 600 }}>
+              Ctrl/Cmd+Shift+Enter
+            </strong>{' '}
+            pin at end (keep text)
+          </span>
+        )}
       </div>
     </div>
   );

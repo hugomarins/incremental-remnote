@@ -303,6 +303,13 @@ export const ONBOARDING_TIPS: OnboardingTip[] = [
     body: '“rp” removes the parent from both sides of the card. Alt+Z gets it automatically.',
     docsPath: 'Utilities/#remove-parent-rp-new',
   },
+  {
+    id: 'pin-source-at-end',
+    category: 'utilities',
+    title: 'Link cards to sources',
+    body: 'Select text, Alt+Shift+F, then Ctrl/Cmd+Shift+Enter: a pin to the source, text intact.',
+    docsPath: 'Utilities/#pin-a-source-at-the-end-of-a-rem',
+  },
 ];
 
 /**

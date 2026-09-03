@@ -4,6 +4,12 @@ This page documents the major changes and improvements for each version of the I
 
 ## v1.0.76 - September 3rd, 2026
 
+### ✨ New - link a flashcard to its source without disturbing the card
+
+**Ctrl/Cmd+Shift+Enter** in the Find Rem picker appends a **pin at the end of the Rem** and leaves your selected text alone — so, mid-queue, you can select part of a card, press `Alt+Shift+F`, and pin the highlight it came from for next time.
+
+📖 [Pin a source at the end of a Rem](Utilities.md#pin-a-source-at-the-end-of-a-rem)
+
 ### ⚡ Improved - making a Rem incremental leaves one history entry, not two
 
 Setting a priority right after creation (Alt+Shift+X, the highlight toolbar's **Create IncRem**, **Toggle Incremental**) no longer files a *Rescheduled in Editor* event beside the ▶ Made Incremental marker: the priority and interval you choose are written into the marker itself, which now also records the interval on the plain Alt+X path. Rescheduling later still counts as its own event.

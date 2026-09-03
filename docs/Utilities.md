@@ -433,6 +433,7 @@ Run **`Find Rem (insert reference / open in pane)`** (quick code `fir`) or press
 - **Ctrl+Enter / Cmd+Enter** or **Ctrl/Cmd+click** → inserts the reference as a **pin** (the link chip *without* the referenced text). See [Insert as a pin](#insert-as-a-pin) below.
 - **Opt+Enter / Alt+Enter** or **Opt/Alt+click** → inserts the Rem's **text followed by a pin** — the readable text plus a link chip (RemNote's paste "Text with Pin"). See [Insert text with a pin](#insert-text-with-a-pin) below.
 - **Shift+Enter** or **Shift+click** → opens the selected Rem in a **new pane** beside your current one (without inserting anything).
+- **Ctrl/Cmd+Shift+Enter** or **Ctrl/Cmd+Shift+click** → appends a **pin at the end of the Rem you are editing, keeping your selected text**. See [Pin a source at the end of a Rem](#pin-a-source-at-the-end-of-a-rem) below.
 - **↑/↓** navigate · **Esc** closes.
 - **Concepts only** checkbox narrows results to Concept-type Rems.
 
@@ -483,6 +484,23 @@ It brings across the source's **full rich text**, not just a plain label:
 - **The source's clozes are marked, not re-clozed.** Any cloze deletions in the source are inserted as **highlighted text (yellow background + reference-coloured font)** — the same visual mark the plugin's cloze command (`Opt+Z`) leaves behind — so they still *read* as clozes without becoming functional clozes in your target (no "clozes out of clozes").
 
 Alias matches use the alias Rem's text; the trailing pin still links to the owning Rem.
+
+#### Pin a source at the end of a Rem
+
+The other three modes all insert **at your cursor**, and — like RemNote's own `[[` — a text selection is **consumed**: the words you highlighted are replaced by the reference. That is wrong for one very common move: *linking a flashcard back to where it came from*. There, the selected text is the card, and the reference belongs at the **end** of the line, out of the way.
+
+Press **Ctrl/Cmd+Shift+Enter** (or **Ctrl/Cmd+Shift+click** a result) to do exactly that: a **pin is appended at the end of the Rem**, and your **selected text is left untouched**. The pin lands at the end of the field the selection is in, so highlighting something on a card's back appends to the back, not the front. When the selection sits inside a cloze, the pin stays *outside* it — a pin at the end of the line is a source marker, not part of the answer.
+
+![Find Rem — searching with the selected text of a card](assets/find-rem-selected-text.png)
+
+**The queue flow this is built for.** You are reviewing a card and want to check where it came from — say the PDF highlight behind it:
+
+1. **Peek at the source** while the card is in front of you.
+2. **Select part of the card's text** — the phrase you would search for.
+3. Press **`Alt+Shift+F`**. The picker opens with that text already in the search box, so the source Rem (its `PDF HIGHLIGHT` badge makes it easy to spot — see [Spotting PDF highlights](#spotting-pdf-highlights)) is usually the first result.
+4. Press **`Ctrl/Cmd+Shift+Enter`**.
+
+The card keeps reading exactly as before, and now carries a small chip at the end that takes you straight back to the highlight next time the card comes up — no re-searching, no broken wording.
 
 #### Cloze-aware insertion
 
