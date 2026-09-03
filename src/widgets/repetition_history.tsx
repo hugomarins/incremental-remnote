@@ -1185,6 +1185,7 @@ function RepetitionHistoryPopup() {
                                 { backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#22c55e' },
                                 <>
                                     ▶ Made Incremental — {bannerWhen}
+                                    {rep.interval !== undefined && ` → ${rep.interval}d`}
                                     {rep.priority !== undefined && ` — Pri: ${rep.priority}`}
                                 </>
                             );

@@ -10,6 +10,7 @@ import {
   QueueInteractionScore,
 } from '@remnote/plugin-sdk';
 import { convertRemTree } from '../lib/markup_to_richtext';
+import { markRemsAsFreshlyCreated } from '../lib/incRemHelpers';
 import {
   powerupCode,
   currentIncRemKey,
@@ -401,6 +402,8 @@ export async function registerCommands(plugin: ReactRNPlugin) {
         const remIds = result.map(r => r._id);
         if (remIds.length === 0) return;
         await plugin.storage.setSession('batchPriorityIntervalRemIds', remIds);
+        // Fold the popup's save into each rem's fresh 'madeIncremental' marker.
+        await markRemsAsFreshlyCreated(plugin, remIds);
         await plugin.widget.openPopup('priority_interval', {
           remId: remIds[0], // First rem as reference for defaults
           batchMode: true,
@@ -408,6 +411,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
       } else {
         // Single rem
         await plugin.storage.setSession('batchPriorityIntervalRemIds', null);
+        await markRemsAsFreshlyCreated(plugin, [result._id]);
         await plugin.widget.openPopup('priority_interval', {
           remId: result._id,
         });

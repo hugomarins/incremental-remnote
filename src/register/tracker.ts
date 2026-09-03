@@ -430,6 +430,13 @@ export function registerIncrementalRemTracker(plugin: ReactRNPlugin) {
       remIds: string[];
       priority: number;
       interval: number;
+      /**
+       * Rems made Incremental moments ago, whose priority popup this save is
+       * closing. For these the chosen priority/interval is folded INTO the
+       * 'madeIncremental' marker rather than appended as a separate
+       * 'rescheduledInEditor' entry — one user action, one history entry.
+       */
+      foldRemIds?: string[];
     }>(pendingIntervalBatchSaveKey);
 
     if (!job || intervalBatchSaveRunning) return;
@@ -467,19 +474,42 @@ export function registerIncrementalRemTracker(plugin: ReactRNPlugin) {
         const wasEarly = daysDifference < 0;
         const daysEarlyOrLate = Math.round(daysDifference * 10) / 10;
 
-        const newHistory = [
-          ...(incRem.history || []),
-          {
-            date: actualDate,
-            scheduled: scheduledDate,
-            interval: job.interval,
-            wasEarly,
-            daysEarlyOrLate,
-            reviewTimeSeconds: undefined as number | undefined,
-            priority: job.priority,
-            eventType: 'rescheduledInEditor' as const,
-          },
-        ];
+        const history = incRem.history || [];
+        const lastEntry = history[history.length - 1];
+
+        // Fold into the creation marker when this save is the tail of a
+        // "make incremental → choose priority" action and nothing has happened to
+        // the rem since. The marker keeps its own date (when the rem was made
+        // incremental) and gains the values the user just picked, so the history
+        // shows a single 'madeIncremental' entry carrying the real priority
+        // instead of a default-priority marker plus a phantom reschedule.
+        const foldIntoCreationMarker =
+          job.foldRemIds?.includes(remId) === true &&
+          lastEntry?.eventType === 'madeIncremental';
+
+        const newHistory = foldIntoCreationMarker
+          ? [
+              ...history.slice(0, -1),
+              {
+                ...lastEntry,
+                interval: job.interval,
+                priority: job.priority,
+                nextRepMs: newNextRepDate,
+              },
+            ]
+          : [
+              ...history,
+              {
+                date: actualDate,
+                scheduled: scheduledDate,
+                interval: job.interval,
+                wasEarly,
+                daysEarlyOrLate,
+                reviewTimeSeconds: undefined as number | undefined,
+                priority: job.priority,
+                eventType: 'rescheduledInEditor' as const,
+              },
+            ];
 
         await updateSRSDataForRem(plugin as any, remId, newNextRepDate, newHistory);
 

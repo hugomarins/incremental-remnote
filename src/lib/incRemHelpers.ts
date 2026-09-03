@@ -2,6 +2,7 @@ import { BuiltInPowerupCodes, RNPlugin, PluginRem } from '@remnote/plugin-sdk';
 import { ActionItemType, IncrementalRem } from './incremental_rem/types';
 import { remToActionItemType } from './incremental_rem/action_items';
 import { resolveRemTextForBreadcrumb } from './richTextRemRefs';
+import { creationFoldRemIdsKey } from './consts';
 
 /**
  * Extract plain text from RemNote rich text format.
@@ -243,4 +244,24 @@ export async function getBreadcrumbText(
   } catch (error) {
     return '';
   }
+}
+
+
+/**
+ * Flag Rems that were made Incremental moments ago, right before opening the
+ * priority popup for them.
+ *
+ * Without this, the creation flows produce TWO history entries for one user
+ * action: the 'madeIncremental' marker written by initIncrementalRem (carrying
+ * the default/inherited priority), then a 'rescheduledInEditor' entry when the
+ * popup saves the priority and interval the user actually chose. The popup reads
+ * this list once on mount and echoes the ids back to the tracker, which then
+ * rewrites the marker in place instead of appending — one entry, the chosen
+ * priority, no phantom reschedule.
+ *
+ * Call this immediately before plugin.widget.openPopup('priority_interval', ...).
+ */
+export async function markRemsAsFreshlyCreated(plugin: RNPlugin, remIds: string[]) {
+  if (!remIds || remIds.length === 0) return;
+  await plugin.storage.setSession(creationFoldRemIdsKey, remIds);
 }
