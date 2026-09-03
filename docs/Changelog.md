@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.76 - September 3rd, 2026
+
+### ⚡ Improved - making a Rem incremental leaves one history entry, not two
+
+Setting a priority right after creation (Alt+Shift+X, the highlight toolbar's **Create IncRem**, **Toggle Incremental**) no longer files a *Rescheduled in Editor* event beside the ▶ Made Incremental marker: the priority and interval you choose are written into the marker itself, which now also records the interval on the plain Alt+X path. Rescheduling later still counts as its own event.
+
+📖 [Event Markers](Getting-Started.md#event-markers)
+
 ## v1.0.75 - September 2nd, 2026
 
 ### ✨ New - where you stopped reading an outline, shown next to where you stopped in a PDF

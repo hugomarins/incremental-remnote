@@ -111,7 +111,7 @@ The first step is to convert a Rem, PDF, or website into an "Incremental Rem" so
 ### What Happens When You Make a Rem Incremental?
 
 1. The Rem receives the `Incremental` powerup tag
-2. A **"Made Incremental"** event is recorded in the repetition history
+2. A **"Made Incremental"** event is recorded in the repetition history, stamped with the priority and the interval the Rem started with
 3. The Rem is scheduled for its first review (based on your Initial Interval setting, default: 1 day)
 4. The Rem will now appear in your queue, interleaved with flashcards
 
@@ -235,8 +235,10 @@ The history includes special event markers:
 
 | Marker | Meaning |
 |--------|---------|
-| ▶ **Made Incremental** | When the Rem was first made (or re-made) incremental |
+| ▶ **Made Incremental** | When the Rem was first made (or re-made) incremental — shows the priority and the interval it started with |
 | ⏸ **Dismissed** | When the Rem was dismissed via the Dismiss button |
+
+When you set a priority right after creating the Rem — **[Alt+Shift+X](Keyboard-Shortcuts.md#core-commands)**, the PDF highlight toolbar's **Create IncRem**, or **Toggle Incremental** — the priority and interval you choose are written *into* this marker rather than added beside it, so one action leaves one entry. Rescheduling later (**[Alt+P](Keyboard-Shortcuts.md#priority-commands)**, **[Ctrl+J](Keyboard-Shortcuts.md#core-commands)**) is still recorded as its own event.
 
 These markers help you understand your learning timeline and distinguish between different review sessions. Each banner shows the **date and the time of day** (`Aug 13, 2026 · 09:44`) it was recorded — the same wall-clock detail the repetition rows carry — so a day holding several lifecycle events (made incremental → dismissed → made incremental again) still reads in order.
 

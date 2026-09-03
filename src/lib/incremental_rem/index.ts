@@ -542,6 +542,11 @@ export async function initIncrementalRem(plugin: ReactRNPlugin, rem: PluginRem, 
         scheduled: Date.now(),
         eventType: 'madeIncremental' as const,
         priority: Number(initialPriority), // Record priority at time of creation
+        // Interval used at creation (the Initial Interval setting, or whatever the
+        // priority popup folds in over it). Display/diagnostic only — no scheduling
+        // code reads `interval` off a history entry — but it keeps the Opt+X marker
+        // as informative as the Opt+Shift+X one.
+        interval: initialInterval,
         // Reliable fallback for the next-rep date when this rem's Daily Doc reference
         // can't be resolved on read (covers rems made incremental without a reschedule,
         // e.g. the plain "make incremental" command, especially with initialInterval 0).
