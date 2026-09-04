@@ -22,6 +22,12 @@ The IMO/UN drafting style is now recognised as one marker, so the line break lan
 
 📖 [Inlinize Detected List](Utilities.md#inlinize-detected-list-inl)
 
+### ⚡ Improved - the flashcard history table compares your schedule against FSRS
+
+Each review now shows **two** target dates in tinted column groups — what RemNote **Scheduled**, and the **FSRS Optimum** (the previous review's date plus the stability computed then) — each with its own delay, so you can see at a glance whether a card is being reviewed sooner than the memory model needs or later. Delays are written compactly (`+3d`, `−2w`, `+1.4y`) and the `pluginData` column is gone, which is what makes the whole table fit without scrolling sideways.
+
+📖 [Flashcard Repetition History](Plugin-Widgets-Reference.md#211-flashcard-repetition-history)
+
 ### 🐛 Fixed - the retention % in the Practiced Queues log was always grey
 
 Every other surface colours it — the Sessions Summary, the live session card, the Study Dashboard — but the logged session cards printed `(92%)` in plain grey, so a session you had to work for looked the same as one you sailed through. A session that answered no cards at all (`0 / 0`) now shows its placeholder `100%` in grey rather than green, since there is no retention there to be pleased about.

@@ -93,6 +93,107 @@ function formatInterval(intervalMs: number): string {
     return `${(days / 365.25).toFixed(1)} years`;
 }
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+/**
+ * A delay in the narrowest form that still reads: `+3d`, `−2w`, `+1.4y`, `0d`.
+ *
+ * The history table carries four date-ish columns across two comparison groups,
+ * and "2 months late" spelled out four times is what pushed it past the popup.
+ * Single-letter units and a leading sign instead of the words early/late, which
+ * the colour already says. The letters are `formatStabilityDays`' — `d` / `m`
+ * (months) / `y`, plus `w` for the week range it does not cover — so this column
+ * and the S column beside it are read the same way. `m` cannot be mistaken for
+ * minutes here: sub-day values use `h`, and the minute case (interval column
+ * only) is spelled `min`. The verbose form stays in the cell's tooltip, so
+ * nothing is actually lost.
+ *
+ * A true minus (−, U+2212) rather than a hyphen: it matches the `+` in width,
+ * so a column of signed values stays aligned.
+ */
+function formatDelayCompact(delayMs: number): string {
+    const days = delayMs / MS_PER_DAY;
+    const abs = Math.abs(days);
+    if (abs < 0.5) return '0d';
+    const sign = days > 0 ? '+' : '−';
+    if (abs < 1) return `${sign}${Math.round(abs * 24)}h`;
+    if (abs < 14) return `${sign}${Math.round(abs)}d`;
+    if (abs < 60) return `${sign}${Math.round(abs / 7)}w`;
+    if (abs < 545) return `${sign}${Math.round(abs / 30.44)}m`;
+    return `${sign}${(abs / 365.25).toFixed(1)}y`;
+}
+
+/**
+ * Late is red, early is green, on target is neutral — the same reading the
+ * IncRem Repetition History gives its early/late column, so the two histories
+ * do not use one colour for opposite meanings.
+ */
+function delayColor(delayMs: number): string {
+    const days = delayMs / MS_PER_DAY;
+    if (Math.abs(days) < 0.5) return 'var(--rn-clr-content-tertiary)';
+    return days > 0 ? '#ef4444' : '#22c55e';
+}
+
+/** {@link formatInterval} in the table's units. */
+function formatIntervalCompact(intervalMs: number): string {
+    const days = intervalMs / MS_PER_DAY;
+    if (days < 0.007) return 'now';
+    if (days < 0.042) return `${Math.round(days * 24 * 60)}min`;
+    if (days < 1) return `${Math.round(days * 24)}h`;
+    if (days < 14) return `${Math.round(days)}d`;
+    if (days < 60) return `${Math.round(days / 7)}w`;
+    if (days < 545) return `${(days / 30.44).toFixed(1)}m`;
+    return `${(days / 365.25).toFixed(1)}y`;
+}
+
+/** Short date for the table: `11/1/21` rather than `11/1/2021`. */
+function shortDate(ms: number): string {
+    return new Date(ms).toLocaleDateString(undefined, {
+        year: '2-digit',
+        month: 'numeric',
+        day: 'numeric',
+    });
+}
+
+/**
+ * The two column groups of the history table, tinted so the eye can tell which
+ * Target/Delay pair it is reading without tracking back up to the header.
+ *
+ * Sky for what RemNote actually scheduled, violet for what FSRS would have
+ * chosen. Neither collides with the rating colours in the column to their left
+ * (red/amber/green/blue) because those are TEXT colours and these are washes
+ * behind whole columns.
+ */
+interface ColumnGroupTint {
+    accent: string;
+    head: string;
+    body: string;
+    edge: string;
+}
+const SCHEDULED_TINT: ColumnGroupTint = {
+    accent: '#0284c7',
+    head: 'rgba(14, 165, 233, 0.16)',
+    body: 'rgba(14, 165, 233, 0.06)',
+    edge: 'rgba(14, 165, 233, 0.45)',
+};
+const FSRS_TINT: ColumnGroupTint = {
+    accent: '#7c3aed',
+    head: 'rgba(139, 92, 246, 0.16)',
+    body: 'rgba(139, 92, 246, 0.06)',
+    edge: 'rgba(139, 92, 246, 0.45)',
+};
+
+/** Body-cell style for a column inside a tinted group. */
+function groupCell(tint: ColumnGroupTint, edge: 'left' | 'right'): React.CSSProperties {
+    return {
+        ...cellStyle,
+        backgroundColor: tint.body,
+        ...(edge === 'left'
+            ? { borderLeft: `2px solid ${tint.edge}` }
+            : { borderRight: `2px solid ${tint.edge}` }),
+    };
+}
+
 /** "4 min", "1.2 h" — the TIME SPENT figure, from summed response times. */
 function formatMinutes(totalMinutes: number): string {
     if (totalMinutes <= 0) return 'None';
@@ -953,21 +1054,65 @@ function FlashcardRepetitionHistory() {
                                     <div style={{ color: 'var(--rn-clr-content-tertiary)', paddingLeft: 8 }}>No repetition history.</div>
                                 ) : (
                                     <div style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4 }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4, tableLayout: 'auto' }}>
                                         <thead>
+                                            {/* Two header rows: the plain columns span both, the two
+                                                comparison groups own the top one. */}
+                                            <tr style={{ fontSize: 10, color: 'var(--rn-clr-content-tertiary)' }}>
+                                                <th rowSpan={2} style={{ ...cellStyle, textAlign: 'left' }}>#</th>
+                                                <th rowSpan={2} style={{ ...cellStyle, textAlign: 'left' }}>Rating</th>
+                                                <th rowSpan={2} style={{ ...cellStyle, textAlign: 'right' }}>Time</th>
+                                                <th rowSpan={2} style={{ ...cellStyle, textAlign: 'left' }}>Practice Date</th>
+                                                <th
+                                                    colSpan={2}
+                                                    title="What RemNote actually scheduled this review for, and how far off the day you were."
+                                                    style={{
+                                                        ...cellStyle,
+                                                        textAlign: 'center',
+                                                        backgroundColor: SCHEDULED_TINT.head,
+                                                        color: SCHEDULED_TINT.accent,
+                                                        fontWeight: 700,
+                                                        borderLeft: `2px solid ${SCHEDULED_TINT.edge}`,
+                                                        borderRight: `2px solid ${SCHEDULED_TINT.edge}`,
+                                                        cursor: 'help',
+                                                    }}
+                                                >
+                                                    Scheduled
+                                                </th>
+                                                <th
+                                                    colSpan={2}
+                                                    title={
+                                                        'Where FSRS would have put this review: the PREVIOUS review’s date ' +
+                                                        'plus the stability it computed then — the day recall was predicted ' +
+                                                        'to fall to 90%.\n\nComparing the two Delay columns says whether your ' +
+                                                        'schedule is running ahead of the memory model (green here, so you are ' +
+                                                        'reviewing sooner than needed) or behind it (red, so recall had already ' +
+                                                        'decayed past the target).'
+                                                    }
+                                                    style={{
+                                                        ...cellStyle,
+                                                        textAlign: 'center',
+                                                        backgroundColor: FSRS_TINT.head,
+                                                        color: FSRS_TINT.accent,
+                                                        fontWeight: 700,
+                                                        borderLeft: `2px solid ${FSRS_TINT.edge}`,
+                                                        borderRight: `2px solid ${FSRS_TINT.edge}`,
+                                                        cursor: 'help',
+                                                    }}
+                                                >
+                                                    FSRS Optimum
+                                                </th>
+                                                <th rowSpan={2} style={{ ...cellStyle, textAlign: 'left' }}>Next Int.</th>
+                                                {showFsrsDsr && <th rowSpan={2} style={{ ...cellStyle, textAlign: 'right' }}>D</th>}
+                                                {showFsrsDsr && <th rowSpan={2} style={{ ...cellStyle, textAlign: 'right' }}>S</th>}
+                                                {showFsrsDsr && <th rowSpan={2} style={{ ...cellStyle, textAlign: 'right' }}>R</th>}
+                                                {showFsrsDsr && <th rowSpan={2} style={{ ...cellStyle, textAlign: 'right' }}>SInc</th>}
+                                            </tr>
                                             <tr style={{ borderBottom: '2px solid var(--rn-clr-border-primary)', fontSize: 10, color: 'var(--rn-clr-content-tertiary)' }}>
-                                                <th style={{ ...cellStyle, textAlign: 'left' }}>#</th>
-                                                <th style={{ ...cellStyle, textAlign: 'left' }}>Rating</th>
-                                                <th style={{ ...cellStyle, textAlign: 'right' }}>Time</th>
-                                                <th style={{ ...cellStyle, textAlign: 'left' }}>Target Date</th>
-                                                <th style={{ ...cellStyle, textAlign: 'left' }}>Practice Date</th>
-                                                <th style={{ ...cellStyle, textAlign: 'left' }}>Delay</th>
-                                                <th style={{ ...cellStyle, textAlign: 'left' }}>Next Interval</th>
-                                                {showFsrsDsr && <th style={{ ...cellStyle, textAlign: 'right' }}>D</th>}
-                                                {showFsrsDsr && <th style={{ ...cellStyle, textAlign: 'right' }}>S</th>}
-                                                {showFsrsDsr && <th style={{ ...cellStyle, textAlign: 'right' }}>R</th>}
-                                                {showFsrsDsr && <th style={{ ...cellStyle, textAlign: 'right' }}>SInc</th>}
-                                                <th style={{ ...cellStyle, textAlign: 'left' }}>pluginData</th>
+                                                <th style={{ ...cellStyle, textAlign: 'left', backgroundColor: SCHEDULED_TINT.head, borderLeft: `2px solid ${SCHEDULED_TINT.edge}` }}>Target</th>
+                                                <th style={{ ...cellStyle, textAlign: 'right', backgroundColor: SCHEDULED_TINT.head, borderRight: `2px solid ${SCHEDULED_TINT.edge}` }}>Delay</th>
+                                                <th style={{ ...cellStyle, textAlign: 'left', backgroundColor: FSRS_TINT.head, borderLeft: `2px solid ${FSRS_TINT.edge}` }}>Target</th>
+                                                <th style={{ ...cellStyle, textAlign: 'right', backgroundColor: FSRS_TINT.head, borderRight: `2px solid ${FSRS_TINT.edge}` }}>Delay</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -975,6 +1120,20 @@ function FlashcardRepetitionHistory() {
                                                 const stepState = fsrs?.stepStates[ri];
                                                 // Delay: practice date - scheduled date
                                                 const delay = rep.scheduled ? rep.date - rep.scheduled : null;
+
+                                                // The FSRS counterpart of `rep.scheduled`: the day the
+                                                // PREVIOUS review's stability said recall would fall to
+                                                // 90%. Same formula as the "Optimum Next repetition
+                                                // date" line above, applied one step back instead of at
+                                                // the end. Undefined for the first review (nothing
+                                                // preceded it) and after a RESET, which zeroes stability.
+                                                const prevState = ri > 0 ? fsrs?.stepStates[ri - 1] : undefined;
+                                                const fsrsTarget =
+                                                    prevState && prevState.s > 0
+                                                        ? stats.sortedHistory[ri - 1].date + prevState.s * MS_PER_DAY
+                                                        : null;
+                                                const fsrsDelay = fsrsTarget !== null ? rep.date - fsrsTarget : null;
+
                                                 // Next interval: next review's scheduled date - this review's date
                                                 let nextInterval: number | null = null;
                                                 if (ri < stats.sortedHistory.length - 1) {
@@ -1001,20 +1160,66 @@ function FlashcardRepetitionHistory() {
                                                         <td style={{ ...cellStyle, textAlign: 'right' }}>
                                                             {rep.responseTime != null ? `${(rep.responseTime / 1000).toFixed(0)}s` : '—'}
                                                         </td>
-                                                        <td style={cellStyle}>
-                                                            {rep.scheduled ? new Date(rep.scheduled).toLocaleDateString() : '—'}
+                                                        <td style={cellStyle} title={new Date(rep.date).toLocaleString()}>
+                                                            {shortDate(rep.date)}
                                                         </td>
-                                                        <td style={cellStyle}>
-                                                            {new Date(rep.date).toLocaleDateString()}
+
+                                                        {/* ── Scheduled ── */}
+                                                        <td
+                                                            style={groupCell(SCHEDULED_TINT, 'left')}
+                                                            title={rep.scheduled ? new Date(rep.scheduled).toLocaleString() : undefined}
+                                                        >
+                                                            {rep.scheduled ? shortDate(rep.scheduled) : '—'}
                                                         </td>
-                                                        <td style={cellStyle}>
-                                                            {delay !== null ? formatDelay(delay) : '—'}
+                                                        <td
+                                                            style={{
+                                                                ...groupCell(SCHEDULED_TINT, 'right'),
+                                                                textAlign: 'right',
+                                                                color: delay !== null ? delayColor(delay) : undefined,
+                                                                fontWeight: 600,
+                                                            }}
+                                                            title={delay !== null ? formatDelay(delay) : undefined}
+                                                        >
+                                                            {delay !== null ? formatDelayCompact(delay) : '—'}
                                                         </td>
-                                                        <td style={cellStyle}>
+
+                                                        {/* ── FSRS Optimum ── */}
+                                                        <td
+                                                            style={groupCell(FSRS_TINT, 'left')}
+                                                            title={
+                                                                fsrsTarget !== null
+                                                                    ? `${new Date(fsrsTarget).toLocaleString()}\n(previous review + ${formatStabilityDays(prevState!.s)} of stability)`
+                                                                    : 'No preceding review to project from'
+                                                            }
+                                                        >
+                                                            {fsrsTarget !== null ? shortDate(fsrsTarget) : '—'}
+                                                        </td>
+                                                        <td
+                                                            style={{
+                                                                ...groupCell(FSRS_TINT, 'right'),
+                                                                textAlign: 'right',
+                                                                color: fsrsDelay !== null ? delayColor(fsrsDelay) : undefined,
+                                                                fontWeight: 600,
+                                                            }}
+                                                            title={fsrsDelay !== null ? formatDelay(fsrsDelay) : undefined}
+                                                        >
+                                                            {fsrsDelay !== null ? formatDelayCompact(fsrsDelay) : '—'}
+                                                        </td>
+
+                                                        <td
+                                                            style={cellStyle}
+                                                            title={
+                                                                isLast && card.nextRepetitionTime
+                                                                    ? formatInterval(card.nextRepetitionTime - rep.date)
+                                                                    : nextInterval !== null
+                                                                        ? formatInterval(nextInterval)
+                                                                        : undefined
+                                                            }
+                                                        >
                                                             {isLast && card.nextRepetitionTime
-                                                                ? formatInterval(card.nextRepetitionTime - rep.date)
+                                                                ? formatIntervalCompact(card.nextRepetitionTime - rep.date)
                                                                 : nextInterval !== null
-                                                                    ? formatInterval(nextInterval)
+                                                                    ? formatIntervalCompact(nextInterval)
                                                                     : '—'}
                                                         </td>
                                                         {showFsrsDsr && (
@@ -1023,12 +1228,11 @@ function FlashcardRepetitionHistory() {
                                                             </td>
                                                         )}
                                                         {showFsrsDsr && (
-                                                            <td style={{ ...cellStyle, textAlign: 'right' }}>
-                                                                {stepState ? (() => {
-                                                                    const raw = `${stepState.s.toFixed(1)}d`;
-                                                                    const friendly = formatStabilityDays(stepState.s);
-                                                                    return friendly !== raw ? `${raw} (${friendly})` : raw;
-                                                                })() : '—'}
+                                                            <td
+                                                                style={{ ...cellStyle, textAlign: 'right' }}
+                                                                title={stepState ? `${stepState.s.toFixed(1)} days` : undefined}
+                                                            >
+                                                                {stepState ? formatStabilityDays(stepState.s) : '—'}
                                                             </td>
                                                         )}
                                                         {showFsrsDsr && (
@@ -1045,13 +1249,6 @@ function FlashcardRepetitionHistory() {
                                                                 {stepState?.sInc != null ? `×${stepState.sInc.toFixed(2)}` : '—'}
                                                             </td>
                                                         )}
-                                                        <td style={{ ...cellStyle, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                            {rep.pluginData ? (
-                                                                <span title={JSON.stringify(rep.pluginData, null, 2)} style={{ cursor: 'help' }}>
-                                                                    {JSON.stringify(rep.pluginData).slice(0, 80)}…
-                                                                </span>
-                                                            ) : '—'}
-                                                        </td>
                                                     </tr>
                                                 );
                                             })}

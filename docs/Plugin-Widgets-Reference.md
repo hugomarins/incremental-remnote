@@ -99,7 +99,11 @@ A detailed popup covering **every card of one Rem**, enriched with FSRS analytic
 - **Date Summaries**: Next repetition scheduled, optimum next repetition (Last practice + Stability), date the card becomes stale (Last practice + 2× Interval), and current interval with stability ratio.
 - **Retrievability Gradient**: R is displayed with a dynamic color gradient — red (≤ 70%) through green (100%).
 - **SInc per grade**: Color-coded Stability Increase projections for 🟠 Hard / 🟢 Good / 🔵 Easy with hover tooltips showing projected stability.
-- **History Table**: Every review with rating (color-coded), response time, target vs. practice date, delay, next interval, per-step D & S (in friendly units), SInc ratio, and pluginData.
+- **History Table**: Every review with rating (color-coded), response time, practice date, next interval, per-step D & S, SInc ratio — and **two target dates side by side**, in tinted column groups:
+    - **Scheduled** *(sky)* — the date RemNote actually scheduled the review for, and how far off you were.
+    - **FSRS Optimum** *(violet)* — where FSRS would have put it: the *previous* review's date plus the stability computed then, i.e. the day recall was predicted to reach 90%. Blank for the first review, and after a RESET.
+
+    Comparing the two **Delay** columns is the point of the pairing: green in the FSRS column means you reviewed sooner than the model needed, red that recall had already decayed past the target. Delays are written compactly (`+3d`, `−2w`, `+1.4y`) in the [early/late colours](Colour-Coding-Reference.md#queue), with the full phrasing on hover.
 - **Color-Coded Markers**: Visual markers distinguish standard reviews, queue reschedules (📅), editor command reviews (⌨️), and manual date resets.
 
 **🎚 Card Priority History** *(footer)* — every priority this Rem has held, newest first, with the change (`60 → 45`), the gesture behind it and the source recorded alongside. Rem-level rather than per-card, because the `cardPriority` powerup tags the Rem and all its cards share the value. See [Priority history](Priorities-for-Flashcards.md#priority-history) for what is recorded and how bursts are collapsed.
