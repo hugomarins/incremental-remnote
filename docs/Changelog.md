@@ -10,6 +10,12 @@ Both priorities keep a history of what they have been, with the gesture behind e
 
 📖 [Priority history](Priorities-for-Flashcards.md#priority-history) · [Event Markers](Getting-Started.md#event-markers)
 
+### ✨ New - record a flashcard review you did away from RemNote
+
+The card history popup gains **➕ Repetition**: the four grade buttons, each showing the interval FSRS projects it would buy — Again included, so you can see what a lapse costs before pressing it. The repetition is dated now and cannot be backdated, which the panel states; it is the flashcard counterpart of the IncRem popup's ➕ Session.
+
+📖 [Flashcard Repetition History](Plugin-Widgets-Reference.md#211-flashcard-repetition-history)
+
 ### ✨ New - `Ctrl+Shift+H` shows flashcard history too, one section per card
 
 The shortcut now opens the card history for any Rem with flashcards — **in the editor as well as the queue** — showing every card of the Rem in a collapsible section named the way RemNote's own panel names it (`Cloze (a [Carena])`, `Forward Card`), with per-card and Rem-wide totals for repetitions, lapses, time and retention. A Rem that is both incremental and a flashcard source gets a button across to the other history.

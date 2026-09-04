@@ -489,6 +489,154 @@ function RemTotalsHeader({ totals }: { totals: RemTotals }) {
 }
 
 /**
+ * Record a review of one card without going through the queue.
+ *
+ * WHY IT EXISTS
+ *
+ * The IncRem history has had "➕ Session" for a while, for reading done away
+ * from RemNote. A flashcard has the same gap and a narrower fix: you tested
+ * yourself on a card somewhere the queue was not — aloud, on paper, in
+ * conversation — and the only way to tell RemNote was to find the card in a
+ * queue and answer it there, which schedules from *that* moment anyway.
+ * `updateCardRepetitionStatus` appends the repetition directly.
+ *
+ * WHAT IT CANNOT DO
+ *
+ * Unlike ➕ Session, it cannot be backdated: the SDK takes a score and nothing
+ * else, so the repetition lands NOW. That is stated on the panel rather than
+ * hidden, because a user who expects backdating would otherwise silently
+ * mis-record when they studied.
+ *
+ * THE PREDICTED INTERVALS
+ *
+ * Each button carries what FSRS projects that grade would buy, from this
+ * plugin's own model and the user's configured weights. RemNote's scheduler
+ * decides the date that is actually written, and the two can differ — for the
+ * same reasons the "Optimum Next repetition date" line above already documents
+ * (a non-FSRS scheduler, different weights, fuzz, load balancing). So the
+ * numbers are labelled as a projection, not as a promise.
+ */
+function AddRepetitionPanel({
+    cardId,
+    finalState,
+    onRecorded,
+}: {
+    cardId: string;
+    finalState: ReturnType<typeof computeFSRSState>;
+    onRecorded: () => void;
+}) {
+    const plugin = usePlugin();
+    const [open, setOpen] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    const grades: { score: QueueInteractionScore; label: string; days: number | null }[] = [
+        { score: QueueInteractionScore.AGAIN, label: 'Again', days: finalState?.nextInterval.again ?? null },
+        { score: QueueInteractionScore.HARD, label: 'Hard', days: finalState?.nextInterval.hard ?? null },
+        { score: QueueInteractionScore.GOOD, label: 'Good', days: finalState?.nextInterval.good ?? null },
+        { score: QueueInteractionScore.EASY, label: 'Easy', days: finalState?.nextInterval.easy ?? null },
+    ];
+
+    const record = async (score: QueueInteractionScore, label: string) => {
+        if (busy) return;
+        setBusy(true);
+        try {
+            const card = await plugin.card.findOne(cardId);
+            if (!card) {
+                await plugin.app.toast('Could not find that card.');
+                return;
+            }
+            await card.updateCardRepetitionStatus(score);
+            await plugin.app.toast(`Recorded “${label}” on this card.`);
+            setOpen(false);
+            onRecorded();
+        } catch (err) {
+            console.error('[FlashcardHistory] failed to record a repetition', err);
+            await plugin.app.toast('Could not record that repetition.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (!open) {
+        return (
+            <div style={{ padding: '2px 8px 6px' }}>
+                <button
+                    style={buttonStyle}
+                    onClick={() => setOpen(true)}
+                    title="Record a review of this card done outside the queue"
+                >
+                    ➕ Repetition
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div
+            style={{
+                margin: '2px 8px 8px',
+                padding: 8,
+                borderRadius: 6,
+                border: '1px solid var(--rn-clr-border-primary)',
+                background: 'var(--rn-clr-background-primary)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+            }}
+        >
+            <div style={{ fontSize: 10, color: 'var(--rn-clr-content-tertiary)', lineHeight: 1.4 }}>
+                How did it go? The repetition is recorded <strong>now</strong> — this cannot be
+                backdated. Intervals are what FSRS projects with your weights; RemNote's scheduler
+                sets the date it actually writes.
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {grades.map((g) => (
+                    <button
+                        key={g.label}
+                        disabled={busy}
+                        onClick={() => record(g.score, g.label)}
+                        title={`Append a “${g.label}” repetition to this card, dated now.${
+                            g.days !== null
+                                ? ` FSRS projects a ${formatIntervalCompact(g.days * MS_PER_DAY)} interval.`
+                                : ''
+                        }`}
+                        style={{
+                            flex: '1 1 70px',
+                            padding: '4px 8px',
+                            borderRadius: 4,
+                            border: `1px solid ${scoreColor(g.score)}`,
+                            background: 'transparent',
+                            color: scoreColor(g.score),
+                            fontWeight: 600,
+                            fontSize: 11,
+                            cursor: busy ? 'wait' : 'pointer',
+                            opacity: busy ? 0.5 : 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 1,
+                        }}
+                    >
+                        <span>{g.label}</span>
+                        <span style={{ fontWeight: 400, fontSize: 10, opacity: 0.85 }}>
+                            {g.days !== null ? formatIntervalCompact(g.days * MS_PER_DAY) : '—'}
+                        </span>
+                    </button>
+                ))}
+                <button style={buttonStyle} disabled={busy} onClick={() => setOpen(false)}>
+                    Cancel
+                </button>
+            </div>
+            {!finalState && (
+                <div style={{ fontSize: 10, color: 'var(--rn-clr-content-tertiary)' }}>
+                    No graded history yet, so there is nothing to project an interval from.
+                </div>
+            )}
+        </div>
+    );
+}
+
+/**
  * The Rem's CardPriority history — every priority it has held, newest first.
  *
  * Rem-level, so it sits once at the bottom rather than inside any card section:
@@ -598,6 +746,12 @@ function FlashcardRepetitionHistory() {
     const showFsrsDsr = useIESetting(displayFsrsDsrId);
     const fsrsWeightsRaw = useIESetting(fsrsWeightsId);
 
+    // Bumped after a repetition is recorded. The tracker does not reliably
+    // re-run on a card's repetitionHistory changing — it is not a Rem edit —
+    // so the reload is forced, the same way the IncRem history popup does it
+    // after an edited or deleted record.
+    const [refreshKey, setRefreshKey] = useState(0);
+
     const data = useTrackerPlugin(async (rp) => {
         const ctx = await rp.widget.getWidgetContext<WidgetLocation.Popup>();
         const cardId = ctx?.contextData?.cardId as string | undefined;
@@ -658,7 +812,7 @@ function FlashcardRepetitionHistory() {
                 history: c.repetitionHistory || [],
             })),
         };
-    }, []);
+    }, [refreshKey]);
 
     // Which card sections are open. Undefined until the data lands, so the
     // default below can depend on how many cards there turned out to be.
@@ -1048,6 +1202,12 @@ function FlashcardRepetitionHistory() {
                                         Next: {card.nextRepetitionTime ? new Date(card.nextRepetitionTime).toLocaleDateString() : '—'}
                                     </div>
                                 )}
+
+                                <AddRepetitionPanel
+                                    cardId={card._id}
+                                    finalState={fsrs?.finalState ?? null}
+                                    onRecorded={() => setRefreshKey((k) => k + 1)}
+                                />
 
                                 {/* History table */}
                                 {stats.sortedHistory.length === 0 ? (

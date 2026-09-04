@@ -106,6 +106,13 @@ A detailed popup covering **every card of one Rem**, enriched with FSRS analytic
     Comparing the two **Delay** columns is the point of the pairing: green in the FSRS column means you reviewed sooner than the model needed, red that recall had already decayed past the target. Delays are written compactly (`+3d`, `−2w`, `+1.4y`) in the [early/late colours](Colour-Coding-Reference.md#queue), with the full phrasing on hover.
 - **Color-Coded Markers**: Visual markers distinguish standard reviews, queue reschedules (📅), editor command reviews (⌨️), and manual date resets.
 
+**➕ Repetition** *(inside each open card section)* — records a review of that card done **outside the queue**: you tested yourself aloud, on paper, or in conversation, and the only way to tell RemNote used to be to find the card in a queue and answer it there. Press it and the four grade buttons appear, each carrying the interval **FSRS projects** that grade would buy — including **Again**, whose projection uses the post-lapse formula, so you can see what a lapse would actually cost before pressing it.
+
+Two things it is not:
+
+- **It cannot be backdated.** Unlike the IncRem popup's [➕ Session](#recording-and-correcting-records), the SDK takes a grade and nothing else, so the repetition is dated *now*. The panel says so.
+- **The intervals are a projection, not a promise.** They come from this plugin's FSRS model and your configured weights; RemNote's own scheduler decides the date it writes, and the two can differ for the same reasons the *Optimum Next repetition date* line above already lists — a non-FSRS scheduler, different weights, fuzz, load balancing.
+
 **🎚 Card Priority History** *(footer)* — every priority this Rem has held, newest first, with the change (`60 → 45`), the gesture behind it and the source recorded alongside. Rem-level rather than per-card, because the `cardPriority` powerup tags the Rem and all its cards share the value. See [Priority history](Priorities-for-Flashcards.md#priority-history) for what is recorded and how bursts are collapsed.
 
 **♾ Incremental History** *(header button)* — appears when the Rem is also an Incremental Rem (or a dismissed one), and switches to [its history](#212-increm-repetition-history-aggregated-view). The reverse button lives there.
