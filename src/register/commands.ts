@@ -828,7 +828,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
 
         // Apply the auto-priority computed at the top (before the new cloze existed,
         // so the existing-cloze count was correct).
-        await setCardPriority(plugin, clozeRem, autoPriority.priority, 'manual');
+        await setCardPriority(plugin, clozeRem, autoPriority.priority, 'manual', false, { event: 'cloze' });
         await updateCardPriorityCache(plugin, clozeRem._id, true, {
           remId: clozeRem._id,
           priority: autoPriority.priority,
@@ -2503,11 +2503,39 @@ export async function registerCommands(plugin: ReactRNPlugin) {
         return;
       }
 
-      const hasIncrementalPowerup = await rem.hasPowerup(powerupCode);
-      const hasDismissedPowerup = await rem.hasPowerup(dismissedPowerupCode);
+      const [hasIncrementalPowerup, hasDismissedPowerup, cards] = await Promise.all([
+        rem.hasPowerup(powerupCode),
+        rem.hasPowerup(dismissedPowerupCode),
+        rem.getCards(),
+      ]);
+      const hasCards = (cards?.length ?? 0) > 0;
 
-      // If we are in the queue reviewing a regular flashcard (not an Incremental Rem)
-      if (isQueue && !hasIncrementalPowerup) {
+      // Routing, in the order the two histories matter to the user:
+      //
+      //   1. An ACTIVE Incremental Rem always opens its own history, cards or
+      //      not. When it also has cards, that popup carries a "🃏 Cards
+      //      History" button across — one popup at a time, but both reachable.
+      //   2. Any rem with cards opens the flashcard history — the popup shows
+      //      every card of the rem, and `cardId` (set only when the queue was
+      //      showing one) just says which section to open first. Reaching here
+      //      in the editor is new: this used to be a queue-only route, so the
+      //      shortcut on an ordinary flashcard in the outline said "no
+      //      repetition history" and showed nothing. A dismissed rem with cards
+      //      lands here too — the card in front of you is what the shortcut is
+      //      about, and that popup links back to the preserved history.
+      //   3. A dismissed rem with no cards keeps its preserved history.
+      //   4. Otherwise fall through to the aggregated view over descendants.
+      //
+      // Both single-rem popups cross-link, so a rem that qualifies for two of
+      // these routes is never a dead end whichever one it takes.
+      if (hasIncrementalPowerup) {
+        await plugin.widget.openPopup('repetition_history', {
+          remId: remId,
+        });
+        return;
+      }
+
+      if (hasCards) {
         await plugin.widget.openPopup('flashcard_repetition_history', {
           remId: remId,
           cardId: cardId,
@@ -2515,8 +2543,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
         return;
       }
 
-      if (hasIncrementalPowerup || hasDismissedPowerup) {
-        // If it is directly an incremental/dismissed rem, open the single history widget
+      if (hasDismissedPowerup) {
         await plugin.widget.openPopup('repetition_history', {
           remId: remId,
         });
@@ -2546,7 +2573,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
         return;
       }
 
-      await plugin.app.toast('This Rem has no repetition history (not Incremental/Dismissed and no such descendants).');
+      await plugin.app.toast('This Rem has no repetition history (no flashcards, not Incremental/Dismissed, and no such descendants).');
     },
   });
 

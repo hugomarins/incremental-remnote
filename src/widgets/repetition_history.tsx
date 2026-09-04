@@ -22,6 +22,7 @@ import {
 } from '../lib/history_edit';
 import { getNextSpacingDateForRem } from '../lib/scheduler';
 import { MAX_NOTE_LENGTH } from '../lib/history_notes';
+import { priorityEventIcon, priorityEventLabel } from '../lib/priority_history';
 
 interface PdfPageInfo {
     pdfName: string;
@@ -258,6 +259,8 @@ function describeEntry(rep: IncrementalRep): string {
         case 'rescheduledInQueue': return `Rescheduled in Queue — ${when}`;
         case 'manualDateReset': return `Manual Date Reset — ${when}`;
         case 'executeRepetition': return `Editor review — ${when}`;
+        case 'priorityChange':
+            return `Priority change (${priorityEventLabel(rep.priorityEvent)}) — ${when}`;
         case 'importedRep': return `Imported flashcard review — ${when}`;
         case 'externalRep': return `External session — ${when}`;
         default: return `Review — ${when}`;
@@ -704,6 +707,12 @@ function RepetitionHistoryPopup() {
             // inside the rem's own outline, shown as a path from this rem down.
             const readPointInfo = await loadReadPointInfo(plugin, remId);
 
+            // A rem can be BOTH incremental and a flashcard source. When it is,
+            // this popup owns the header (that is the routing rule in
+            // register/commands.ts) and offers a way across to the card
+            // histories rather than making the user guess which popup has them.
+            const cardCount = (await rem.getCards()).length;
+
             // First try to get incremental rem info
             const incRemInfo = await getIncrementalRemFromRem(plugin, rem);
 
@@ -719,6 +728,7 @@ function RepetitionHistoryPopup() {
                     dismissedDate: null,
                     pdfPageInfo,
                     readPointInfo,
+                    cardCount,
                     error: null
                 };
             }
@@ -738,6 +748,7 @@ function RepetitionHistoryPopup() {
                     dismissedDate: dismissedInfo.dismissedDate,
                     pdfPageInfo,
                     readPointInfo,
+                    cardCount,
                     error: null
                 };
             }
@@ -753,6 +764,7 @@ function RepetitionHistoryPopup() {
                 dismissedDate: null,
                 pdfPageInfo,
                 readPointInfo,
+                cardCount,
                 error: null
             };
         } catch (error) {
@@ -762,7 +774,7 @@ function RepetitionHistoryPopup() {
     }, [refreshKey]);
 
     const containerStyle: React.CSSProperties = {
-        width: '440px',
+        width: '500px',
         maxHeight: '850px',
         backgroundColor: 'var(--rn-clr-background-primary)',
         borderRadius: '12px',
@@ -788,12 +800,19 @@ function RepetitionHistoryPopup() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        // The title row can carry up to two switcher buttons ("Show Aggregated"
+        // and, on a rem that also has cards, "Cards History"). At 500px that is
+        // one line for the common case and a clean second line for the rem that
+        // is both incremental and a flashcard source, rather than a squeezed row.
+        gap: '8px',
+        flexWrap: 'wrap',
     };
 
     const headerTitleStyle: React.CSSProperties = {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
+        flexWrap: 'wrap',
     };
 
     const remNameStyle: React.CSSProperties = {
@@ -902,6 +921,7 @@ function RepetitionHistoryPopup() {
             readPointInfo?: ReadPointPath | null;
             isIncremental?: boolean;
         };
+    const cardCount = (data as any).cardCount as number | undefined;
     const isIncremental = (data as any).isIncremental === true;
     // History can only be amended where it is actually stored: on the Incremental
     // powerup, or on the Dismissed powerup of a dismissed rem.
@@ -1011,6 +1031,32 @@ function RepetitionHistoryPopup() {
                         >
                             Show Aggregated
                         </button>
+                        {!!cardCount && cardCount > 0 && remId && (
+                            <button
+                                onClick={async () => {
+                                    // Close first — RemNote shows one popup at a
+                                    // time, and opening over this one would leave
+                                    // it behind on the stack.
+                                    await plugin.widget.closePopup();
+                                    await plugin.widget.openPopup('flashcard_repetition_history', { remId });
+                                }}
+                                style={{
+                                    marginLeft: '6px',
+                                    fontSize: '11px',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    border: '1px solid var(--rn-clr-border-primary)',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    color: 'var(--rn-clr-content-secondary)',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                }}
+                                title={`This Rem also has ${cardCount} flashcard${cardCount === 1 ? '' : 's'} — show their repetition and priority history`}
+                            >
+                                🃏 Cards History
+                            </button>
+                        )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                         {canEditHistory && (
@@ -1219,6 +1265,41 @@ function RepetitionHistoryPopup() {
                                     {rep.interval !== undefined && ` → ${rep.interval}d`}
                                     {rep.priority !== undefined && ` — Pri: ${rep.priority}`}
                                 </>
+                            );
+                        }
+
+                        // Priority-only change — the Alt+P popup, Quick Priority,
+                        // an inline edit. Rendered as a banner rather than a rep
+                        // row because it is a marker: it has no review time, no
+                        // interval and no early/late, and the grid columns would
+                        // all read "—".
+                        if (rep.eventType === 'priorityChange') {
+                            const from = rep.previousPriority;
+                            const to = rep.priority;
+                            const eventName = priorityEventLabel(rep.priorityEvent);
+                            const move =
+                                from !== undefined && to !== undefined
+                                    ? `${from} → ${to}`
+                                    : to !== undefined
+                                    ? `set to ${to}`
+                                    : 'changed';
+                            // The banner clips at one line (bannerBaseStyle is
+                            // nowrap + overflow hidden), so the "more/less
+                            // important" reading of the direction lives in the
+                            // tooltip rather than eating the width the date needs.
+                            return banner(
+                                { backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9' },
+                                <span
+                                    title={
+                                        from !== undefined && to !== undefined && from !== to
+                                            ? `${eventName}: priority ${move} — ${to > from ? 'less' : 'more'} important`
+                                            : eventName
+                                    }
+                                >
+                                    {priorityEventIcon(rep.priorityEvent)} Priority {move}
+                                    <span style={{ opacity: 0.8, margin: '0 5px' }}>·</span>
+                                    {eventName} — {bannerWhen}
+                                </span>
                             );
                         }
 

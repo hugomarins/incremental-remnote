@@ -1126,7 +1126,9 @@ export function registerGlobalRemChangedListener(plugin: ReactRNPlugin) {
                   const incRemForPriority = cachedIncRem || await getIncrementalRemFromRem(plugin, rem);
                   if (incRemForPriority) {
                     console.log('[GlobalRemChanged] In-queue card creation on IncRem, applying cardPriority:', data.remId);
-                    await setCardPriority(plugin, rem, incRemForPriority.priority, 'incremental');
+                    await setCardPriority(plugin, rem, incRemForPriority.priority, 'incremental', false, {
+                      event: 'incremental',
+                    });
                   }
                 }
               }

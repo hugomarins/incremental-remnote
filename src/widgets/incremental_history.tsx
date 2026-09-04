@@ -330,6 +330,7 @@ function HistoryItem({
             cardSource: 'manual',
             needsAddPowerup: false,
             triggerCascade: true,
+            event: 'editor',
         }).catch(console.error);
 
         // Optimistically reflect the change in the badge.

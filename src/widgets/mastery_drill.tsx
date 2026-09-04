@@ -774,7 +774,7 @@ function FinalDrill() {
               onChange={setEditingPriority}
               onSave={async () => {
                 const rem = await plugin.rem.findOne(currentCardData.remId);
-                if (rem) await setCardPriority(plugin, rem, editingPriority, 'manual');
+                if (rem) await setCardPriority(plugin, rem, editingPriority, 'manual', false, { event: 'drill' });
                 setEditingPriority(null);
               }}
               onCancel={() => setEditingPriority(null)}

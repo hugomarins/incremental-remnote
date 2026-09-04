@@ -84,6 +84,13 @@ export const IncrementalRep = z.object({
    *   Repetition History popup ("Add session") — reading done away from RemNote.
    *   It is a genuine repetition of this rem, so it counts for BOTH statistics and
    *   the scheduler's rep count, exactly like 'executeRepetition'.
+   * - 'priorityChange': The priority was changed WITHOUT a review or a reschedule —
+   *   the Alt+P popup, Quick Priority, an inline edit in a list view. A marker, like
+   *   'madeIncremental': it counts for neither statistics nor the scheduler (both
+   *   predicates below whitelist, so it is excluded by construction), and exists so
+   *   those gestures stop being invisible. Carries `previousPriority` and
+   *   `priorityEvent`; the reschedule and review paths do NOT emit one, because the
+   *   entry they already write records the new priority itself.
    *
    * The scheduler uses this to count only review events since the last 'madeIncremental' event.
    */
@@ -96,12 +103,28 @@ export const IncrementalRep = z.object({
     'madeIncremental',
     'dismissed',
     'importedRep',
-    'externalRep'
+    'externalRep',
+    'priorityChange'
   ]).optional(),
   /**
    * The absolute priority (0-100) at the time of this repetition
    */
   priority: z.number().min(0).max(100).optional(),
+  /**
+   * The priority this rem held immediately BEFORE this entry, so a
+   * 'priorityChange' row can read "60 → 45" without the reader having to hunt
+   * backwards for the last entry that happened to carry a priority (markers and
+   * slot-edit events often carry none).
+   */
+  previousPriority: z.number().min(0).max(100).optional(),
+  /**
+   * Which gesture changed the priority, for 'priorityChange' entries — one of
+   * the PriorityChangeEvent codes in lib/priority_history.ts, the same
+   * vocabulary the CardPriority history uses. Stored as a plain string rather
+   * than a zod enum so adding a code there cannot invalidate history already
+   * written to a rem.
+   */
+  priorityEvent: z.string().optional(),
   /**
    * The next-repetition timestamp (ms) scheduled at this point. Stamped on the
    * most-recent entry at every scheduling write. Used as a reliable read-time
