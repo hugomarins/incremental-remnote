@@ -28,7 +28,7 @@ import {
 import React, { useMemo, useEffect, useState } from 'react';
 import { computeFSRSStatesPerReview, computeFSRSState, parseWeightsString } from '../lib/fsrs';
 import { formatStabilityDays, formatTimeAgo, getRetrievabilityColor } from '../lib/utils';
-import { safeRemTextToString } from '../lib/pdfUtils';
+import { resolveRemTextForBreadcrumb } from '../lib/richTextRemRefs';
 import { displayFsrsDsrId, fsrsWeightsId, powerupCode, dismissedPowerupCode } from '../lib/consts';
 import { useIESetting } from '../lib/settings';
 import { buildCardLabels, CardLabel } from '../lib/card_labels';
@@ -539,7 +539,11 @@ function FlashcardRepetitionHistory() {
         if (rem) {
             const [remCards, name, history, hasInc, hasDismissed] = await Promise.all([
                 rem.getCards(),
-                safeRemTextToString(rp, rem.text),
+                // Same renderer the card labels use: rem references resolved
+                // in [ ] and reference pins collapsed to 📌, rather than
+                // safeRemTextToString's expansion of a pin into the whole rem
+                // it points at.
+                resolveRemTextForBreadcrumb(rp, rem.text),
                 readCardPriorityHistory(rem),
                 rem.hasPowerup(powerupCode),
                 rem.hasPowerup(dismissedPowerupCode),

@@ -18,9 +18,22 @@
 //              card_analytics_export returns the texts but not which id each
 //              belongs to, and without the id a Rem's five clozes are again
 //              indistinguishable.
+//
+// WHY IT GOES THROUGH resolveRemTextSegments
+//
+// Rich text is not just text. A clozed span can be a REM REFERENCE, and reading
+// `node.text` off the elements — which is all `collectClozeTexts` does — sees
+// nothing there, because a reference element (`{ i: 'q', _id }`) carries an id
+// and no text. That is how a cloze over `[Carena]` came out labelled `Cloze ()`.
+//
+// lib/richTextRemRefs already solves exactly this for breadcrumbs and list rows:
+// it resolves each reference to the referenced Rem's text in `[ ]`, and collapses
+// a reference PIN to a 📌 rather than expanding the (often enormous) rem behind
+// it. Both conventions are reused verbatim here, so a card label reads the same
+// way as the breadcrumb above it.
 
 import { RNPlugin } from '@remnote/plugin-sdk';
-import { safeRemTextToString } from './pdfUtils';
+import { RemTextSegment, resolveRemTextSegments } from './richTextRemRefs';
 
 /** Longest identifier text kept inline; the full text stays in the tooltip. */
 export const CARD_LABEL_MAX_CHARS = 70;
@@ -37,36 +50,29 @@ export interface CardLabel {
 }
 
 /**
- * Cloze id → the text inside it.
- *
- * Cloze markup rides on the rich-text elements themselves (`cId`), so a cloze's
- * words are that element's own `text`. A cloze split across several elements
- * (partly bolded, say) contributes each fragment, joined in document order.
+ * Render resolved segments the way a breadcrumb does: references already carry
+ * their `[ ]`, and a pin becomes a 📌 instead of the rem it points at.
  */
-export function collectClozeTextsById(richText: any): Map<string, string> {
+function segmentsToString(segments: RemTextSegment[]): string {
+  return segments.map((s) => (s.kind === 'pin' ? '📌' : s.text)).join('');
+}
+
+/**
+ * Cloze id → the text inside it, references and pins resolved.
+ *
+ * A cloze split across several elements (partly bolded, or text plus a
+ * reference) contributes each fragment, joined in document order.
+ */
+export function clozeTextsFromSegments(segments: RemTextSegment[]): Map<string, string> {
   const parts = new Map<string, string[]>();
-  const add = (id: unknown, text: string) => {
-    if (typeof id !== 'string' || !id || !text) return;
-    const bucket = parts.get(id);
-    if (bucket) bucket.push(text);
-    else parts.set(id, [text]);
-  };
-  const visit = (node: any, depth: number) => {
-    if (!node || depth > 12) return;
-    if (Array.isArray(node)) {
-      for (const child of node) visit(child, depth + 1);
-      return;
-    }
-    if (typeof node !== 'object') return;
-    const text = typeof node.text === 'string' ? node.text : '';
-    if (text) {
-      if (Array.isArray(node.cId)) node.cId.forEach((id: unknown) => add(id, text));
-      else add(node.cId, text);
-    }
-    if (Array.isArray(node.blocks)) visit(node.blocks, depth + 1);
-    if (Array.isArray(node.text)) visit(node.text, depth + 1);
-  };
-  visit(richText, 0);
+  for (const segment of segments) {
+    if (!segment.cId) continue;
+    const piece = segment.kind === 'pin' ? '📌' : segment.text;
+    if (!piece) continue;
+    const bucket = parts.get(segment.cId);
+    if (bucket) bucket.push(piece);
+    else parts.set(segment.cId, [piece]);
+  }
   const out = new Map<string, string>();
   for (const [id, fragments] of parts) out.set(id, fragments.join('').trim());
   return out;
@@ -85,25 +91,29 @@ export function truncateLabel(text: string, max = CARD_LABEL_MAX_CHARS): string 
 /**
  * Labels for every card of one Rem, keyed by card id.
  *
- * Takes the Rem's front/back text once and reuses it across the cards, so a
- * Rem with eight cards costs two text conversions rather than sixteen.
+ * The Rem's front and back are each resolved ONCE into segments, and both the
+ * direction labels and the cloze map are derived from those — reference
+ * resolution costs a `findOne` per reference, so resolving separately for the
+ * two purposes would double it for no gain.
  */
 export async function buildCardLabels(
   plugin: RNPlugin,
   rem: { text?: any; backText?: any } | null,
   cards: { _id: string; type?: any }[]
 ): Promise<Map<string, CardLabel>> {
-  const [frontText, backText] = await Promise.all([
-    rem?.text ? safeRemTextToString(plugin, rem.text) : Promise.resolve(''),
-    rem?.backText ? safeRemTextToString(plugin, rem.backText) : Promise.resolve(''),
+  const [frontSegments, backSegments] = await Promise.all([
+    rem?.text ? resolveRemTextSegments(plugin, rem.text) : Promise.resolve([]),
+    rem?.backText ? resolveRemTextSegments(plugin, rem.backText) : Promise.resolve([]),
   ]);
-  const clozeTexts = rem?.text ? collectClozeTextsById(rem.text) : new Map<string, string>();
+
+  const frontText = segmentsToString(frontSegments);
+  const backText = segmentsToString(backSegments);
+
+  const clozeTexts = clozeTextsFromSegments(frontSegments);
   // Clozes can live on the back of a Rem too (RemNote's panel labels them the
   // same way), so fold the back's markup in as well.
-  if (rem?.backText) {
-    for (const [id, text] of collectClozeTextsById(rem.backText)) {
-      if (!clozeTexts.has(id)) clozeTexts.set(id, text);
-    }
+  for (const [id, text] of clozeTextsFromSegments(backSegments)) {
+    if (!clozeTexts.has(id)) clozeTexts.set(id, text);
   }
 
   const out = new Map<string, CardLabel>();
@@ -127,9 +137,7 @@ export async function buildCardLabels(
     }
 
     const kind = typeof type === 'string' ? type : 'card';
-    const identifier = truncateLabel(
-      kind === 'backward' ? backText : kind === 'forward' ? frontText : frontText
-    );
+    const identifier = truncateLabel(kind === 'backward' ? backText : frontText);
     const typeName = `${titleCase(kind)} Card`;
     out.set(card._id, {
       kind,

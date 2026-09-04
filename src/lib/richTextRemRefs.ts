@@ -3,7 +3,7 @@ import { RNPlugin, RichTextElementRemInterface } from '@remnote/plugin-sdk';
 export type RemTextSegment =
   /** `cId` is the cloze id of the element this text came from, when it was clozed. */
   | { kind: 'text'; text: string; cId?: string }
-  | { kind: 'pin'; text: string };
+  | { kind: 'pin'; text: string; cId?: string };
 
 const isRemRef = (el: unknown): el is RichTextElementRemInterface =>
   el != null && typeof el === 'object' && (el as any).i === 'q';
@@ -102,8 +102,14 @@ export async function resolveRemTextSegments(
     }
     if (isRemRef(el)) {
       const text = await resolveRefText(plugin, el);
-      if (el.pin) segments.push({ kind: 'pin', text });
-      else pushText(`[${text}]`);
+      // Cloze markup rides on the element itself, references included — a clozed
+      // rem reference is a `q` element carrying a `cId`. Carrying it through is
+      // what lets a caller attribute the resolved text to its cloze; without it
+      // a cloze whose only content is a reference looks empty (which is how a
+      // `Cloze ([Carena])` card came out labelled `Cloze ()`).
+      const refCId = typeof (el as any).cId === 'string' ? ((el as any).cId as string) : undefined;
+      if (el.pin) segments.push({ kind: 'pin', text, cId: refCId });
+      else pushText(`[${text}]`, refCId);
       continue;
     }
     const anyEl = el as any;
