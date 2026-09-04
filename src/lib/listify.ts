@@ -95,12 +95,20 @@ const matchMarkerAt = (
   // Reject a token that is the tail of a dotted path (e.g. the "1" in "1.1" or
   // the "a" in "1.a"): those are handled by the compound detector, not here.
   if (S[pos - 1] === '.' && /[\da-zA-Z]/.test(S[pos - 2] || '')) return null;
+  // Reject the digit of a leading-dot marker (".1"): the marker starts one char
+  // earlier, at the dot, and is matched there instead (see 'decimal' below).
+  if (S[pos - 1] === '.' && /\d/.test(S[pos]) && isSep(S[pos - 2])) return null;
   const rest = S.slice(pos);
 
   if (kind === 'decimal') {
-    const m = /^(\d+)/.exec(rest);
+    // Sub-paragraph markers carry a LEADING dot (".1 Deep water… .2 Wind…" —
+    // IMO/UN drafting style). The dot belongs to the marker, so match from the
+    // dot itself; otherwise the split lands on the digit and strands a lone "."
+    // at the end of the previous item.
+    const dotLead = S[pos] === '.' && /\d/.test(S[pos + 1] || '') ? 1 : 0;
+    const m = /^(\d+)/.exec(rest.slice(dotLead));
     if (!m) return null;
-    const tokenEnd = pos + m[1].length;
+    const tokenEnd = pos + dotLead + m[1].length;
     // A decimal marker may carry no delimiter at all (sample: "1 Aumentar"), so
     // require token + optional delimiter + whitespace + a letter (item start).
     const dm = /^([.\-)–]?)\s+(\p{L})/u.exec(S.slice(tokenEnd));
