@@ -108,10 +108,11 @@ A detailed popup covering **every card of one Rem**, enriched with FSRS analytic
 
 **➕ Repetition** *(inside each open card section)* — records a review of that card done **outside the queue**: you tested yourself aloud, on paper, or in conversation, and the only way to tell RemNote used to be to find the card in a queue and answer it there. Press it and the four grade buttons appear, each carrying the interval **FSRS projects** that grade would buy — including **Again**, whose projection uses the post-lapse formula, so you can see what a lapse would actually cost before pressing it.
 
-Two things it is not:
+Three things to know about the figures:
 
 - **It cannot be backdated.** Unlike the IncRem popup's [➕ Session](#recording-and-correcting-records), the SDK takes a grade and nothing else, so the repetition is dated *now*. The panel says so.
 - **The intervals are a projection, not a promise.** They come from this plugin's FSRS model and your configured weights; RemNote's own scheduler decides the date it writes, and the two can differ for the same reasons the *Optimum Next repetition date* line above already lists — a non-FSRS scheduler, different weights, fuzz, load balancing.
+- **Again † is where FSRS *resumes*, not what you will see next.** If your scheduler has **Relearning Phase Steps** set (Settings → Schedulers → Relearning Phase, e.g. `1h`), RemNote walks those steps first. They are extra repetitions that confirm you have relearnt the card, and the scheduler does not count them — so a card whose Again projection reads `6w` is shown by RemNote's own **Forgot** button as `1 hour`. Both are right, a relearning step apart.
 
 **🎚 Card Priority History** *(footer)* — every priority this Rem has held, newest first, with the change (`60 → 45`), the gesture behind it and the source recorded alongside. Rem-level rather than per-card, because the `cardPriority` powerup tags the Rem and all its cards share the value. See [Priority history](Priorities-for-Flashcards.md#priority-history) for what is recorded and how bursts are collapsed.
 

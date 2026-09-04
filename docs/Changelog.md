@@ -12,7 +12,7 @@ Both priorities keep a history of what they have been, with the gesture behind e
 
 ### ✨ New - record a flashcard review you did away from RemNote
 
-The card history popup gains **➕ Repetition**: the four grade buttons, each showing the interval FSRS projects it would buy — Again included, so you can see what a lapse costs before pressing it. The repetition is dated now and cannot be backdated, which the panel states; it is the flashcard counterpart of the IncRem popup's ➕ Session.
+The card history popup gains **➕ Repetition**: the four grade buttons, each showing the interval FSRS projects it would buy — Again included, so you can see what a lapse costs before pressing it. The repetition is dated now and cannot be backdated, which the panel states; it is the flashcard counterpart of the IncRem popup's ➕ Session. Again's figure is where FSRS *resumes* after any relearning steps your scheduler adds, which is why it differs from the `1 hour` RemNote's own Forgot button shows.
 
 📖 [Flashcard Repetition History](Plugin-Widgets-Reference.md#211-flashcard-repetition-history)
 

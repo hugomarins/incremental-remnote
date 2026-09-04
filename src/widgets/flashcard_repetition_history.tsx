@@ -108,6 +108,11 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
  * only) is spelled `min`. The verbose form stays in the cell's tooltip, so
  * nothing is actually lost.
  *
+ * The month→year boundary is ONE YEAR, not the ~18 months a "still reads as
+ * months" instinct suggests: `formatStabilityDays` switches at 365 and so does
+ * RemNote's own answer-button display, so a wider boundary here printed `17.7m`
+ * beside RemNote's `1.5 years` for the same interval.
+ *
  * A true minus (−, U+2212) rather than a hyphen: it matches the `+` in width,
  * so a column of signed values stays aligned.
  */
@@ -119,7 +124,7 @@ function formatDelayCompact(delayMs: number): string {
     if (abs < 1) return `${sign}${Math.round(abs * 24)}h`;
     if (abs < 14) return `${sign}${Math.round(abs)}d`;
     if (abs < 60) return `${sign}${Math.round(abs / 7)}w`;
-    if (abs < 545) return `${sign}${Math.round(abs / 30.44)}m`;
+    if (abs < 365) return `${sign}${Math.round(abs / 30.44)}m`;
     return `${sign}${(abs / 365.25).toFixed(1)}y`;
 }
 
@@ -142,7 +147,7 @@ function formatIntervalCompact(intervalMs: number): string {
     if (days < 1) return `${Math.round(days * 24)}h`;
     if (days < 14) return `${Math.round(days)}d`;
     if (days < 60) return `${Math.round(days / 7)}w`;
-    if (days < 545) return `${(days / 30.44).toFixed(1)}m`;
+    if (days < 365) return `${(days / 30.44).toFixed(1)}m`;
     return `${(days / 365.25).toFixed(1)}y`;
 }
 
@@ -515,6 +520,17 @@ function RemTotalsHeader({ totals }: { totals: RemTotals }) {
  * same reasons the "Optimum Next repetition date" line above already documents
  * (a non-FSRS scheduler, different weights, fuzz, load balancing). So the
  * numbers are labelled as a projection, not as a promise.
+ *
+ * AGAIN NEEDS ITS OWN CAVEAT
+ *
+ * The Again figure is the post-lapse stability — where FSRS RESUMES once the
+ * card has been relearnt. It is not what RemNote will show you next. A
+ * scheduler with Relearning Phase Steps configured (Settings → Schedulers →
+ * Relearning Phase, e.g. `1h`) walks those steps first, and they are not FSRS
+ * intervals at all: they exist to confirm the material was actually relearnt,
+ * and the scheduler does not count them. So a card whose Again projection reads
+ * `6w` is shown by RemNote's own Forgot button as `1 hour` — both correct, a
+ * relearning step apart. Left unsaid, the two numbers look like a contradiction.
  */
 function AddRepetitionPanel({
     cardId,
@@ -595,11 +611,18 @@ function AddRepetitionPanel({
                         key={g.label}
                         disabled={busy}
                         onClick={() => record(g.score, g.label)}
-                        title={`Append a “${g.label}” repetition to this card, dated now.${
-                            g.days !== null
+                        title={
+                            `Append a “${g.label}” repetition to this card, dated now.` +
+                            (g.days !== null
                                 ? ` FSRS projects a ${formatIntervalCompact(g.days * MS_PER_DAY)} interval.`
-                                : ''
-                        }`}
+                                : '') +
+                            (g.score === QueueInteractionScore.AGAIN
+                                ? '\n\nThat is where FSRS resumes once the card has been relearnt. ' +
+                                  'If your scheduler has Relearning Phase Steps configured, RemNote ' +
+                                  'walks those first — so it will show the card again after the first ' +
+                                  'step (e.g. 1 hour), not after this interval.'
+                                : '')
+                        }
                         style={{
                             flex: '1 1 70px',
                             padding: '4px 8px',
@@ -617,7 +640,12 @@ function AddRepetitionPanel({
                             gap: 1,
                         }}
                     >
-                        <span>{g.label}</span>
+                        <span>
+                            {g.label}
+                            {g.score === QueueInteractionScore.AGAIN && (
+                                <span style={{ fontWeight: 400, opacity: 0.7 }}> †</span>
+                            )}
+                        </span>
                         <span style={{ fontWeight: 400, fontSize: 10, opacity: 0.85 }}>
                             {g.days !== null ? formatIntervalCompact(g.days * MS_PER_DAY) : '—'}
                         </span>
@@ -626,6 +654,13 @@ function AddRepetitionPanel({
                 <button style={buttonStyle} disabled={busy} onClick={() => setOpen(false)}>
                     Cancel
                 </button>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--rn-clr-content-tertiary)', lineHeight: 1.4 }}>
+                <strong>Again †</strong> is where FSRS <em>resumes</em>, after any{' '}
+                <strong>relearning steps</strong> your scheduler adds (Settings → Schedulers →
+                Relearning Phase). Those steps are extra reps that confirm you have relearnt the
+                card, and the scheduler does not count them — so RemNote's own Forgot button will
+                show the first step (e.g. 1 hour) rather than this figure.
             </div>
             {!finalState && (
                 <div style={{ fontSize: 10, color: 'var(--rn-clr-content-tertiary)' }}>

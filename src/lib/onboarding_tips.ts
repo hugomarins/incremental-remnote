@@ -369,7 +369,14 @@ export const ONBOARDING_TIPS: OnboardingTip[] = [
 
   // --- Advanced ---------------------------------------------------------
   // Drawn only once EVERY other tip has been acknowledged — the last stage in
-  // TIP_DRAW_STAGES. Empty for now; an empty stage is simply skipped.
+  // TIP_DRAW_STAGES.
+  {
+    id: 'add-repetition-outside-queue',
+    category: 'advanced',
+    title: 'Add a Repetition',
+    body: 'Ctrl+Shift+H → ➕ Repetition logs a card you tested outside the queue, FSRS interval per grade.',
+    docsPath: 'Plugin-Widgets-Reference/#211-flashcard-repetition-history',
+  },
 ];
 
 /**
