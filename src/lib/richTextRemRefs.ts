@@ -104,9 +104,10 @@ export async function resolveRemTextSegments(
       const text = await resolveRefText(plugin, el);
       // Cloze markup rides on the element itself, references included — a clozed
       // rem reference is a `q` element carrying a `cId`. Carrying it through is
-      // what lets a caller attribute the resolved text to its cloze; without it
-      // a cloze whose only content is a reference looks empty (which is how a
-      // `Cloze ([Carena])` card came out labelled `Cloze ()`).
+      // what lets a caller attribute the resolved text to its cloze. Without it
+      // the reference drops out of the cloze silently: a cloze over
+      // "a [Carena]" resolves to just "a", and one over a reference alone to
+      // nothing at all.
       const refCId = typeof (el as any).cId === 'string' ? ((el as any).cId as string) : undefined;
       if (el.pin) segments.push({ kind: 'pin', text, cId: refCId });
       else pushText(`[${text}]`, refCId);

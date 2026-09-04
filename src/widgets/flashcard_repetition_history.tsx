@@ -673,9 +673,11 @@ function FlashcardRepetitionHistory() {
                         style={buttonStyle}
                         title="This Rem is also Incremental — switch to its repetition history"
                         onClick={async () => {
-                            // Close first: RemNote shows one popup at a time, and
-                            // opening over this one leaves it behind on the stack.
-                            await plugin.widget.closePopup();
+                            // Open only — NEVER close first. closePopup destroys
+                            // this widget's sandbox immediately, so the await
+                            // after it never resumes and openPopup is never
+                            // called. Opening a popup replaces the current one
+                            // regardless.
                             await plugin.widget.openPopup('repetition_history', { remId: data.remId });
                         }}
                     >

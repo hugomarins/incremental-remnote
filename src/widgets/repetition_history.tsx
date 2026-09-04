@@ -1034,10 +1034,15 @@ function RepetitionHistoryPopup() {
                         {!!cardCount && cardCount > 0 && remId && (
                             <button
                                 onClick={async () => {
-                                    // Close first — RemNote shows one popup at a
-                                    // time, and opening over this one would leave
-                                    // it behind on the stack.
-                                    await plugin.widget.closePopup();
+                                    // Open only — NEVER close first. closePopup
+                                    // destroys this widget's sandbox immediately,
+                                    // so the await after it never resumes and the
+                                    // openPopup call is simply never made (the
+                                    // same teardown hazard the Dismiss button in
+                                    // answer_buttons.tsx documents). Opening a
+                                    // popup replaces the current one regardless,
+                                    // which is what "Show Aggregated" above relies
+                                    // on too.
                                     await plugin.widget.openPopup('flashcard_repetition_history', { remId });
                                 }}
                                 style={{

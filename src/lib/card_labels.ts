@@ -21,10 +21,14 @@
 //
 // WHY IT GOES THROUGH resolveRemTextSegments
 //
-// Rich text is not just text. A clozed span can be a REM REFERENCE, and reading
-// `node.text` off the elements — which is all `collectClozeTexts` does — sees
-// nothing there, because a reference element (`{ i: 'q', _id }`) carries an id
-// and no text. That is how a cloze over `[Carena]` came out labelled `Cloze ()`.
+// Rich text is not just text. A clozed span can take in a REM REFERENCE, and
+// reading `node.text` off the elements — which is all `collectClozeTexts` does —
+// sees nothing there, because a reference element (`{ i: 'q', _id }`) carries an
+// id and no text. So the reference silently contributes nothing: a cloze over
+// "a [Carena]" came out labelled `Cloze (a)`, keeping the article and dropping
+// the word that identified it, and a cloze over a reference ALONE came out
+// empty. The partial case is the worse of the two — it looks like a label
+// rather than a failure.
 //
 // lib/richTextRemRefs already solves exactly this for breadcrumbs and list rows:
 // it resolves each reference to the referenced Rem's text in `[ ]`, and collapses
