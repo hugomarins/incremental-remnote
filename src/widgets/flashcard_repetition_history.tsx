@@ -101,6 +101,67 @@ function formatMinutes(totalMinutes: number): string {
 
 const cellStyle: React.CSSProperties = { padding: '3px 6px', whiteSpace: 'nowrap' };
 
+/** Tailwind's red-500, the colour lapses are called out in throughout the popup. */
+const LAPSE_COLOR = '#ef4444';
+
+/**
+ * The Practiced Queues dashboard's retention thresholds and colours, as hex:
+ * ≥90% green-600, <80% red-500, amber-600 in between. Repeated as literals
+ * rather than imported because that widget expresses them as Tailwind class
+ * names and this one styles inline — the numbers are the contract, and they are
+ * stated here so the two cannot silently drift apart unnoticed.
+ */
+function retentionColor(retention: number): string {
+    if (retention >= 90) return '#16a34a';
+    if (retention < 80) return LAPSE_COLOR;
+    return '#ca8a04';
+}
+
+/**
+ * Retention over a set of graded answers: the share that were not "Again".
+ *
+ * Same definition the Practiced Queues dashboard uses (remembered / practised),
+ * applied to a card's own history instead of a session's. `null` when there is
+ * nothing graded to divide by — a new card has no retention, and showing it as
+ * 100% would flatter it.
+ */
+function retentionOf(gradeableCount: number, lapses: number): number | null {
+    if (gradeableCount <= 0) return null;
+    return ((gradeableCount - lapses) / gradeableCount) * 100;
+}
+
+/** "7 (2)" — repetitions with lapses called out in red. */
+function RepsWithLapses({ reps, lapses }: { reps: number; lapses: number }) {
+    return (
+        <>
+            {reps}
+            {lapses > 0 && (
+                <span
+                    style={{ color: LAPSE_COLOR, marginLeft: 4 }}
+                    title={`${lapses} lapse${lapses === 1 ? '' : 's'} — answers graded "Again"`}
+                >
+                    ({lapses})
+                </span>
+            )}
+        </>
+    );
+}
+
+/** "94% retention", coloured on the dashboard's thresholds. */
+function RetentionText({ retention }: { retention: number | null }) {
+    if (retention === null) {
+        return <span style={{ color: 'var(--rn-clr-content-tertiary)' }}>no retention yet</span>;
+    }
+    return (
+        <span title="Share of graded answers that were not “Again”">
+            <span style={{ color: retentionColor(retention), fontWeight: 600 }}>
+                {retention.toFixed(0)}%
+            </span>{' '}
+            retention
+        </span>
+    );
+}
+
 const buttonStyle: React.CSSProperties = {
     fontSize: 11,
     padding: '2px 6px',
@@ -119,6 +180,14 @@ interface CardStats {
     /** The slice after the last RESET — what the current schedule is built on. */
     activeHistory: any[];
     totalMinutes: number;
+    /** Answers with a real grade (Again/Hard/Good/Easy) — retention's denominator. */
+    gradeableCount: number;
+    /** Answers graded "Again". */
+    lapses: number;
+    /** Share of `gradeableCount` that was not a lapse; null when nothing is graded. */
+    retention: number | null;
+    /** No repetitions at all — RemNote's "New Card". */
+    isNew: boolean;
     cardAgeText: string;
     cardAgeMs: number;
     firstRepDate: number | null;
@@ -151,6 +220,9 @@ function computeCardStats(card: any): CardStats {
     );
     const totalMs = gradeableReps.reduce((acc: number, h: any) => acc + (h.responseTime || 0), 0);
     const totalMinutes = Math.round(totalMs / 6000) / 10;
+
+    const lapses = gradeableReps.filter((h: any) => h.score === QueueInteractionScore.AGAIN).length;
+    const retention = retentionOf(gradeableReps.length, lapses);
 
     const firstRepDate = activeHistory.length > 0 ? activeHistory[0].date : null;
     const cardAgeMs = firstRepDate ? Date.now() - firstRepDate : 0;
@@ -202,6 +274,10 @@ function computeCardStats(card: any): CardStats {
         sortedHistory,
         activeHistory,
         totalMinutes,
+        gradeableCount: gradeableReps.length,
+        lapses,
+        retention,
+        isNew: sortedHistory.length === 0,
         cardAgeText,
         cardAgeMs,
         firstRepDate,
@@ -216,7 +292,15 @@ function computeCardStats(card: any): CardStats {
 }
 
 /** One of the four tiles in a card's collapsed summary, mirroring RemNote's panel. */
-function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatTile({
+    label,
+    value,
+    sub,
+}: {
+    label: string;
+    value: React.ReactNode;
+    sub?: React.ReactNode;
+}) {
     return (
         <div
             style={{
@@ -235,6 +319,87 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
             {sub && (
                 <div style={{ fontSize: 9, color: 'var(--rn-clr-content-tertiary)' }}>{sub}</div>
             )}
+        </div>
+    );
+}
+
+interface RemTotals {
+    cards: number;
+    newCards: number;
+    staleCards: number;
+    reps: number;
+    lapses: number;
+    minutes: number;
+    retention: number | null;
+}
+
+/**
+ * Rem-wide totals across every card.
+ *
+ * Retention is pooled, not a mean of the per-card percentages: averaging a card
+ * with 40 answers against one with 2 would let the small card swing the figure,
+ * and the dashboard's definition — remembered ÷ practised — is already an
+ * aggregate. Summing both sides first keeps this number comparable with the one
+ * the Practiced Queues history shows for a session.
+ */
+function computeRemTotals(statsList: CardStats[]): RemTotals {
+    let newCards = 0;
+    let staleCards = 0;
+    let reps = 0;
+    let lapses = 0;
+    let minutes = 0;
+    let gradeable = 0;
+    for (const s of statsList) {
+        if (s.isNew) newCards++;
+        if (s.isStale) staleCards++;
+        reps += s.activeHistory.length;
+        lapses += s.lapses;
+        minutes += s.totalMinutes;
+        gradeable += s.gradeableCount;
+    }
+    return {
+        cards: statsList.length,
+        newCards,
+        staleCards,
+        reps,
+        lapses,
+        minutes: Math.round(minutes * 10) / 10,
+        retention: retentionOf(gradeable, lapses),
+    };
+}
+
+/** The four rem-wide tiles, above the per-card sections. */
+function RemTotalsHeader({ totals }: { totals: RemTotals }) {
+    const composition: string[] = [];
+    if (totals.newCards > 0) composition.push(`${totals.newCards} new`);
+    if (totals.staleCards > 0) composition.push(`${totals.staleCards} stale`);
+
+    return (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            <StatTile
+                label="CARDS"
+                value={`${totals.cards}`}
+                sub={composition.length ? composition.join(' · ') : 'all reviewed'}
+            />
+            <StatTile
+                label="REPETITIONS"
+                value={<RepsWithLapses reps={totals.reps} lapses={totals.lapses} />}
+                sub="across all cards"
+            />
+            <StatTile label="TIME SPENT" value={formatMinutes(totals.minutes)} sub="all cards" />
+            <StatTile
+                label="RETENTION"
+                value={
+                    totals.retention === null ? (
+                        '—'
+                    ) : (
+                        <span style={{ color: retentionColor(totals.retention), fontWeight: 700 }}>
+                            {totals.retention.toFixed(0)}%
+                        </span>
+                    )
+                }
+                sub="graded answers kept"
+            />
         </div>
     );
 }
@@ -476,6 +641,11 @@ function FlashcardRepetitionHistory() {
         );
     }
 
+    // One pass over the cards, reused by the totals header and by every section:
+    // the header's figures must be the sum of exactly what the sections show.
+    const statsByCard = data.cards.map((card) => computeCardStats(card));
+    const totals = computeRemTotals(statsByCard);
+
     const allExpanded = data.cards.length > 0 && data.cards.every((c) => expanded?.[c._id]);
     const setAll = (open: boolean) => {
         const next: Record<string, boolean> = {};
@@ -526,6 +696,8 @@ function FlashcardRepetitionHistory() {
                 <code>{data.remId || '—'}</code>
             </div>
 
+            {data.cards.length > 0 && <RemTotalsHeader totals={totals} />}
+
             {data.cards.length === 0 && (
                 <div style={{ color: 'var(--rn-clr-content-tertiary)', padding: '8px 0' }}>
                     This Rem has no flashcards.
@@ -534,7 +706,7 @@ function FlashcardRepetitionHistory() {
 
             {data.cards.map((card, ci) => {
                 const fsrs = fsrsData?.[ci];
-                const stats = computeCardStats(card);
+                const stats = statsByCard[ci];
                 const isOpen = !!expanded?.[card._id];
                 const label = card.label;
                 const headerName = label?.typeName
@@ -632,8 +804,27 @@ function FlashcardRepetitionHistory() {
                                 }}
                             >
                                 {stats.activeHistory.length} rep
-                                {stats.activeHistory.length === 1 ? '' : 's'} · ⏳{' '}
-                                {formatMinutes(stats.totalMinutes)}
+                                {stats.activeHistory.length === 1 ? '' : 's'}
+                                {stats.lapses > 0 && (
+                                    <span
+                                        style={{ color: LAPSE_COLOR, marginLeft: 4 }}
+                                        title={`${stats.lapses} lapse${stats.lapses === 1 ? '' : 's'} — answers graded “Again”`}
+                                    >
+                                        ({stats.lapses})
+                                    </span>
+                                )}{' '}
+                                · ⏳ {formatMinutes(stats.totalMinutes)}
+                                {stats.retention !== null && (
+                                    <>
+                                        {' · '}
+                                        <span
+                                            style={{ color: retentionColor(stats.retention), fontWeight: 600 }}
+                                            title="Share of graded answers that were not “Again”"
+                                        >
+                                            {stats.retention.toFixed(0)}%
+                                        </span>
+                                    </>
+                                )}
                             </span>
                         </div>
 
@@ -651,9 +842,14 @@ function FlashcardRepetitionHistory() {
                                     sub={stats.lastPracticeDate ? stats.lastPracticeDate.toLocaleDateString() : undefined}
                                 />
                                 <StatTile
-                                    label="TIMES PRACTICED"
-                                    value={`${stats.activeHistory.length}`}
-                                    sub="practice sessions"
+                                    label="REPETITIONS"
+                                    value={
+                                        <RepsWithLapses
+                                            reps={stats.activeHistory.length}
+                                            lapses={stats.lapses}
+                                        />
+                                    }
+                                    sub={<RetentionText retention={stats.retention} />}
                                 />
                                 <StatTile
                                     label="TIME SPENT"
@@ -670,8 +866,18 @@ function FlashcardRepetitionHistory() {
                                     fontSize: 11,
                                     color: 'var(--rn-clr-content-tertiary)',
                                 }}>
-                                    {stats.activeHistory.length} reviews, ⏳ {stats.totalMinutes} min,{' '}
-                                    {stats.cardAgeText} age{stats.coverageText}{stats.costText}
+                                    {stats.activeHistory.length} reviews
+                                    {stats.lapses > 0 && (
+                                        <span
+                                            style={{ color: LAPSE_COLOR }}
+                                            title={`${stats.lapses} lapse${stats.lapses === 1 ? '' : 's'} — answers graded “Again”`}
+                                        >
+                                            {' '}({stats.lapses})
+                                        </span>
+                                    )}
+                                    , <RetentionText retention={stats.retention} />, ⏳{' '}
+                                    {stats.totalMinutes} min, {stats.cardAgeText} age
+                                    {stats.coverageText}{stats.costText}
                                 </div>
 
                                 {/* Dates summary */}
