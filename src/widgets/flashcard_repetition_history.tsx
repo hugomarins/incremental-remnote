@@ -39,6 +39,7 @@ import {
     priorityEventIcon,
     summarizePriorityHistory,
 } from '../lib/priority_history';
+import { LAPSE_COLOR, retentionColorHex, retentionPercent } from '../lib/retention';
 
 function scoreLabel(score: QueueInteractionScore): string {
     switch (score) {
@@ -101,33 +102,15 @@ function formatMinutes(totalMinutes: number): string {
 
 const cellStyle: React.CSSProperties = { padding: '3px 6px', whiteSpace: 'nowrap' };
 
-/** Tailwind's red-500, the colour lapses are called out in throughout the popup. */
-const LAPSE_COLOR = '#ef4444';
-
-/**
- * The Practiced Queues dashboard's retention thresholds and colours, as hex:
- * ≥90% green-600, <80% red-500, amber-600 in between. Repeated as literals
- * rather than imported because that widget expresses them as Tailwind class
- * names and this one styles inline — the numbers are the contract, and they are
- * stated here so the two cannot silently drift apart unnoticed.
- */
-function retentionColor(retention: number): string {
-    if (retention >= 90) return '#16a34a';
-    if (retention < 80) return LAPSE_COLOR;
-    return '#ca8a04';
-}
-
 /**
  * Retention over a set of graded answers: the share that were not "Again".
  *
- * Same definition the Practiced Queues dashboard uses (remembered / practised),
- * applied to a card's own history instead of a session's. `null` when there is
- * nothing graded to divide by — a new card has no retention, and showing it as
- * 100% would flatter it.
+ * The same `kept ÷ answered` the Practiced Queues dashboard reports for a
+ * session, applied to a card's own history — hence the shared helper, and the
+ * shared colour scale beneath it.
  */
 function retentionOf(gradeableCount: number, lapses: number): number | null {
-    if (gradeableCount <= 0) return null;
-    return ((gradeableCount - lapses) / gradeableCount) * 100;
+    return retentionPercent(gradeableCount - lapses, gradeableCount);
 }
 
 /** "7 (2)" — repetitions with lapses called out in red. */
@@ -154,7 +137,7 @@ function RetentionText({ retention }: { retention: number | null }) {
     }
     return (
         <span title="Share of graded answers that were not “Again”">
-            <span style={{ color: retentionColor(retention), fontWeight: 600 }}>
+            <span style={{ color: retentionColorHex(retention), fontWeight: 600 }}>
                 {retention.toFixed(0)}%
             </span>{' '}
             retention
@@ -393,7 +376,7 @@ function RemTotalsHeader({ totals }: { totals: RemTotals }) {
                     totals.retention === null ? (
                         '—'
                     ) : (
-                        <span style={{ color: retentionColor(totals.retention), fontWeight: 700 }}>
+                        <span style={{ color: retentionColorHex(totals.retention), fontWeight: 700 }}>
                             {totals.retention.toFixed(0)}%
                         </span>
                     )
@@ -824,7 +807,7 @@ function FlashcardRepetitionHistory() {
                                     <>
                                         {' · '}
                                         <span
-                                            style={{ color: retentionColor(stats.retention), fontWeight: 600 }}
+                                            style={{ color: retentionColorHex(stats.retention), fontWeight: 600 }}
                                             title="Share of graded answers that were not “Again”"
                                         >
                                             {stats.retention.toFixed(0)}%

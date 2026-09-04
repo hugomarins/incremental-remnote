@@ -44,6 +44,7 @@ import {
     resolveSpeedThresholds,
     speedColorStyle,
 } from "../lib/speed_color";
+import { retentionColorClass, retentionPercent } from "../lib/retention";
 import { useIESetting } from "../lib/settings";
 import {
     SpeedCalibrationPeriod,
@@ -221,7 +222,9 @@ function buildRow(
         endMs
     );
     const remembered = Math.max(0, s.cardsCount - s.forgotCount);
-    const retentionRate = s.cardsCount > 0 ? (remembered / s.cardsCount) * 100 : 0;
+    // 0 rather than null for a period with no cards: the table already hides the
+    // cell behind a `cardsCount > 0` guard, so the number is never rendered.
+    const retentionRate = retentionPercent(remembered, s.cardsCount) ?? 0;
     const cardsTimeMin = s.cardsTime / 1000 / 60;
     const avgSpeed = cardsTimeMin > 0 ? s.cardsCount / cardsTimeMin : 0;
     const avgSecondsPerCard = s.cardsCount > 0 ? s.cardsTime / 1000 / s.cardsCount : 0;
@@ -343,7 +346,7 @@ function SummaryTable({
                                 </td>
                                 <td className="p-2 text-right">
                                     {row.cardsCount > 0 ? (
-                                        <span className={row.retentionRate >= 90 ? "text-green-600 font-bold" : (row.retentionRate < 80 ? "text-red-500 font-bold" : "text-yellow-600 font-bold")}>
+                                        <span className={`${retentionColorClass(row.retentionRate)} font-bold`}>
                                             {row.retentionRate.toFixed(0)}%
                                         </span>
                                     ) : <span className="rn-clr-content-tertiary">-</span>}
@@ -1026,12 +1029,13 @@ function QueueSessionItem({ session, onDelete, isLive, thresholds }: { session: 
 
     const forgotCount = session.againCount || 0;
     const rememberedCount = Math.max(0, count - forgotCount);
-    const retentionRate = count > 0 ? ((rememberedCount / count) * 100).toFixed(0) : "100";
+    // "100" for a session with no cards answered yet — a live card that has just
+    // opened reads better at 100% than at a dash.
+    const retentionRate = (retentionPercent(rememberedCount, count) ?? 100).toFixed(0);
 
     const speedColor = speedColorStyle(count > 0 ? cardsPerMinVal : 0, thresholds);
 
-    const retentionVal = parseInt(retentionRate);
-    const retentionColor = retentionVal >= 90 ? "text-green-600" : (retentionVal < 80 ? "text-red-500" : "text-yellow-600");
+    const retentionColor = retentionColorClass(parseInt(retentionRate));
 
     if (isLive) {
         return (
