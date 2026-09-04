@@ -82,7 +82,7 @@ A compact PDF dropdown that appears in the Reader's top bar, just to the right o
 
 A detailed popup covering **every card of one Rem**, enriched with FSRS analytics. Open it via the 🔬 button on the [Card Info Bar](#11-card-info-bar), or press `Ctrl+Shift+H` on the Rem — in the queue *or* in the editor. Press `Esc` to close.
 
-![Flashcard Repetition History Popup](assets/flashcard-rep-history.png){ width="900" }
+![Flashcard Repetition History Popup](assets/flashcard-rep-history-2.png){ width="900" }
 
 **Rem-wide totals** *(header)* — four tiles summing every card: **Cards** (with how many are new, or stale — overdue by more than twice their last interval), **Repetitions** (with total lapses in red parentheses), **Time Spent**, and **Retention** in the [Practiced Queues colours](Colour-Coding-Reference.md#retention). Retention is pooled — remembered ÷ graded across all cards — not an average of the per-card figures, so a two-answer card cannot swing it as hard as a forty-answer one.
 
@@ -106,7 +106,7 @@ A detailed popup covering **every card of one Rem**, enriched with FSRS analytic
     Comparing the two **Delay** columns is the point of the pairing: green in the FSRS column means you reviewed sooner than the model needed, red that recall had already decayed past the target. Delays are written compactly (`+3d`, `−2w`, `+1.4y`) in the [early/late colours](Colour-Coding-Reference.md#queue), with the full phrasing on hover.
 - **Color-Coded Markers**: Visual markers distinguish standard reviews, queue reschedules (📅), editor command reviews (⌨️), and manual date resets.
 
-**➕ Repetition** *(inside each open card section)* — records a review of that card done **outside the queue**: you tested yourself aloud, on paper, or in conversation, and the only way to tell RemNote used to be to find the card in a queue and answer it there. Press it and the four grade buttons appear, each carrying the interval **FSRS projects** that grade would buy — including **Again**, whose projection uses the post-lapse formula, so you can see what a lapse would actually cost before pressing it.
+**➕ Repetition** *(inside each open card section)* — records a review of that card done **outside the queue**: you tested yourself aloud, on paper, or in conversation, and the only way to tell RemNote used to be to find the card in a queue and answer it there. Press it and the four grade buttons appear, each carrying the interval **FSRS projects** that grade would buy — including **Again**, whose projection uses the post-lapse formula, so you can see what a lapse would actually cost before pressing it. **Sample use case**: while in the Editor, you realize you forgot the answer of a card that has a large interval and is not yet due. Tell it to RemNote, so that it can be rescheduled appropriately.
 
 Three things to know about the figures:
 
