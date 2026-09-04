@@ -164,7 +164,7 @@ circunstâncias, o número de pessoal qualificado… 2 Deixar claro em que situa
 "chamar o Comandante ao passadiço". 3 O Oficial de quarto… 11 Garantir que…
 ```
 
-There are no line breaks to bulletize — the only structure is in the **markers**: **enumerators** (`1`, `2`, `3`… / `a)` `b)` / `i.` `ii.`), **depth/compound numbers** (`1.1`, `1.2`… or mixed `1.a`, `1.b`…), or **inline bullet/dash glyphs** (`•`, `-`, `*`) that a highlight ran together onto one line. These commands detect that structure and rebuild the list, first inline (for review) and then as proper child rems, with a full undo.
+There are no line breaks to bulletize — the only structure is in the **markers**: **enumerators** (`1`, `2`, `3`… / `a)` `b)` / `i.` `ii.` / `.1` `.2` `.3`), **depth/compound numbers** (`1.1`, `1.2`… or mixed `1.a`, `1.b`…), or **inline bullet/dash glyphs** (`•`, `-`, `*`) that a highlight ran together onto one line. These commands detect that structure and rebuild the list, first inline (for review) and then as proper child rems, with a full undo.
 
 Unlike Bulletize, all three act on the **focused rem** — just click into the rem, no text selection required.
 
@@ -188,6 +188,7 @@ As seguintes medidas podem contribuir para evitá-las:
 ```
 
 - **Enumerated lists keep their number:** `1 Aumentar` → `• 1 Aumentar`.
+- **Sub-paragraph markers keep their leading dot:** the `.1` `.2` `.3` style used by IMO/UN and other legal drafting is read as one marker, so the break lands **before the dot** (`• .1 Deep unrestricted water…`) instead of stranding a lone `.` at the end of the previous item. A number glued to a word (`footnote.1`) is not a marker.
 - **Bullet/dash lists have their marker normalized:** an existing `•`, `-` or `*` is **replaced** by a single `• ` (so `- calado` and `* item` both become `• …`) — no duplicate bullet is added.
 
 The text before the first marker becomes the **caput** (title line); the whitespace before each marker is collapsed into the `• ` prefix. This stays a **single rem** and is fully `Ctrl+Z`-able — it's the review checkpoint before the destructive step. If no list is detected, a toast says so and nothing changes.

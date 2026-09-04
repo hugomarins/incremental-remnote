@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.77 - September 4th, 2026
+
+### ⚡ Improved - Inlinize reads `.1` `.2` `.3` sub-paragraph markers
+
+The IMO/UN drafting style is now recognised as one marker, so the line break lands before the dot instead of leaving a stray `.` at the end of the previous item.
+
+📖 [Inlinize Detected List](Utilities.md#inlinize-detected-list-inl)
+
 ## v1.0.76 - September 3rd, 2026
 
 ### ✨ New - link a flashcard to its source without disturbing the card
