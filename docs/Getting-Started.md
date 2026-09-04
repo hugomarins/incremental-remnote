@@ -214,7 +214,7 @@ Gives you a high-level overview of progress stats for a Rem and **all its descen
 
 There is a single unified command: **Open IncRem Repetition History**.
 
-*   **Keyboard Shortcut:** [`Ctrl+Shift+H`](Keyboard-Shortcuts.md#view-navigation) (works in both Queue and Editor)
+*   **Keyboard Shortcut:** [`Ctrl+Shift+H`](Keyboard-Shortcuts.md#view-navigation) (works in both Queue and Editor, on Incremental Rems *and* on ordinary flashcards — see [how it routes](Plugin-Widgets-Reference.md#how-ctrlshifth-routes))
 *   **In the Queue:** Click the 📊 icon in the Answer Buttons info bar
 
 **Smart Behavior:**
@@ -237,8 +237,11 @@ The history includes special event markers:
 |--------|---------|
 | ▶ **Made Incremental** | When the Rem was first made (or re-made) incremental — shows the priority and the interval it started with |
 | ⏸ **Dismissed** | When the Rem was dismissed via the Dismiss button |
+| 🎚 **Priority change** | The priority changed on its own — no review, no reschedule. Shows the move (`60 → 45`) and which gesture made it |
 
 When you set a priority right after creating the Rem — **[Alt+Shift+X](Keyboard-Shortcuts.md#core-commands)**, the PDF highlight toolbar's **Create IncRem**, or **Toggle Incremental** — the priority and interval you choose are written *into* this marker rather than added beside it, so one action leaves one entry. Rescheduling later (**[Alt+P](Keyboard-Shortcuts.md#priority-commands)**, **[Ctrl+J](Keyboard-Shortcuts.md#core-commands)**) is still recorded as its own event.
+
+A **🎚 Priority change** marker is filed only when nothing else records the new priority. Reschedules and reviews already carry the priority they set, so they produce no separate marker; and successive changes from the same gesture within a minute collapse into one, so holding **[Ctrl+Opt+↓](Keyboard-Shortcuts.md#priority-commands)** to walk a priority down leaves a single entry showing where it landed. Priority changes count for neither your statistics nor the scheduler.
 
 These markers help you understand your learning timeline and distinguish between different review sessions. Each banner shows the **date and the time of day** (`Aug 13, 2026 · 09:44`) it was recorded — the same wall-clock detail the repetition rows carry — so a day holding several lifecycle events (made incremental → dismissed → made incremental again) still reads in order.
 

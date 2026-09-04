@@ -59,7 +59,7 @@ This table lists all the custom keyboard shortcuts that are unique to the Increm
 | Shortcut | Command Name | Function | Context |
 | :--- | :--- | :--- | :--- |
 | `Alt` + `Shift` + `I` | Open Incremental Rems Main View | Opens the main view popup showing all Incremental Rems with filtering and sorting. | Global |
-| `Ctrl` + `Shift` + `H` | [Open IncRem Repetition History](Getting-Started.md#repetition-history-statistics) | Opens the **Single History** view for individual items or **Aggregated History** view for folders with incremental descendants. | Editor and Queue |
+| `Ctrl` + `Shift` + `H` | [Open Repetition History](Getting-Started.md#repetition-history-statistics) | Routes to the right view: **Single History** for an Incremental Rem, **[Flashcard History](Plugin-Widgets-Reference.md#211-flashcard-repetition-history)** (all of the Rem's cards) for a flashcard, **Aggregated History** for a folder with incremental descendants. A Rem that is both offers a button across. | Editor and Queue |
 | `Ctrl` + `Shift` + `I` | [Toggle Ignore Tag](Plugin-Commands-Reference.md#other-utilities) | Adds/removes the `#ignore` tag on the focused Rem **or a multi-rem selection** (run from the Omnibar). Ignored rems are shrunk and dimmed (full opacity on hover/focus) and the tag chip is hidden — used during IR to mark already-read snippets that don't deserve becoming Incremental. | Editor Only |
 
 ### Editing Utilities
@@ -134,7 +134,7 @@ Function keys carry the utilities whose natural letter combination was already t
 
 | Shortcut | Command | Context |
 | :--- | :--- | :--- |
-| `Ctrl` + `Shift` + `H` | [Open IncRem Repetition History](Getting-Started.md#repetition-history-statistics) | Editor and Queue |
+| `Ctrl` + `Shift` + `H` | [Open Repetition History](Getting-Started.md#repetition-history-statistics) | Editor and Queue |
 | `Ctrl` + `Shift` + `I` | [Toggle Ignore Tag](Plugin-Commands-Reference.md#other-utilities) | Editor |
 | `Ctrl` + `Shift` + `J` | [Execute Repetition / Review & Open](Reviewing-Items-in-the-Queue.md#review-in-editor) | Editor and Queue |
 | `Ctrl` + `Shift` + `F1` | [Copy Rem Sources](PDF-Incremental-Reading-Workflow.md#2-copying-and-pasting-sources) | Editor |

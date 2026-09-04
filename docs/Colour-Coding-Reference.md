@@ -101,6 +101,18 @@ Progress bars in the Weighted Shield breakdown and the Card Priority × Memory t
 
 Green starts at 95%, not 100%: at 99.8% the answer to "am I on top of this?" is yes.
 
+### Retention { #retention }
+
+**Retention** — the share of graded answers that were not *Again* — uses a coarser three-step scale, shared by the [Practiced Queues history and Live Dashboard](History-Queue-Dashboard-and-Mastery-Drill.md#practiced-queues-history-live-dashboard) and the [Flashcard Repetition History](Plugin-Widgets-Reference.md#211-flashcard-repetition-history):
+
+| Value | Colour |
+|---|---|
+| ≥ 90% | **green** `#16a34a` |
+| ≥ 80% | **amber** `#ca8a04` |
+| below | **red** `#ef4444` |
+
+Three steps, not four, because retention is a judgement rather than a progress bar: above 90% you are over-reviewing, below 80% the material is not sticking, and in between is where it should be. **Lapse counts** are always shown in the same red, in parentheses after the repetition count.
+
 The Queue Dashboard's **speed** reading has its own red→green scale, either fixed cpm thresholds or calibrated against your own history — see [Speed colour coding](Plugin-Settings-Reference.md).
 
 ---

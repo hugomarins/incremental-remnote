@@ -41,7 +41,7 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
 - **[Dismiss Incremental Rem](Getting-Started.md#dismissing-an-incremental-rem-dismiss-button)** (`Ctrl+D`) — `quick: dis`
   Equivalent to clicking the "[Dismiss](Reviewing-Items-in-the-Queue.md#dismiss)" button. Removes the Incremental and transfers its history to the Dismissed powerup.
 
-- **[Open Repetition History](Getting-Started.md#repetition-history-statistics)** (`Ctrl+Shift+H`) — `quick: his`
+- **[Open Repetition History](Getting-Started.md#repetition-history-statistics)** (`Ctrl+Shift+H`) — `quick: his` — [routes](Plugin-Widgets-Reference.md#how-ctrlshifth-routes) to the IncRem, flashcard or aggregated view
   Displays a comprehensive history popup. For Incremental Rems, opens the [IncRem Repetition History](Getting-Started.md#repetition-history-statistics). For regular flashcards, opens the [Flashcard Repetition History](Reviewing-Items-in-the-Queue.md#flashcard-repetition-history).
 
 - **[Open Study Dashboard](Study-Dashboard.md)** — `quick: sdb`

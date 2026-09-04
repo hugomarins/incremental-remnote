@@ -4,6 +4,18 @@ This page documents the major changes and improvements for each version of the I
 
 ## v1.0.77 - September 4th, 2026
 
+### ✨ New - every priority change is now on the record
+
+Both priorities keep a history of what they have been, with the gesture behind each change: a flashcard Rem gets a **🎚 Card Priority History** at the bottom of its history popup, and an Incremental Rem files a **🎚 Priority change** marker for the gestures that used to leave no trace at all (`Alt+P`, `Ctrl+Opt+↑/↓`, inline edits). A burst from the same gesture inside a minute collapses into one entry.
+
+📖 [Priority history](Priorities-for-Flashcards.md#priority-history) · [Event Markers](Getting-Started.md#event-markers)
+
+### ✨ New - `Ctrl+Shift+H` shows flashcard history too, one section per card
+
+The shortcut now opens the card history for any Rem with flashcards — **in the editor as well as the queue** — showing every card of the Rem in a collapsible section named the way RemNote's own panel names it (`Cloze (a [Carena])`, `Forward Card`), with per-card and Rem-wide totals for repetitions, lapses, time and retention. A Rem that is both incremental and a flashcard source gets a button across to the other history.
+
+📖 [Flashcard Repetition History](Plugin-Widgets-Reference.md#211-flashcard-repetition-history)
+
 ### ⚡ Improved - Inlinize reads `.1` `.2` `.3` sub-paragraph markers
 
 The IMO/UN drafting style is now recognised as one marker, so the line break lands before the dot instead of leaving a stray `.` at the end of the previous item.

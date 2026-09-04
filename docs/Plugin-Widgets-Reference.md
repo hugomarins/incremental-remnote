@@ -80,19 +80,31 @@ A compact PDF dropdown that appears in the Reader's top bar, just to the right o
 #### 2.1.1. Flashcard Repetition History
 *(Flashcards only)*
 
-A detailed popup for regular flashcards, enriched with FSRS analytics. Open it via the 🔬 button on the [Card Info Bar](#11-card-info-bar), or press `Ctrl+Shift+H` while a flashcard is showing. Press `Esc` to close.
+A detailed popup covering **every card of one Rem**, enriched with FSRS analytics. Open it via the 🔬 button on the [Card Info Bar](#11-card-info-bar), or press `Ctrl+Shift+H` on the Rem — in the queue *or* in the editor. Press `Esc` to close.
 
 ![Flashcard Repetition History Popup](assets/flashcard-rep-history.png){ width="900" }
 
-**Features:**
+**Rem-wide totals** *(header)* — four tiles summing every card: **Cards** (with how many are new, or stale — overdue by more than twice their last interval), **Repetitions** (with total lapses in red parentheses), **Time Spent**, and **Retention** in the [Practiced Queues colours](Colour-Coding-Reference.md#retention). Retention is pooled — remembered ÷ graded across all cards — not an average of the per-card figures, so a two-answer card cannot swing it as hard as a forty-answer one.
 
-- **Rem Name Header**: Identifies the parent Rem holding the flashcard, plus Card ID and Rem ID.
-- **Total Reviews & Time**: Aggregate review count, cumulative time spent, **card age**, **coverage** (time from first to next scheduled review), and **cost** (ignoring any reviews that occurred before a manual Date Reset).
+**One collapsible section per card.** A Rem with five clozes plus forward and backward is seven histories, so each card is a section you open and close, named the way RemNote's own *Bullet Information* panel names it:
+
+- **Card identifiers** — `Forward Card (…)` and `Backward Card (…)` show the side the card asks; `Cloze (…)` shows the clozed words themselves. Rem references inside the text resolve to `[the referenced Rem]` and reference pins to 📌, so a cloze over a reference reads `Cloze (a [Carena])` rather than losing the word that identifies it.
+- **Collapsed** — the four tiles from RemNote's panel: **Next Practice**, **Last Practiced**, **Repetitions** (lapses in red, retention underneath) and **Time Spent**.
+- **Expanded** — the full analytics below.
+- Sections start **collapsed** when the Rem has more than one card, except the card you were reviewing (badged `IN QUEUE`); a single-card Rem opens straight into its table. **Expand all / Collapse all** is in the header, and `↑`/`↓` walk the sections with `Enter` to open the selected one.
+
+**Per-card analytics** *(expanded)*:
+
+- **Total Reviews & Time**: review count, lapses, retention, cumulative time spent, **card age**, **coverage** (time from first to next scheduled review), and **cost** (ignoring any reviews that occurred before a manual Date Reset).
 - **Date Summaries**: Next repetition scheduled, optimum next repetition (Last practice + Stability), date the card becomes stale (Last practice + 2× Interval), and current interval with stability ratio.
 - **Retrievability Gradient**: R is displayed with a dynamic color gradient — red (≤ 70%) through green (100%).
 - **SInc per grade**: Color-coded Stability Increase projections for 🟠 Hard / 🟢 Good / 🔵 Easy with hover tooltips showing projected stability.
 - **History Table**: Every review with rating (color-coded), response time, target vs. practice date, delay, next interval, per-step D & S (in friendly units), SInc ratio, and pluginData.
 - **Color-Coded Markers**: Visual markers distinguish standard reviews, queue reschedules (📅), editor command reviews (⌨️), and manual date resets.
+
+**🎚 Card Priority History** *(footer)* — every priority this Rem has held, newest first, with the change (`60 → 45`), the gesture behind it and the source recorded alongside. Rem-level rather than per-card, because the `cardPriority` powerup tags the Rem and all its cards share the value. See [Priority history](Priorities-for-Flashcards.md#priority-history) for what is recorded and how bursts are collapsed.
+
+**♾ Incremental History** *(header button)* — appears when the Rem is also an Incremental Rem (or a dismissed one), and switches to [its history](#212-increm-repetition-history-aggregated-view). The reverse button lives there.
 
 📖 **Full documentation:** [Card Stats & FSRS Integration](Reviewing-Items-in-the-Queue.md#card-stats-fsrs-integration)
 
@@ -105,6 +117,8 @@ Two interconnected popups for Incremental Rems, both accessed via `Ctrl+Shift+H`
   - **📝 Notes & context sub-lines** — entries carrying a [review note](Reviewing-Items-in-the-Queue.md#the-answer-buttons) show it under the row (📝, full text); entries with an automatic **reading-context snapshot** show a compact line like `p.57 of 40–80 · Book.pdf · 🔖 "bookmark…"` — the page you were on **at that rep**, so your reading trajectory across sessions is visible. Event banners (Dismissed, Rescheduled in Editor, …) show their note the same way — a dismissal reason lives right on the dismissal marker.
   - **PDF reading-progress footer** — when the Rem (active *or* dismissed) reads from a PDF with a **page range** set, a footer shows the PDF name, the page range, your current page, the **degree of processing** (`% read`, with a progress bar), and an **estimated remaining time** (extrapolated from the total time spent and the degree of processing reached). The percentage and estimate are omitted for open-ended ranges (`start–∞`), where there's no finite end to measure against.
   - **🔖 Read-point footer** — when the Rem has a [read point](Reviewing-Items-in-the-Editor.md#read-points-for-rem-type-incremental-rems) set, a footer shows the path from the Rem itself down to the bookmarked descendant (`Chapter › Section › Read point`), with the date it was set. Every segment is clickable and navigates to that Rem. It works for dismissed Rems too, and if the read point has since been moved out of the outline the footer says so and shows its nearest ancestors instead.
+  - **🎚 Priority change banners** — a priority changed *without* a review or a reschedule (the [`Alt+P`](Prioritization-&-Sorting.md#main-priority-popup) popup, [`Ctrl+Opt+↑/↓`](Prioritization-&-Sorting.md#quick-priority-shortcuts), an inline edit in a list view) files its own blue banner reading `⚡ Priority 60 → 45 · Quick priority change — Sep 4, 2026 · 14:30`. Hover it for whether that made the item more or less important. It counts for neither your statistics nor the scheduler — it is a marker, like ▶ Made Incremental. A reschedule or a review that *also* set a priority does **not** produce one: the entry it already writes records the new priority itself. Nor does a priority chosen within a minute of creating the Rem — that goes *into* the ▶ Made Incremental marker.
+  - **🃏 Cards History** *(header button)* — appears when the Rem also generates flashcards, and switches to the [Flashcard Repetition History](#211-flashcard-repetition-history) for all of them. The reverse button lives there.
   - **➕ Session — recording study done outside RemNote** — see [Recording and correcting records](#recording-and-correcting-records) below.
   - **✏️ / 🗑 per record** — hover any row to edit or delete it; see the same section.
 
@@ -116,7 +130,16 @@ Two interconnected popups for Incremental Rems, both accessed via `Ctrl+Shift+H`
 
 ![Aggregated Repetition History](assets/aggregated-repetition-history.gif){ width="600" }
 
-The `Ctrl+Shift+H` command **intelligently routes** to the right view: Single for individual items, Aggregated for folders. If triggered on a flashcard, it opens the [Flashcard Repetition History](Reviewing-Items-in-the-Queue.md#flashcard-repetition-history) instead.
+##### How `Ctrl+Shift+H` routes
+
+The command picks the view from what the Rem actually is, in this order:
+
+1. **An active Incremental Rem** → its own history, cards or not. When it also has cards, the **🃏 Cards History** button carries you across.
+2. **Any Rem with flashcards** → the [Flashcard Repetition History](#211-flashcard-repetition-history), covering every card of the Rem. This works **in the editor** as well as the queue — pressing the shortcut on an ordinary flashcard in your outline used to report that there was no history to show.
+3. **A dismissed Rem with no cards** → its preserved history.
+4. **A Document or Folder with incremental descendants** → the Aggregated view.
+
+Both single-Rem popups link to each other, so a Rem that qualifies for two of these is never a dead end whichever one it opens.
 
 ##### Recording and correcting records
 
