@@ -1029,13 +1029,19 @@ function QueueSessionItem({ session, onDelete, isLive, thresholds }: { session: 
 
     const forgotCount = session.againCount || 0;
     const rememberedCount = Math.max(0, count - forgotCount);
-    // "100" for a session with no cards answered yet — a live card that has just
-    // opened reads better at 100% than at a dash.
-    const retentionRate = (retentionPercent(rememberedCount, count) ?? 100).toFixed(0);
+    // null when no card was answered — an IncRem-only session, or a live card
+    // that has just opened.
+    const retentionValue = retentionPercent(rememberedCount, count);
+    // "100" for that case: a live card reads better at 100% than at a dash.
+    const retentionRate = (retentionValue ?? 100).toFixed(0);
 
     const speedColor = speedColorStyle(count > 0 ? cardsPerMinVal : 0, thresholds);
 
-    const retentionColor = retentionColorClass(parseInt(retentionRate));
+    // Grey when there is no retention to report. A session that answered no
+    // cards at all shows `0 / 0 (100%)`, and painting that green would claim
+    // perfect recall on the strength of nothing.
+    const retentionColor =
+        retentionValue === null ? 'text-gray-500' : retentionColorClass(retentionValue);
 
     if (isLive) {
         return (
@@ -1259,7 +1265,7 @@ function QueueSessionItem({ session, onDelete, isLive, thresholds }: { session: 
                                 <span className="font-bold text-green-600">{rememberedCount}</span>
                                 <span className="text-gray-400">/</span>
                                 <span className="font-bold text-red-500">{forgotCount}</span>
-                                <span className="ml-1 font-semibold text-gray-500">({retentionRate}%)</span>
+                                <span className={`ml-1 font-semibold ${retentionColor}`}>({retentionRate}%)</span>
                             </div>
 
                             {session.incRemsCount > 0 && (
