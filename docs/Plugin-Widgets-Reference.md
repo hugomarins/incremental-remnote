@@ -599,7 +599,7 @@ Scan, review and delete in one popup — but deliberately in **two stages**, bec
 📖 **Full documentation:** [Delete Empty Extra Card Detail Rems](Utilities.md#delete-empty-extra-card-detail-rems)
 
 ### 6.12. Clean Priority Review Documents Popup
-**Trigger:** `Clean Priority Review Documents` command (quick code `cprd`)
+**Trigger:** `Clean Priority Review Documents` command (quick code `clean`)
 
 Two stages, like the Empty Extra Card Detail popup and for the same reason: the scan writes nothing, and you confirm against real counts before any Rem is deleted.
 

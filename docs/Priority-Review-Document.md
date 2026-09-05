@@ -245,7 +245,7 @@ Even though you are reviewing a generated list, the plugin is smart enough to kn
 
 A Priority Review Document is a **snapshot**. Its entries are Rem references chosen from what was due at the moment you built it, and nothing updates them afterwards. Once you have reviewed an item, its entry stays behind — and keeps feeding the document's queue. A document you have been working through for a few days ends up mostly made of things you have already done, crowding out the priorities it was built to reach.
 
-The **Clean Priority Review Documents** command (quick code `cprd`) removes those entries.
+The **Clean Priority Review Documents** command (quick code `clean`) removes those entries.
 
 It reads *every* review document in your knowledge base, works out which entries still have something due, and shows you the result **before** anything is deleted:
 

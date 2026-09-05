@@ -10,6 +10,12 @@ This page documents the major changes and improvements for each version of the I
 
 📖 [Card Enablement Audit](Utilities.md#card-enablement-audit) · [Suppressed cards](Prioritization-&-Sorting.md#suppressed-cards)
 
+### ♻️ Changed - the quick code for *Clean Priority Review Documents* is now `clean`
+
+It was `cprd`.
+
+📖 [Cleaning a review document](Priority-Review-Document.md#cleaning-a-review-document)
+
 ## v1.0.79 - September 5th, 2026
 
 ### 🐛 Fixed - cards removed from the Mastery Drill came back in the same session

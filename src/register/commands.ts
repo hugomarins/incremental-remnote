@@ -1523,7 +1523,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     name: 'Clean Priority Review Documents',
     description:
       'Finds the entries in your Priority Review Documents whose Rem no longer has anything due — reviewed flashcards and incremental Rems — and removes them after you confirm, per document.',
-    quickCode: 'cprd',
+    quickCode: 'clean',
     action: async () => {
       await plugin.widget.openPopup('prd_cleanup_popup');
     },
