@@ -170,6 +170,11 @@ function FinalDrill() {
   // a cluster anchor that was never in the drill list is never in the snapshot either, so it can
   // never be skipped by mistake. See the Card Cluster note on removeCurrentFromDrill below.
   const MAX_CONSECUTIVE_SKIPS = 3;
+  // Traces one line per card load. Off by default: the two paths that act (skip, rebuild) log
+  // unconditionally, so a resurrection still leaves a record without this. Flip it to true to
+  // watch the guard's bookkeeping on every card — stale/snapshot/live counts — when validating
+  // a change to it.
+  const DRILL_GUARD_DEBUG = false;
   const [queueCardIds, setQueueCardIds] = useState<string[] | null>(null);
   const [queueEpoch, setQueueEpoch] = useState(0);
   const consecutiveSkipsRef = useRef(0);
@@ -213,7 +218,18 @@ function FinalDrill() {
   );
 
   useEffect(() => {
-    if (!currentDrillCardId || !queueCardIds) return;
+    if (!currentDrillCardId || !queueCardIds) {
+      if (DRILL_GUARD_DEBUG && currentDrillCardId) {
+        console.log(`[MasteryDrill] guard: card ${currentDrillCardId} loaded while the queue is being rebuilt — standing by.`);
+      }
+      return;
+    }
+
+    if (DRILL_GUARD_DEBUG) {
+      console.log(
+        `[MasteryDrill] guard: card ${currentDrillCardId} loaded — stale=${staleQueueIdsRef.current.has(currentDrillCardId)}, snapshot=${queueCardIds.length}, live=${filteredIdsRef.current.length}, staleInSnapshot=${staleQueueIdsRef.current.size}`
+      );
+    }
 
     if (!staleQueueIdsRef.current.has(currentDrillCardId)) {
       consecutiveSkipsRef.current = 0;
@@ -242,7 +258,12 @@ function FinalDrill() {
         // Confirm against RemNote's live controller before acting: if the queue has already moved
         // past this card, removeCurrentCardFromQueue would drop an unrelated (unseen) card.
         const live = await plugin.queue.getCurrentCard();
-        if (live?._id !== currentDrillCardId) return;
+        if (live?._id !== currentDrillCardId) {
+          if (DRILL_GUARD_DEBUG) {
+            console.log(`[MasteryDrill] guard: queue already moved past ${currentDrillCardId} (now ${live?._id ?? 'none'}) — not skipping.`);
+          }
+          return;
+        }
         console.log(
           `[MasteryDrill] Card ${currentDrillCardId} is no longer in the drill but was presented again — skipping it (${skips}/${MAX_CONSECUTIVE_SKIPS}).`
         );

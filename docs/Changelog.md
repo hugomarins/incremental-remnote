@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.79 - September 5th, 2026
+
+### 🐛 Fixed - cards removed from the Mastery Drill came back in the same session
+
+*Remove from Drill* took the card out of the drill list, and the card still reappeared later in the same session — as did cards taken out by *Edit Later* or by rating them *Good* — because RemNote's embedded queue keeps the card list it was handed when the drill opened: each time it runs out of cards it clears its own bookkeeping and reloads that original list, undoing every removal since. The drill now notices a card that has left the list, skips it the moment it is presented again, and rebuilds the embedded queue from the current list when a whole reloaded batch is stale. Cards inside [Card Clusters](https://help.remnote.com/en/articles/10104223-card-clusters) are a documented exception, now written up on the drill's page: RemNote reports only the cluster anchor to plugins, so sibling ratings mostly never reach the drill and the per-card toolbar actions act on the anchor.
+
+📖 [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill) · [Card Cluster limitation](History-Queue-Dashboard-and-Mastery-Drill.md#how-it-works)
+
 ## v1.0.77 - September 4th, 2026
 
 ### ✨ New - every priority change is now on the record
