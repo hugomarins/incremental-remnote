@@ -249,6 +249,25 @@ function FinalDrill() {
     setEditLaterMessage('');
   };
 
+  // KNOWN LIMITATION — Card Clusters.
+  // Every per-card toolbar action above (Go to Rem, Edit Later, Edit Current, the priority
+  // badge) and this one resolve the target through `finalDrillCurrentCardId`, which
+  // queue_session.ts writes from QueueLoadCard. Inside a cluster that id is the cluster
+  // ANCHOR and never advances to the visible sibling, so on siblings 2..n these actions act
+  // on the wrong card: Remove from Drill drops the anchor's id (usually not even in the drill
+  // list) while the sibling stays, and the card keeps coming back.
+  //
+  // Measured 2026-09-05 against RemNote's own queue controller, in a document sub-queue with a
+  // 4-sibling table cluster: `window.queueController.currentCard.cardId` (what
+  // plugin.queue.getCurrentCard() resolves, and what QueueLoadCard broadcasts) stayed pinned to
+  // the anchor for all four siblings, while the cluster component's own
+  // `state.currentCompoundCardIdToTest` advanced each time. So getCurrentCard() is NOT a way out.
+  // The `clusterVisibleCardId` bridge (card_info_bar.tsx) does not exist here either — that
+  // widget is not mounted inside the drill popup. See registerDrillCardRatingListener in
+  // register/events.ts for the matching gap on the recording side.
+  //
+  // Left unfixed deliberately: clusters reaching the drill is already rare (see events.ts), and
+  // the cost of a wrong-card action is one stale card in the list, not data loss.
   const removeCurrentFromDrill = async () => {
     const cardId = await plugin.storage.getSession<string>("finalDrillCurrentCardId");
     if (!cardId) {
