@@ -4,11 +4,29 @@ This page documents the major changes and improvements for each version of the I
 
 ## v1.0.80 - September 5th, 2026
 
+### ✨ New - hand an Incremental Rem's data to its parent
+
+**Transfer Incremental Data to Parent Rem** (`quick: ttp`) moves the priority, the next-repetition date, the full repetition history and the reading state up one level — for when an extract ended up under the outline heading that should have been the incremental item — so the interval progression carries on instead of restarting, and a **🔀 Transferred from …** marker records where the reviews were actually done.
+
+📖 [Transferring an Incremental Rem to its Parent](Create-Incremental-Rem-from-PDF-Highlights.md#transfer-to-parent)
+
 ### ✨ New - the audit now spots Rems whose clozes are switched off
 
 **Card Enablement Audit**: added the `clozes off` and `some clozes off` verdicts, so a Rem silenced by RemNote's *Disable All Cloze Cards* is no longer filed under *not surfaced*. Nothing here can undo it — RemNote does not expose that list to plugins, and switching cards back on does not clear it — so the panel says so and points you at RemNote's own `/Enable All Cloze Cards`, in the Suppressed Cards breakdown and the enablement probe too.
 
 📖 [Card Enablement Audit](Utilities.md#card-enablement-audit) · [Suppressed cards](Prioritization-&-Sorting.md#suppressed-cards)
+
+### ⚡ Improved - the Incremental History sidebar says what kind of item each entry is
+
+Every row now carries an item-type badge — 📄 PDF, 🖍️ PDF Extract, 🌐 Web, ▶️ YouTube, 📝 Rem — the same labels the IncRem List uses.
+
+📖 [Incremental Rem History](Plugin-Widgets-Reference.md#221-incremental-rem-history)
+
+### ♻️ Changed - ✏️ / 🗑 in the repetition history are now offered on reviews only
+
+Event banners (Made Incremental, Dismissed, Priority change, Transferred…) are markers the plugin reads by position, not records of study time, so they are no longer hand-editable.
+
+📖 [Recording and correcting records](Plugin-Widgets-Reference.md#recording-and-correcting-records)
 
 ### ♻️ Changed - the quick code for *Clean Priority Review Documents* is now `clean`
 
@@ -30,7 +48,7 @@ It was `cprd`.
 
 Both priorities keep a history of what they have been, with the gesture behind each change: a flashcard Rem gets a **🎚 Card Priority History** at the bottom of its history popup, and an Incremental Rem files a **🎚 Priority change** marker for the gestures that used to leave no trace at all (`Alt+P`, `Ctrl+Opt+↑/↓`, inline edits). A burst from the same gesture inside a minute collapses into one entry.
 
-📖 [Priority history](Priorities-for-Flashcards.md#priority-history) · [Event Markers](Getting-Started.md#event-markers)
+📖 [Priority history](Priorities-for-Flashcards.md#priority-history) · [Event Markers](Repetition-History-and-Statistics.md#event-markers)
 
 ### ✨ New - `Ctrl+Shift+H` shows flashcard history too, one section per card
 
@@ -76,7 +94,7 @@ Every other surface colours it — the Sessions Summary, the live session card, 
 
 Setting a priority right after creation (Alt+Shift+X, the highlight toolbar's **Create IncRem**, **Toggle Incremental**) no longer files a *Rescheduled in Editor* event beside the ▶ Made Incremental marker: the priority and interval you choose are written into the marker itself, which now also records the interval on the plain Alt+X path. Rescheduling later still counts as its own event.
 
-📖 [Event Markers](Getting-Started.md#event-markers)
+📖 [Event Markers](Repetition-History-and-Statistics.md#event-markers)
 
 ### ⚡ Improved - Find Rem marks PDF highlights with their own badge
 
@@ -783,7 +801,7 @@ The history rows for repetitions have always shown the wall-clock time under the
 
 That made a day with several lifecycle events unreadable: made incremental → dismissed → made incremental again → dismissed, all stacked as "Aug 13, 2026" with no way to tell the order apart from their position. Each banner now carries its time next to the date, after a separator dot: `⏸ Dismissed — Aug 13, 2026 · 09:44`.
 
-📖 [Event Markers](Getting-Started.md#event-markers)
+📖 [Event Markers](Repetition-History-and-Statistics.md#event-markers)
 
 ### 📚 Docs - the Keyboard Shortcuts page now also lists every binding by key
 
@@ -3811,7 +3829,7 @@ We have overhauled the Randomness sliders in the **Sorting Criteria** widget to 
     *   **Parallelized Data Fetching:** Descendant data is now aggressively fetched concurrently in background chunks rather than one-by-one.
 *   **Open Rem Navigation:** Added a subtle `↗` link icon to the far right of every row in the hierarchy tree. While clicking anywhere on the row safely expands/collapses the branch, clicking this icon instantly teleports you to that specific Rem in the editor and closes the widget out of your way.
 
-📖 **Full documentation:** See the [Getting-Started#2-aggregated-history-view](Getting-Started.md#2-aggregated-history-view) section in the Getting Started guide.
+📖 **Full documentation:** See [Aggregated History View](Repetition-History-and-Statistics.md#2-aggregated-history-view).
 
 ---
 ## v0.2.126 - March 5th, 2026
@@ -4505,7 +4523,7 @@ The plugin now **differentiates reschedule and repetition events** based on thei
 
 - **Review actions** ([Next](Reviewing-Items-in-the-Queue.md#next), [Reschedule in queue](Reviewing-Items-in-the-Queue.md#reschedule), [Execute Repetition command](Reviewing-Items-in-the-Editor.md#1-execute-repetition-command) in editor) count for interval calculation because you engaged with and reviewed the content
 - **Administrative adjustments** (Ctrl+J in editor, manual date edits) don't count — they change the schedule without confirming a review took place
-- The **[Repetition History widget](Getting-Started.md#repetition-history-statistics)** displays visual indicators for each event type (📅 for queue reschedules, ⌨️ for editor command reviews, colored markers for administrative events)
+- The **[Repetition History widget](Repetition-History-and-Statistics.md)** displays visual indicators for each event type (📅 for queue reschedules, ⌨️ for editor command reviews, colored markers for administrative events)
 
 See [Reviewing Items in the Queue#reschedule-event-types](Reviewing-Items-in-the-Queue.md#technical-note-reschedule-event-types) for the complete event type reference.
 

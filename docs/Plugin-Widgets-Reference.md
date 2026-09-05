@@ -43,7 +43,7 @@ Unlike the *Card Info Bar*, which lives at the bottom of flashcards and can be e
 
 ### 1.3. Answer Buttons Info Bar
 *(Incremental Rems only)*
-An info bar shown below the answer buttons when reviewing an Incremental Rem in the queue. It displays review stats, the [Priority Shield](Prioritization-&-Sorting.md#priority-shield) counter, and a **📊** button to open the [IncRem Repetition History](Getting-Started.md#repetition-history-statistics).
+An info bar shown below the answer buttons when reviewing an Incremental Rem in the queue. It displays review stats, the [Priority Shield](Prioritization-&-Sorting.md#priority-shield) counter, and a **📊** button to open the [IncRem Repetition History](Repetition-History-and-Statistics.md).
 
 ![Answer Buttons Info Bar](assets/reps-info-bar.png){ width="600" }
 
@@ -130,9 +130,10 @@ Two interconnected popups for Incremental Rems, both accessed via `Ctrl+Shift+H`
   - **PDF reading-progress footer** — when the Rem (active *or* dismissed) reads from a PDF with a **page range** set, a footer shows the PDF name, the page range, your current page, the **degree of processing** (`% read`, with a progress bar), and an **estimated remaining time** (extrapolated from the total time spent and the degree of processing reached). The percentage and estimate are omitted for open-ended ranges (`start–∞`), where there's no finite end to measure against.
   - **🔖 Read-point footer** — when the Rem has a [read point](Reviewing-Items-in-the-Editor.md#read-points-for-rem-type-incremental-rems) set, a footer shows the path from the Rem itself down to the bookmarked descendant (`Chapter › Section › Read point`), with the date it was set. Every segment is clickable and navigates to that Rem. It works for dismissed Rems too, and if the read point has since been moved out of the outline the footer says so and shows its nearest ancestors instead.
   - **🎚 Priority change banners** — a priority changed *without* a review or a reschedule (the [`Alt+P`](Prioritization-&-Sorting.md#main-priority-popup) popup, [`Ctrl+Opt+↑/↓`](Prioritization-&-Sorting.md#quick-priority-shortcuts), an inline edit in a list view) files its own blue banner reading `⚡ Priority 60 → 45 · Quick priority change — Sep 4, 2026 · 14:30`. Hover it for whether that made the item more or less important. It counts for neither your statistics nor the scheduler — it is a marker, like ▶ Made Incremental. A reschedule or a review that *also* set a priority does **not** produce one: the entry it already writes records the new priority itself. Nor does a priority chosen within a minute of creating the Rem — that goes *into* the ▶ Made Incremental marker.
+  - **🔀 Transferred banners** — a Rem whose incremental data was [transferred from another Rem](Create-Incremental-Rem-from-PDF-Highlights.md#transfer-to-parent) shows a teal banner reading `🔀 Transferred from "…" — Sep 5, 2026 · 14:42`. Everything **above** it was reviewed on the Rem it names, not on this one; hover it for the full name when it is long. Like ▶ Made Incremental it is a marker — it counts for neither your statistics nor the scheduler.
   - **🃏 Cards History** *(header button)* — appears when the Rem also generates flashcards, and switches to the [Flashcard Repetition History](#211-flashcard-repetition-history) for all of them. The reverse button lives there.
   - **➕ Session — recording study done outside RemNote** — see [Recording and correcting records](#recording-and-correcting-records) below.
-  - **✏️ / 🗑 per record** — hover any row to edit or delete it; see the same section.
+  - **✏️ / 🗑 per record** — hover a **review** row to edit or delete it; see the same section.
 
 ![IncRem Repetition History Popup](assets/repetition-history-popup.png){ width="400" }
 
@@ -170,11 +171,13 @@ Whether the schedule moves depends on where the session lands in the log:
 
 The session's end time cannot be in the future. Its **early/late status** is computed against what was actually due at that moment — taken from the next-repetition date stamped by the last record preceding it — so a backdated entry reads correctly rather than being measured against today's due date.
 
-**✏️ Edit / 🗑 Delete** *(hover any record)* — the two buttons appear at the right edge of a row when you hover it, and work on event banners (Made Incremental, Dismissed, …) as well as review rows.
+**✏️ Edit / 🗑 Delete** *(hover a review record)* — the two buttons appear at the right edge of a row when you hover it, on **reviews only**: queue reps, editor reviews (⌨️), queue reschedules (📅), imported flashcard reps (🃏) and external sessions (📖) — the same set that counts towards your study time.
+
+Event banners (▶ Made Incremental, ⏸ Dismissed, 📅 Rescheduled in Editor, ✏️ Manual Date Reset, 🎚 Priority change, 🔀 Transferred) are **read-only**. The dialog behind those buttons edits a date, an end time and a duration, which says nothing about a marker; and the markers are exactly the entries the plugin reads *by position* — the scheduler counts repetitions since the last ▶ Made Incremental, and 🔀 Transferred records where a history came from — so hand-editing one would quietly rewrite an interval progression or the provenance of the log.
 
 ![Edit and delete buttons on a hovered record](assets/repetition-history-edit-record-button.png){ width="400" }
 
-**Edit** changes the **date**, **end time**, **total time** and note of an existing record; early/late status is recomputed, and the log is kept in chronological order. Editing never changes the schedule. **Delete** asks for confirmation first, reporting the study time that will disappear from the Rem's totals, and warns when the record is a lifecycle marker — removing a *Made Incremental* or *Dismissed* marker changes how the scheduler counts repetitions for that Rem. Deletion cannot be undone.
+**Edit** changes the **date**, **end time**, **total time** and note of an existing record; early/late status is recomputed, and the log is kept in chronological order. Editing never changes the schedule. **Delete** asks for confirmation first, reporting the study time that will disappear from the Rem's totals. Deletion cannot be undone.
 
 ![Edit record dialog](assets/repetition-history-edit-record.png){ width="400" }
 
@@ -191,6 +194,7 @@ A distinct widget that serves as a **chronological log** of all your Incremental
 - Shows a unified timeline of **review sessions**, **creation events**, and **dismissals** sorted chronologically (most recent first).
 - Each entry shows a color-coded pill badge: 🟢 **Created** (the Rem was first made Incremental), 🟣 **Reviewed** (a review session), or 🔴 **Dismissed** (the Rem was dismissed).
 - When a Rem is dismissed *during* a review (queue / editor timer **Dismiss** button, or `Ctrl+D` in the queue), the entry shows **both** the 🟣 **Reviewed** and 🔴 **Dismissed** badges side by side. A standalone dismissal (e.g. `Ctrl+D` in the editor with no review) shows only the 🔴 **Dismissed** badge.
+- Each entry also shows an **item-type badge** — 📄 PDF, 🖍️ PDF Extract, 📑 PDF Note, 🌐 Web, 🔖 Web Extract, ▶️ YouTube, ✂️ Video Extract, 🎬 Video or 📝 Rem — the same labels the [IncRem List & Main View](#51-increm-list-main-view) uses, so you can tell at a glance whether a line in the log was a PDF page you read or a note you extracted. It is resolved in the background for the rows on screen and appears a moment after the list does; entries whose Rem no longer exists simply have none.
 - Each entry also shows a **priority badge** (colored by KB-wide percentile) — click it to edit the IncRem's priority with an inline slider, without leaving the sidebar.
 - Searchable by text content; shows "seen X ago" (reviews), "created X ago" (creation events), or "dismissed X ago" (standalone dismissals).
 - Useful companion to the [History and Final Drill](https://www.remnote.com/plugins/final_drill_and_history) plugin.

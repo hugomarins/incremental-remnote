@@ -132,7 +132,7 @@ These shortcuts allow you to adjust priorities on the fly without breaking your 
 
 The step in which priorities will increase or decrease can be configured in the settings.
 
-**They leave a record.** A quick change is written to the item's history — a 🎚 [priority change marker](Getting-Started.md#event-markers) for an Incremental Rem, an entry in the [priority history](Priorities-for-Flashcards.md#priority-history) for a flashcard. Holding the key to walk a priority from 80 down to 30 files **one** entry showing where it landed, not eight.
+**They leave a record.** A quick change is written to the item's history — a 🎚 [priority change marker](Repetition-History-and-Statistics.md#event-markers) for an Incremental Rem, an entry in the [priority history](Priorities-for-Flashcards.md#priority-history) for a flashcard. Holding the key to walk a priority from 80 down to 30 files **one** entry showing where it landed, not eight.
 
 **When to use:** During review sessions when you want to adjust an item's priority up or down in a predefined step without stopping.
 

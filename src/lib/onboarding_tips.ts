@@ -377,6 +377,13 @@ export const ONBOARDING_TIPS: OnboardingTip[] = [
     body: 'Ctrl+Shift+H → ➕ Repetition logs a card you tested outside the queue, FSRS interval per grade.',
     docsPath: 'Plugin-Widgets-Reference/#211-flashcard-repetition-history',
   },
+  {
+    id: 'transfer-increm-to-parent',
+    category: 'advanced',
+    title: 'Transfer to Parent Rem',
+    body: '“ttp” — Transfer Incremental Data to Parent hands priority, history and schedule to the parent.',
+    docsPath: 'Create-Incremental-Rem-from-PDF-Highlights/#transfer-to-parent',
+  },
 ];
 
 /**

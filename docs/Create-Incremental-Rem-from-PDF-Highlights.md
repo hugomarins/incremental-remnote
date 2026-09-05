@@ -114,3 +114,30 @@ If you need a destination that doesn't exist yet (e.g., "Section D" under "Chapt
 
 ![Creat Inc Rem parent selection](assets/uploaded/9cbcdd80-b782-4dcc-b033-cda82fc91be8.gif)
 
+---
+
+## Transferring an Incremental Rem to its Parent { #transfer-to-parent }
+
+Sometimes the wrong Rem in a hierarchy ends up being the incremental one, and this is where it usually happens: you extract a highlight with **[Create IncRem](#how-to-use)**, pick an outline heading as its parent, and two reviews later decide that the **heading** is what should have been scheduled — the extract is only one of the children hanging under it.
+
+*(The command below is not limited to PDF extracts: it works on any Incremental Rem that has a parent.)*
+
+Doing that by hand costs you everything the item has accumulated: the priority, the interval progression, and every review you have recorded. The **Transfer Incremental Data to Parent Rem** command (`quick: ttp`) hands all of it to the parent instead.
+
+It **moves** the data rather than recreating it:
+
+- the **priority** and the **next-repetition date** — the very same daily-document reference, so the date chip stays editable exactly as before;
+- the date the Rem was **first made incremental**, so its age in the [Study Dashboard](Study-Dashboard.md) does not reset;
+- the **complete repetition history**, in order — which means the [scheduler](IncRem-Scheduler.md) carries on from the interval the item had reached instead of starting over;
+- the **reading state**: PDF page, page range and page history, and the [read point](Reviewing-Items-in-the-Editor.md#read-points-for-rem-type-incremental-rems) of a rem-type outline.
+
+The source Rem simply stops being an Incremental Rem — its **text, children, flashcards and references are untouched** — and the parent takes its place in your queue. A **🔀 Transferred from …** marker closes the moved history, naming the Rem the reviews were actually done on, so the record stays honest about where the study happened. It is a marker, not a review: it counts for neither your statistics nor the scheduler.
+
+The command works in the **editor** (on the focused Rem) and in the **queue** (on the item under review, which is advanced past afterwards). A confirmation dialog names both Rems and counts what will move — history entries, reviews and time, the priority, the reading state — before anything happens.
+
+**Two cases it refuses, and what to do instead:**
+
+- **The parent is already an Incremental Rem.** Nothing is merged silently; [dismiss](Getting-Started.md#dismissing-an-incremental-rem-dismiss-button) the parent first (`Ctrl+D`), then transfer. The dismissed history is not lost in the process — the transfer revives it and keeps it, ahead of the history it is bringing across.
+- **The Rem has no parent** (it is top-level), so there is nowhere to transfer to.
+
+Afterwards, [flashcard priorities](Priorities-for-Flashcards.md) in the subtree are re-derived in the background: cards that were inheriting from the extract now inherit from the heading, which is the new nearest Incremental ancestor.
