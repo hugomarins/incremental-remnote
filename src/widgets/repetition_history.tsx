@@ -249,6 +249,23 @@ function combineDateTime(dateStr: string, timeStr: string): number {
     return new Date(`${dateStr}T${timeStr || '00:00'}`).getTime();
 }
 
+/**
+ * Display cap for the source-rem name on a 'transferred' marker. The transfer
+ * itself caps what it STORES (TRANSFERRED_NAME_MAX_CHARS in
+ * lib/incremental_rem/transfer.ts); this caps what is RENDERED, so an entry
+ * written before that cap existed — or one whose name is a full paragraph of
+ * extracted prose — still reads as one line instead of overflowing the popup.
+ */
+const TRANSFERRED_NAME_DISPLAY_MAX = 60;
+
+function displayTransferredFrom(rep: IncrementalRep): string {
+    const name = rep.context?.transferredFromName;
+    if (!name) return 'another Rem';
+    return name.length > TRANSFERRED_NAME_DISPLAY_MAX
+        ? name.slice(0, TRANSFERRED_NAME_DISPLAY_MAX).trimEnd() + '…'
+        : name;
+}
+
 /** Human label for an entry, used in the delete confirmation. */
 function describeEntry(rep: IncrementalRep): string {
     const when = dayjs(rep.date).format('MMM D, YYYY HH:mm');
@@ -264,7 +281,7 @@ function describeEntry(rep: IncrementalRep): string {
         case 'importedRep': return `Imported flashcard review — ${when}`;
         case 'externalRep': return `External session — ${when}`;
         case 'transferred':
-            return `Transferred from "${rep.context?.transferredFromName || 'another Rem'}" — ${when}`;
+            return `Transferred from "${displayTransferredFrom(rep)}" — ${when}`;
         default: return `Review — ${when}`;
     }
 }
@@ -1256,11 +1273,27 @@ function RepetitionHistoryPopup() {
                         // a banner (like Made Incremental) because it is a seam in the
                         // history, not a review: no time, no interval, no early/late.
                         if (rep.eventType === 'transferred') {
-                            const from = rep.context?.transferredFromName;
+                            const stored = rep.context?.transferredFromName;
+                            const from = displayTransferredFrom(rep);
                             return banner(
-                                { backgroundColor: 'rgba(20, 184, 166, 0.1)', color: '#14b8a6' },
-                                <span title={from ? `Everything above this line was reviewed on "${from}"` : undefined}>
-                                    🔀 Transferred from {from ? `"${from}"` : 'another Rem'} — {bannerWhen}
+                                {
+                                    backgroundColor: 'rgba(20, 184, 166, 0.1)',
+                                    color: '#14b8a6',
+                                    // The shared banner style is a centred flex row that never
+                                    // wraps, which suits fixed labels ("Dismissed — <date>") but
+                                    // not this one: its length depends on a rem's text, and a
+                                    // nowrap flex item wider than the row overflows BOTH edges of
+                                    // the popup. Block + normal wrapping lets it run to a second
+                                    // line instead, and overflowWrap breaks a single long token
+                                    // (a URL, an unspaced string) rather than letting it stick out.
+                                    display: 'block',
+                                    textAlign: 'center',
+                                    whiteSpace: 'normal',
+                                    overflowWrap: 'anywhere',
+                                    lineHeight: 1.35,
+                                },
+                                <span title={stored ? `Everything above this line was reviewed on "${stored}"` : undefined}>
+                                    🔀 Transferred from "{from}" — {bannerWhen}
                                     {rep.priority !== undefined && ` — Pri: ${rep.priority}`}
                                 </span>
                             );

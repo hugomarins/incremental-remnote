@@ -80,10 +80,26 @@ export interface IncRemTransferPlan {
 
 export type IncRemTransferOutcome = IncRemTransferPlan | IncRemTransferRefusal;
 
-/** Text of a Rem, trimmed for a dialog line. */
-async function shortName(plugin: RNPlugin, rem: PluginRem, max = 80): Promise<string> {
+/**
+ * How much of the source Rem's text is kept on the 'transferred' marker.
+ *
+ * This name is written into history PERMANENTLY and re-rendered on every visit to
+ * the Repetition History popup, so it is capped at both ends of its life: an
+ * extract's text is often a whole paragraph of highlighted prose, which would
+ * bloat the history slot (a synced key with a hard size limit — see
+ * lib/history_shards.ts) to say something a fragment already says. The popup caps
+ * again on display for entries written before this existed.
+ */
+export const TRANSFERRED_NAME_MAX_CHARS = 60;
+
+/** Text of a Rem, trimmed to `max` characters with an ellipsis. */
+async function shortName(
+  plugin: RNPlugin,
+  rem: PluginRem,
+  max = TRANSFERRED_NAME_MAX_CHARS
+): Promise<string> {
   const raw = (await safeRemTextToString(plugin, rem.text)) || '(untitled Rem)';
-  return raw.length > max ? raw.slice(0, max) + '…' : raw;
+  return raw.length > max ? raw.slice(0, max).trimEnd() + '…' : raw;
 }
 
 /**
