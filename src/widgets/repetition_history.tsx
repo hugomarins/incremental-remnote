@@ -263,6 +263,8 @@ function describeEntry(rep: IncrementalRep): string {
             return `Priority change (${priorityEventLabel(rep.priorityEvent)}) — ${when}`;
         case 'importedRep': return `Imported flashcard review — ${when}`;
         case 'externalRep': return `External session — ${when}`;
+        case 'transferred':
+            return `Transferred from "${rep.context?.transferredFromName || 'another Rem'}" — ${when}`;
         default: return `Review — ${when}`;
     }
 }
@@ -1246,6 +1248,21 @@ function RepetitionHistoryPopup() {
                             return banner(
                                 { backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' },
                                 <>⏸ Dismissed — {bannerWhen}</>
+                            );
+                        }
+
+                        // Transferred from another rem — the history above this marker
+                        // was studied on the rem it names, not on this one. Rendered as
+                        // a banner (like Made Incremental) because it is a seam in the
+                        // history, not a review: no time, no interval, no early/late.
+                        if (rep.eventType === 'transferred') {
+                            const from = rep.context?.transferredFromName;
+                            return banner(
+                                { backgroundColor: 'rgba(20, 184, 166, 0.1)', color: '#14b8a6' },
+                                <span title={from ? `Everything above this line was reviewed on "${from}"` : undefined}>
+                                    🔀 Transferred from {from ? `"${from}"` : 'another Rem'} — {bannerWhen}
+                                    {rep.priority !== undefined && ` — Pri: ${rep.priority}`}
+                                </span>
                             );
                         }
 

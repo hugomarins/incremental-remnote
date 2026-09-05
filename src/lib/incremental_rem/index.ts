@@ -611,7 +611,7 @@ export const getIncrementalRemFromRem = async (
  * it fire-and-forget so opening a popup right after extraction isn't blocked by
  * getSources + per-source powerup probes.
  */
-async function registerInKnownHostIndexes(plugin: ReactRNPlugin, rem: PluginRem) {
+export async function registerInKnownHostIndexes(plugin: ReactRNPlugin, rem: PluginRem) {
   try {
     const sources = await rem.getSources();
     const allSources = [rem, ...sources];

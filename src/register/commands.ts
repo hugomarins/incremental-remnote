@@ -49,6 +49,10 @@ import {
   planPreserveHistoryAndRemove,
   executePreserveHistoryAndRemove,
 } from '../lib/history_transfer';
+import {
+  planTransferIncRemToParent,
+  executeTransferIncRemToParent,
+} from '../lib/incremental_rem/transfer';
 import { resolvePowerupSlotDiagnostic } from '../lib/powerup_slot_compat';
 import { dumpRawPowerupSlots } from '../lib/raw_slot_dump';
 import { togglePdfHighlightBorders } from '../lib/ui_helpers';
@@ -326,6 +330,95 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     },
   });
 
+
+  // Transfer Incremental data to the parent Rem.
+  //
+  // For when the wrong Rem in a hierarchy ended up being the Incremental one —
+  // typically an extract created under an outline header, where the header is
+  // what you actually want to schedule. Everything moves (priority, next-rep
+  // date, the full history, reading state); nothing is recreated, so the interval
+  // progression survives. The move is recorded as a 'transferred' marker at the
+  // end of the destination's history, naming where it came from.
+  await plugin.app.registerCommand({
+    id: 'transfer-increm-to-parent',
+    name: 'Transfer Incremental Data to Parent Rem',
+    description:
+      "Moves this Incremental Rem's priority, next-repetition date, full repetition history and reading state onto its parent Rem, and stops the Rem itself from being Incremental.",
+    quickCode: 'ttp',
+    action: async () => {
+      // Resolve the target in BOTH contexts, exactly as 'Preserve history & remove'
+      // does: the focused rem in the editor, the active card/IncRem in the queue.
+      let source: PluginRem | undefined;
+      const url = await plugin.window.getURL();
+      const isQueue = !!(url && url.includes('/flashcards'));
+      if (isQueue) {
+        const currentQueueItem = await plugin.queue.getCurrentCard();
+        let remId = currentQueueItem?.remId;
+        if (!remId) {
+          remId = (await plugin.storage.getSession<string>(currentIncRemKey)) || undefined;
+        }
+        source = remId ? (await plugin.rem.findOne(remId)) || undefined : undefined;
+      } else {
+        source = await plugin.focus.getFocusedRem();
+      }
+
+      if (!source) {
+        await plugin.app.toast(
+          isQueue
+            ? 'No active card or Incremental Rem in the queue.'
+            : 'No focused rem — place your cursor in the Incremental Rem first.'
+        );
+        return;
+      }
+
+      const outcome = await planTransferIncRemToParent(plugin, source);
+      if (!outcome.ok) {
+        await plugin.app.toast(outcome.message);
+        return;
+      }
+
+      const timeStr = formatDuration(Math.round(outcome.totalReviewSeconds)) || '0s';
+      const ok = confirm(
+        `🔀 Transfer Incremental data to parent\n\n` +
+          `From: "${outcome.sourceName}"\n` +
+          `To:   "${outcome.destinationName}"\n\n` +
+          `• ${outcome.history.length} history entr(ies) move across` +
+          (outcome.repCount > 0 ? ` (${outcome.repCount} review(s), ≈ ${timeStr})` : '') +
+          `\n` +
+          (outcome.priority !== null
+            ? `• Priority ${outcome.priority} and the next-repetition date move too\n`
+            : `• Next-repetition date moves (priority could not be read — it will not be written)\n`) +
+          (outcome.hasReadingState ? `• Reading state (pages / read points) moves too\n` : '') +
+          (outcome.destinationDismissedReps > 0
+            ? `• ${outcome.destinationDismissedReps} dismissed entr(ies) already on the parent are revived and kept\n`
+            : '') +
+          `\n"${outcome.sourceName}" stops being an Incremental Rem. Its text and children are untouched.\n\nContinue?`
+      );
+      if (!ok) {
+        await plugin.app.toast('Cancelled.');
+        return;
+      }
+
+      // In the queue, the source is what is on screen. Advance off it in the same
+      // tick its powerup is removed (executeTransferIncRemToParent does that), and
+      // flag the dashboard refocus BEFORE the destructive call, like Dismiss does.
+      const currentIncRemId = await plugin.storage.getSession<string>(currentIncRemKey);
+      const advanceQueue = isQueue && currentIncRemId === source._id;
+      if (advanceQueue) {
+        await requestQueueDashboardRefocus(plugin, 'transfer-to-parent-command');
+      }
+
+      try {
+        await executeTransferIncRemToParent(plugin, outcome, { advanceQueue });
+        await plugin.app.toast(
+          `✅ Incremental data moved to "${outcome.destinationName}".`
+        );
+      } catch (e) {
+        console.error('[TransferIncRem] Error:', e);
+        await plugin.app.toast('❌ Error during the transfer — see console.');
+      }
+    },
+  });
 
   // Isolation probe for the RemNote runtime deprecation of
   // plugin.powerup.getPowerupSlotByCode. Runs as a command (not a widget) so it
