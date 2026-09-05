@@ -20,6 +20,7 @@ import {
   computeFSRSCalibrationBreakdown,
   rBucketLabel,
 } from '../lib/fsrs_calibration';
+import { FSRSInitialStabilityPanel } from './FSRSInitialStabilityPanel';
 import { fsrsCalibrationLastPeriodKey, fsrsWeightsId } from '../lib/consts';
 import { parseWeightsString } from '../lib/fsrs';
 import { Period, resolvePeriod } from '../lib/period';
@@ -685,6 +686,8 @@ export function FSRSCalibrationView() {
             colTotals={data.gridBColTotals}
             overall={data.gridBOverall}
           />
+
+          <FSRSInitialStabilityPanel data={data.initialStability} />
         </>
       )}
     </div>
