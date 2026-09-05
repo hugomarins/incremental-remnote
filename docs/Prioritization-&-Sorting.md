@@ -591,10 +591,12 @@ Press **Compute** and the tab reports a bucket × cause matrix — the same deci
 | **Cards switched off on the Rem itself** | The *Enable Cards* toggle is off on that Rem. **The one worth investigating.** |
 | **Disabled by an ancestor's "Disable Descendant Cards"** | A tag on an ancestor silences the whole subtree. |
 | **This direction is switched off on the Rem** | A forward or backward card was disabled from the queue. |
-| **This single card switched off** | One cloze disabled from the queue; its markup is still in the text. |
+| **Switched off card by card** | A cloze switched off — one at a time in the queue, or all at once with RemNote's `/Disable All Cloze Cards`. The markup is still in the text. **Only RemNote can undo it:** run `/Enable All Cloze Cards` on the Rem, or click the greyed cloze and choose *Enable this card*. Switching cards back on for the Rem does *not* clear it. |
 | **The cloze / back side this card came from is gone** | The Rem was reworded, or a cloze split or deleted, and the card record outlived its markup. |
 
 Click the number in the **off-rem** column of any bucket to open the Rems behind it. Each entry shows `front → back` with clozes marked, its ancestor breadcrumb, its priority and card count, and — where relevant — a **📚 IncRem** badge, which means practice is *expected* to be off until you decide the card is ready. Tick the ones that should be practised again and press **Re-enable**; their cards become due immediately. **↗** opens a Rem in a new browser tab, leaving the list where it was.
+
+Hovering any cause — in the list above the table or in its column header — shows what to do about it. The one with no route back through the plugin, *switched off card by card*, also gets a note of its own under the table whenever it counts anything.
 
 Anything you have looked at can be marked **✓ checked**, which is remembered across devices, shown as a count next to each bucket's off-rem number, and can be filtered out of the list — so working through a few hundred Rems over several sittings picks up where you left off.
 

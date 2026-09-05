@@ -989,7 +989,7 @@ A Rem can look exactly like a flashcard — a front, a back, a cloze — and gen
 * **Enable Cards** is off on the Rem itself;
 * an ancestor carries **Disable Descendant Cards**;
 * the Rem is a **table** or sits inside one — RemNote ships table rows with cards off;
-* the cards were switched off **one at a time** in the queue.
+* its **clozes** were switched off — one at a time in the queue, or all at once with RemNote's `/Disable All Cloze Cards`.
 
 The one that arrives in bulk is the first. An **Anki import** can land hundreds of Rems at `enablePractice=true, practiceDirection=none` — they read as perfectly ordinary flashcards and are simply never scheduled.
 
@@ -1020,13 +1020,24 @@ Each Rem gets one **verdict**, shown as a coloured chip you can click to filter 
 | `table` | The Rem is a table or sits in one | ✅ |
 | `ancestor off` | An ancestor carries **Disable Descendant Cards** | ❌ — untag the ancestor |
 | `paused deck` | Inside a paused deck | ❌ — unpause the deck |
-| `not surfaced` | Nothing surfaces and no Rem-level flag explains it | ❌ — a per-card switch, or the markup is gone |
+| `clozes off` | Every cloze on the Rem is switched off, so it produces nothing | ❌ — see below |
+| `some clozes off` | Still producing cards, but some of its clozes are switched off | ❌ — see below |
+| `not surfaced` | Nothing surfaces and no Rem-level flag explains it | ❌ — the markup is probably gone |
 | `no material` | No back side, no clozes, no card records | ❌ — not a flashcard |
 | `OK` | Producing cards | — |
 
 Every row shows both the cards currently **surfaced** and the card **records** that exist, as `surfaced/records`. Those two numbers are what separate a Rem whose cards were switched off from one that never had any — `rem.getCards()` alone cannot tell them apart.
 
 The verdicts are ordered by what a fix would actually accomplish, so a Rem under a disabling ancestor is reported as `ancestor off` rather than `dir=none`: setting a direction there writes the flag and still produces nothing.
+
+!!! warning "Switched-off clozes can only be undone inside RemNote"
+    RemNote keeps a Rem's disabled clozes in a list on the Rem itself, and it exposes that list to **no plugin** — it cannot be read or written from here. The audit works it out indirectly, from the card records that exist but never surface, and reports it as `clozes off` / `some clozes off` with a count in the `surfaced/records` column (`0/1 · 1c (1 off)`).
+
+    **Switching cards ON will not bring them back.** That writes the *Enable Cards* flag and leaves the cloze list untouched, so the Rem still produces nothing — and RemNote's own `/Enable Cards` command behaves exactly the same way. This catches people out, which is why the panel says so on screen rather than offering a button.
+
+    Click the row to open the Rem, then run RemNote's **`/Enable All Cloze Cards`** there — or click a greyed-out cloze and choose **Enable this card** for just one.
+
+    A Rem is only given one of these verdicts once everything else has been ruled out. A disabling ancestor or a paused deck hides *every* card on a Rem, which would make each of its clozes look individually switched off; those Rems are reported by their real cause instead.
 
 #### Fixing them
 
@@ -1046,7 +1057,7 @@ After the run the panel reports how many cards **actually appeared** — read ba
 
 #### Undoing
 
-The current state of every Rem — its **Enable Cards** flag and its **direction** — is captured *before* the first write, offered as a JSON download, and restorable with **Undo last apply** in the panel.
+The current state of every Rem — its **Enable Cards** flag and its **direction** — is captured *before* the first write, offered as a JSON download, and restorable with **Undo last apply** in the panel. (Those two flags are the only things the panel ever writes, so they are the only things there is anything to undo.)
 
 !!! tip "Try a handful first"
     Select five rows and apply. The report tells you exactly how many cards that produced, which is the honest way to find out what a run over the whole deck will do to your queue before you commit to it.

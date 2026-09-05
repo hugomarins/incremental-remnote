@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.80 - September 5th, 2026
+
+### ✨ New - the audit now spots Rems whose clozes are switched off
+
+**Card Enablement Audit**: added the `clozes off` and `some clozes off` verdicts, so a Rem silenced by RemNote's *Disable All Cloze Cards* is no longer filed under *not surfaced*. Nothing here can undo it — RemNote does not expose that list to plugins, and switching cards back on does not clear it — so the panel says so and points you at RemNote's own `/Enable All Cloze Cards`, in the Suppressed Cards breakdown and the enablement probe too.
+
+📖 [Card Enablement Audit](Utilities.md#card-enablement-audit) · [Suppressed cards](Prioritization-&-Sorting.md#suppressed-cards)
+
 ## v1.0.79 - September 5th, 2026
 
 ### 🐛 Fixed - cards removed from the Mastery Drill came back in the same session

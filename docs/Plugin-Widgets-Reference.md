@@ -622,7 +622,8 @@ Finds the Rems in an anchor's orbit that generate no flashcards, and fixes the t
 
 - **Scope checkboxes** at the top — tagged / referencing / descendants / expand each match — with a **Rescan** button. Scope changes are explicit, since the walk can cover thousands of Rems.
 - **Verdict chips** with counts, click to show or hide. Opens on the two worth hunting (`dir=none`, `practice off`) and pre-selects exactly the rows a bulk write can actually change.
-- **One row per Rem** — front → back, breadcrumb, **Practice** flag, **Direction**, and `surfaced/records` — clicking the text opens the Rem in a browser tab.
+- **One row per Rem** — front → back, breadcrumb, **Practice** flag, **Direction**, and `surfaced/records` (plus `(n off)` when clozes are switched off) — clicking the text opens the Rem in a browser tab.
+- **Says what it cannot fix.** Rems whose clozes are switched off get a banner and a verdict tooltip pointing at RemNote's `/Enable All Cloze Cards`, because that list is not writable from a plugin and switching cards on does not clear it.
 - **Action bar:** set flashcard direction, switch cards on or off, an optional **card priority** for whatever the run enables, **Apply**, and **Undo last apply** once a run has happened.
 - **Reports what actually happened:** how many Rems changed and how many cards **appeared**, read back from the Rems rather than predicted.
 - **Keyboard-driven:** `↑`/`↓` move, `Space` selects, `A` selects everything shown, `Enter` applies, `Esc` closes — ignored mid-write so a reflex press cannot lose the undo snapshot.

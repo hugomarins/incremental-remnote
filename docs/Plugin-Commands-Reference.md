@@ -361,8 +361,8 @@ These commands tag a Rem with one of the [Utilities#queue-display-utilities](Uti
   Takes one anchor Rem, asks every Rem in its orbit whether it actually generates flashcards, and switches the broken ones back on in bulk.
 
   - **Four combinable scopes:** Rems **tagged with** the anchor, Rems **referencing** it, its **descendants**, and *expand each match* to add every match's own subtree — the one that reaches an imported deck, where the tag sits on the container and the cards belong to its children.
-  - **One verdict per Rem,** as clickable filter chips: `dir=none`, `practice off`, `table`, `ancestor off`, `paused deck`, `not surfaced`, `no material`, `OK`. Each row shows the cards currently **surfaced** and the card **records** that exist, which is what separates a Rem whose cards were switched off from one that never had any.
-  - **Two bulk fixes:** set the **flashcard direction** (`forward` by default, or `both` / `backward` / `none`), and switch **Enable Cards** on or off. Rows a switch cannot fix — a disabling ancestor, a paused deck, a per-card disable — are labelled as such rather than offered a button that would change the flag and nothing else.
+  - **One verdict per Rem,** as clickable filter chips: `dir=none`, `practice off`, `table`, `ancestor off`, `paused deck`, `clozes off`, `some clozes off`, `not surfaced`, `no material`, `OK`. Each row shows the cards currently **surfaced** and the card **records** that exist, which is what separates a Rem whose cards were switched off from one that never had any.
+  - **Two bulk fixes:** set the **flashcard direction** (`forward` by default, or `both` / `backward` / `none`), and switch **Enable Cards** on or off. Rows a switch cannot fix — a disabling ancestor, a paused deck, a switched-off cloze — are labelled as such rather than offered a button that would change the flag and nothing else.
   - **Undoable:** every Rem's prior flag and direction is captured before the first write, downloaded as JSON, and restorable from the panel.
   - **Optional card priority** on whatever the run enables, so the new cards enter the queue where you chose.
 
