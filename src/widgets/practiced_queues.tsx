@@ -304,7 +304,7 @@ function SummaryTable({
                             <th className="p-2 font-bold rn-clr-content-secondary text-right">Inc. Rems</th>
                             <th className="p-2 font-bold rn-clr-content-secondary text-right">Ret.</th>
                             <th className="p-2 font-bold rn-clr-content-secondary text-right">
-                                <div className="flex items-center justify-end gap-1.5">
+                                <div className="flex flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5">
                                     <span>Speed</span>
                                     <button
                                         onClick={() => setSpeedUnit(unit === "cpm" ? "spc" : "cpm")}
@@ -331,16 +331,16 @@ function SummaryTable({
                                 <td className="p-2 text-right">
                                     {row.cardsCount > 0 ? (
                                         <div>
-                                            <span className="font-bold rn-clr-content-primary">{row.cardsCount.toLocaleString()}</span>
-                                            <span className="rn-clr-content-tertiary text-[10px] ml-1">({formatTimeShort(row.cardsTime)})</span>
+                                            <span className="font-bold rn-clr-content-primary whitespace-nowrap">{row.cardsCount.toLocaleString()}</span>{" "}
+                                            <span className="rn-clr-content-tertiary text-[10px] whitespace-nowrap">({formatTimeShort(row.cardsTime)})</span>
                                         </div>
                                     ) : <span className="rn-clr-content-tertiary">-</span>}
                                 </td>
                                 <td className="p-2 text-right">
                                     {row.incRemsCount > 0 ? (
                                         <div>
-                                            <span className="font-bold rn-clr-content-primary">{row.incRemsCount.toLocaleString()}</span>
-                                            <span className="rn-clr-content-tertiary text-[10px] ml-1">({formatTimeShort(row.incRemsTime)})</span>
+                                            <span className="font-bold rn-clr-content-primary whitespace-nowrap">{row.incRemsCount.toLocaleString()}</span>{" "}
+                                            <span className="rn-clr-content-tertiary text-[10px] whitespace-nowrap">({formatTimeShort(row.incRemsTime)})</span>
                                         </div>
                                     ) : <span className="rn-clr-content-tertiary">-</span>}
                                 </td>
@@ -354,12 +354,12 @@ function SummaryTable({
                                 <td className="p-2 text-right">
                                     {row.cardsCount > 0 ? (
                                         <span>
-                                            <span className="font-bold" style={speedColorStyle(row.avgSpeed, thresholds)}>
+                                            <span className="font-bold whitespace-nowrap" style={speedColorStyle(row.avgSpeed, thresholds)}>
                                                 {unit === "cpm"
                                                     ? row.avgSpeed.toFixed(1)
                                                     : row.avgSecondsPerCard.toFixed(1)}
                                             </span>{" "}
-                                            <span className="rn-clr-content-tertiary text-[10px]">
+                                            <span className="rn-clr-content-tertiary text-[10px] whitespace-nowrap">
                                                 {unit === "cpm" ? "cpm" : "s/card"}
                                             </span>
                                         </span>
