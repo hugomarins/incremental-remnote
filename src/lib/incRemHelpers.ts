@@ -1,6 +1,6 @@
 import { BuiltInPowerupCodes, RNPlugin, PluginRem } from '@remnote/plugin-sdk';
 import { ActionItemType, IncrementalRem } from './incremental_rem/types';
-import { remToActionItemType } from './incremental_rem/action_items';
+import { remToActionItemType, ActionItemTypeOptions } from './incremental_rem/action_items';
 import { resolveRemTextForBreadcrumb } from './richTextRemRefs';
 import { creationFoldRemIdsKey } from './consts';
 
@@ -31,9 +31,13 @@ export function extractText(text: unknown): string {
  * Determine the type of an incremental rem (pdf, pdf-note, rem, etc).
  * Checks parent hierarchy to detect if it's a note under a PDF.
  */
-export async function determineIncRemType(plugin: RNPlugin, rem: any): Promise<ActionItemType> {
+export async function determineIncRemType(
+  plugin: RNPlugin,
+  rem: any,
+  options?: ActionItemTypeOptions
+): Promise<ActionItemType> {
   try {
-    const actionItem = await remToActionItemType(plugin, rem);
+    const actionItem = await remToActionItemType(plugin, rem, options);
     if (!actionItem) return 'unknown';
 
     let type: ActionItemType = actionItem.type;
