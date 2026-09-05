@@ -1171,8 +1171,24 @@ function RepetitionHistoryPopup() {
                     {sortedHistory.map(({ rep, storedIndex }, index) => {
                         const hovered = hoveredIndex === index;
 
+                        // A review — a queue rep, an editor 'Execute Repetition', a queue
+                        // reschedule, an imported flashcard rep or a hand-added external
+                        // session. Same predicate the Study Dashboard totals use, so the
+                        // rule stays "if it counted as study, you can correct it"; every
+                        // other event type renders as a banner and is read-only.
+                        const canEditEntry = canEditHistory && repCountsForStats(rep.eventType);
+
                         // Edit / delete affordances, revealed on hover. Their space is
                         // reserved even while hidden so rows don't shift under the cursor.
+                        //
+                        // Only REVIEW entries get them (see `canEditEntry` below): the
+                        // dialog behind these buttons edits a date, an end time and a
+                        // duration, which is meaningful for something that was studied and
+                        // meaningless for a marker. Worse, the markers are exactly the
+                        // entries other code reads positionally — the scheduler counts reps
+                        // after the last 'madeIncremental', a 'transferred' marker records
+                        // where a history came from — so offering to hand-edit them invites
+                        // silently rewriting an interval progression or a provenance record.
                         const actions = (
                             <span
                                 style={{
@@ -1246,7 +1262,10 @@ function RepetitionHistoryPopup() {
                             wrap(
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                     <div style={{ ...bannerBaseStyle, ...accent }}>{body}</div>
-                                    {canEditHistory && <span style={{ flex: '0 0 44px' }}>{actions}</span>}
+                                    {/* Empty gutter, not the row actions: markers are read-only
+                                        (see `canEditEntry`). Kept so a banner ends where the rows'
+                                        action column starts instead of jutting past them. */}
+                                    {canEditHistory && <span style={{ flex: '0 0 44px' }} />}
                                 </div>
                             );
 
@@ -1391,7 +1410,7 @@ function RepetitionHistoryPopup() {
                                 }}>
                                     {formatEarlyLate(rep)}
                                 </span>
-                                {canEditHistory ? actions : <span />}
+                                {canEditEntry ? actions : <span />}
                             </div>
                         );
                     })}
