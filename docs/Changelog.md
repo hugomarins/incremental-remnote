@@ -2,6 +2,31 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.81 - September 6th, 2026
+
+### ✨ New - the FSRS Calibration tab now audits your initial stability (w0–w3)
+
+`w0`–`w3` are the stability FSRS assigns from the very first grade a card ever gets, and they are the only parameters not learned by the main training loop — [fsrs-optimizer](https://github.com/open-spaced-repetition/fsrs-optimizer) derives them in a separate pass over one narrow slice of history: each card's first grade paired with the outcome of the first review on a later calendar day. It then prints four bare numbers and tells you nothing about how well-founded they are.
+
+A new **D · Initial stability** panel reproduces that pass over your knowledge base and adds what the optimizer leaves out. Alongside the faithful refit it reports an **unregularised maximum-likelihood estimate with a 95% profile-likelihood interval**, a second fit with the optimizer's outlier removal switched off, and per-grade **coverage** — the share of reps actually observed at or beyond the fitted stability. A verdict badge turns that into a reading: *calibrated*, *S₀ too low / too high*, *thin data*, *extrapolating*, or **unidentified** — the last meaning the likelihood keeps improving all the way to the bound because your reviews never ran long enough to watch that grade be forgotten, so the fitted value is a floor rather than an estimate.
+
+Below it, the vector the optimizer would hand to its training loop, with any **monotonicity repair** spelled out — the rule that forces Again ≤ Hard ≤ Good ≤ Easy overwrites the value backed by fewer reps rather than averaging, which is worth seeing rather than inheriting silently. Then one **empirical forgetting curve per grade**: log-spaced interval buckets with observed retention, a **Wilson 95% interval**, what your current weight predicts, the deviation, and which rows the outlier filter discarded before fitting.
+
+The two places the fit and your scheduler disagree are labelled rather than blended: the refit runs at the optimizer's hard-wired `−0.1542` decay because its initialisation pass never sees `w20`, while the *predicted R* column uses yours; and where same-day learning steps sat between the first grade and the outcome, each grade's header states what share that covers and what FSRS actually predicted across them.
+
+> [!TIP]
+> When this panel disagrees with a number fsrs-optimizer produced, check whether the optimizer's value falls inside the 95% interval before changing anything — very often both sit inside the range the data supports, and the disagreement is about confidence, not about the number. Match the windows too: the optimizer's `revlog_start_date` filters whole *cards*, this tab filters *reps* by the period picker, and the weights the optimizer prints are post-training rather than the initialisation output the panel reproduces.
+
+📖 [FSRS Calibration → Initial stability](Prioritization-&-Sorting.md#initial-stability)
+
+### ⚡ Improved - the calibration grids no longer show five rows of dashes
+
+Grids **A** and **B** listed a predicted-R row every 5 percentage points down to 0%, but a scheduler aiming at 90% almost never lets a card fall below ~60%, so the bottom of both tables was permanently empty. Those rows are now folded into a single **0–60%** row, taking each grid from 13 rows to 9.
+
+The cut is fixed rather than "hide whatever is empty today", so the row layout stays identical when you switch periods and two runs can be read side by side — and any reps that do land in the folded range are shown in the merged row rather than dropped.
+
+📖 [FSRS Calibration](Prioritization-&-Sorting.md#fsrs-calibration)
+
 ## v1.0.80 - September 5th, 2026
 
 ### ✨ New - hand an Incremental Rem's data to its parent
