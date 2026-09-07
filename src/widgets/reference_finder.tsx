@@ -2,6 +2,7 @@ import { renderWidget, usePlugin, useRunAsync, WidgetLocation, RemType, Selectio
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { resolveRemTextForBreadcrumb, buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { sanitizeRichTextForSetText } from '../lib/richTextSanitize';
+import { remHasImage } from '../lib/image_scan';
 
 // Report each step of the alias-id resolution as a toast. Off by default: the
 // picker's console lives in its own widget iframe, so toasts are the only
@@ -96,6 +97,12 @@ const fold = (s: string) =>
 // "u" — so already-canonical text is left alone.
 const canonFig = (s: string) => s.replace(/\bfig\b\.?/g, 'figure');
 
+// The opposite spelling. Only used to seed the backend search: RemNote reaches a
+// rem written "Fig. 6.4" through the phrase "fig 6.4" and never through
+// "figure 6.4" (see the phrase-seed comment in runSearch), so both spellings of
+// the whole query have to be asked for.
+const shortFig = (s: string) => s.replace(/\bfigure\b/g, 'fig');
+
 interface Candidate {
   id: string;
   name: string;
@@ -109,6 +116,13 @@ interface Candidate {
   // plain rem, so the badge would say nothing about what it actually is —
   // resolved in Phase 2 (bounded to the rows we show) and shown as its own badge.
   isPdfHighlight?: boolean;
+  // True when the rem carries an image in its own text or back text — the same
+  // predicate the HasImage powerup is applied by ("Tag Rems With Images"), read
+  // straight off the rich text instead of through the tag: it costs nothing (no
+  // extra lookup, unlike the PDF-highlight probe above) and it is right even for
+  // rems that have never been scanned, or whose image was added or removed since
+  // they were.
+  hasImage?: boolean;
   // Set when the rem matched via one of its aliases rather than its primary
   // name. `aliasText` is what we display and insert; `aliasId` stamps the
   // reference so it renders the alias text and links back to this rem.
@@ -361,11 +375,34 @@ function ReferenceFinder() {
             )
           )
         );
-        // Search the full query plus each token (longest first, capped to 4) so
-        // a buried exact-name rem is retrieved via its most distinctive token.
+        // Seed with the WHOLE query as a phrase, in both figure spellings, before
+        // any single token. This is the seed that matters, because of how
+        // RemNote's search actually retrieves candidates (SQLite FTS5):
+        //   • it splits the query on every non-letter/digit character, so
+        //     "Fig. 6.4" becomes the tokens [fig, ., 6, ., 4];
+        //   • it then keeps only the tokens longer than two characters and ORs
+        //     them as prefix matches — here just `"fig"*`, since "6" and "4" are
+        //     dropped. That pool ("every rem containing a word starting with
+        //     fig") is truncated to the top-ranked thousand, and this picker then
+        //     keeps the best 50 by cost. In a knowledge base full of figures the
+        //     one you want does not survive that cut, however well it would have
+        //     scored once retrieved.
+        //   • the ONE branch that isolates a rem instead of truncating a huge
+        //     pool is an exact adjacent-phrase match on the whole query
+        //     (`"figure 6.4"*`, capped at 100 rows) — and it only runs when the
+        //     phrase is at least 3 characters and 2 tokens.
+        // FTS prefix-matches only the LAST word of a phrase, so the phrase
+        // "fig 6.4" does not match a rem named "Figure 6.4" and vice-versa. Both
+        // spellings therefore have to be asked for; canonFig alone was only ever
+        // applied to matching and scoring, never to what we asked the index for,
+        // which is why "Fig. 6.4" could not find "Figure 6.4: …".
+        const phrases = Array.from(new Set<string>([q, canonFig(q), shortFig(q)]));
+        // …then each token (longest first) so a buried exact-name rem is still
+        // reachable via its most distinctive token. Capped so a query stays a
+        // bounded number of backend searches per keystroke.
         const queries = Array.from(
-          new Set<string>([raw.trim(), ...[...searchTokens].sort((a, b) => b.length - a.length).slice(0, 4)])
-        );
+          new Set<string>([...phrases, ...[...searchTokens].sort((a, b) => b.length - a.length)])
+        ).slice(0, 5);
 
         const seen = new Map<string, any>();
         for (const qq of queries) {
@@ -474,6 +511,7 @@ function ReferenceFinder() {
           candidates.push({
             id: s.id, name: s.name, normName: s.normName, type: s.type,
             times: s.times, score: s.score, backText, breadcrumb, isPdfHighlight,
+            hasImage: remHasImage(s.r),
             aliasId: s.aliasId, aliasText: s.aliasText, aliasKeys: s.aliasKeys,
             aliasRichText: s.aliasRichText,
           });
@@ -996,6 +1034,19 @@ function ReferenceFinder() {
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {/* Images carry no searchable text, so nothing else in the row
+                      hints that a result is a figure. Sits to the LEFT of the
+                      name rather than in the badge gutter, which would go ragged
+                      if only some rows widened it. */}
+                  {r.hasImage && (
+                    <span
+                      title="Contains an image"
+                      aria-label="Contains an image"
+                      style={{ flexShrink: 0, fontSize: '11px', lineHeight: 1 }}
+                    >
+                      🖼️
+                    </span>
+                  )}
                   <span style={{ fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                     {(r.aliasText || r.name) || '(empty)'}
                   </span>

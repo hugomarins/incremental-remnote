@@ -2,6 +2,20 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.82 - September 7th, 2026
+
+### ⚡ Improved - Find Rem marks results that hold an image
+
+A 🖼️ now sits before the name of any result carrying an image, so a figure Rem is distinguishable from the prose that discusses it — captions and the sentences citing them are often worded almost identically.
+
+📖 [Spotting figures](Utilities.md#spotting-figures)
+
+### 🐛 Fixed - Find Rem could not find `Figure 6.4` when you typed `Fig. 6.4`
+
+The `Figure` = `Fig` = `Fig.` folding was only ever applied to *matching and ranking*, never to what the picker asked RemNote's index for. So the Rem had to be retrieved by the word `fig` alone, which in a knowledge base full of figures returns thousands of results and is truncated long before the one you wanted — the alternate spelling of the **whole query** is now searched for as well.
+
+📖 [Why it finds Rems the normal search can't](Utilities.md#why-it-finds-rems-the-normal-search-cant)
+
 ## v1.0.81 - September 6th, 2026
 
 ### ✨ New - the FSRS Calibration tab now audits your initial stability (w0–w3)

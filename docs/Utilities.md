@@ -429,7 +429,7 @@ A floating picker that finds a Rem **by name even when RemNote's own reference s
 
 Run **`Find Rem (insert reference / open in pane)`** (quick code `fir`) or press **`Opt+Shift+F` / `Alt+Shift+F`**. A compact box opens **at your cursor**.
 
-- **Type a name** → results appear as you type, with the best matches floated to the top (an `EXACT` badge marks an exact-name match; an `ALIAS` badge marks a match found through one of the Rem's [aliases](#find-by-alias)). Each row shows the Rem's **type badge** (see [Spotting PDF highlights](#spotting-pdf-highlights)), its **back text** (the definition side of a Concept↔definition card), and a short **breadcrumb** (`root / … / parent`) so you can tell which document it lives in when names collide.
+- **Type a name** → results appear as you type, with the best matches floated to the top (an `EXACT` badge marks an exact-name match; an `ALIAS` badge marks a match found through one of the Rem's [aliases](#find-by-alias)). Each row shows the Rem's **type badge** (see [Spotting PDF highlights](#spotting-pdf-highlights)), a 🖼️ icon when it holds an image (see [Spotting figures](#spotting-figures)), its **back text** (the definition side of a Concept↔definition card), and a short **breadcrumb** (`root / … / parent`) so you can tell which document it lives in when names collide.
 - **Enter** or **click** → inserts a reference to the selected Rem at your cursor.
 - **Ctrl+Enter / Cmd+Enter** or **Ctrl/Cmd+click** → inserts the reference as a **pin** (the link chip *without* the referenced text). See [Insert as a pin](#insert-as-a-pin) below.
 - **Opt+Enter / Alt+Enter** or **Opt/Alt+click** → inserts the Rem's **text followed by a pin** — the readable text plus a link chip (RemNote's paste "Text with Pin"). See [Insert text with a pin](#insert-text-with-a-pin) below.
@@ -444,11 +444,19 @@ The Rem you triggered the picker from is **excluded from results** — a Rem can
 
 A PDF highlight carries the same `DEFAULT_TYPE` as any plain Rem, so the type badge alone couldn't tell a highlight apart from your own note of the same sentence — a common collision, since a note is often worded exactly like the passage it came from. Highlights are badged **`PDF HIGHLIGHT`** in amber instead, so you can see at a glance which result is the source passage and which is your note, and reference the one you meant.
 
+#### Spotting figures
+
+A result whose Rem holds an **image** is marked with a 🖼️ before its name. An image contributes no searchable text, so a figure Rem is identified only by its caption — and captions are often near-identical to the prose that discusses them (`Figure 6.4: Definitions used on turning circle` beside a highlight reading *"… consists of (Fig. 6.4)"*). The icon tells you which row is the actual figure.
+
+This reads the Rem's own text directly, so it is accurate whether or not you have ever run [Tag Rems With Images](#filter-a-document-by-images) — it does not depend on the **HasImage** tag being present or up to date.
+
 #### Why it finds Rems the normal search can't
 
 RemNote's reference search builds its candidate list **per token, with a cap**. When *every* word in a Rem's name is high-frequency in your knowledge base (e.g. `Navegação Interior`, `mar territorial` — where both `navegação`/`interior` and `mar`/`territorial` appear in hundreds of Rems), the exact-name Concept never makes any token's candidate cut, so typing its full name returns a flood of partial matches but **not the Rem itself**. This is a property of the search ranking — not a corruption of the Rem — so "Reload Search Cache", retyping the name, or changing its type do **not** fix it. (You can confirm all of this on a specific Rem with the **[Search / Linkage Diagnostics](Troubleshooting.md#search-linkage-diagnostics-debug-widget)** tool in the Debug Widget.)
 
 This picker sidesteps the limitation: it searches **each word of your query separately**, unions the results, keeps only the Rems whose name contains **all** your words, and floats exact-name matches to the top. Because a distinctive word (e.g. `interior`) *does* return the Rem, it reliably surfaces — then ranking puts the exact match first.
+
+It also asks for the **whole query as a phrase**, which is the one thing that pulls back a small, precise set instead of a truncated flood. RemNote only looks for an exact run of adjacent words when the phrase it is handed is at least two words long, and it matches those words literally apart from the last one. That matters for names built from common words plus a number: a query like `fig. 6.4` seeds the word `fig`, which in a knowledge base full of figures returns thousands of Rems and is cut back long before yours is reached — whereas the phrase `figure 6.4` matches only the handful of Rems that actually contain those two words side by side. Since the literal spelling decides whether the phrase matches, both spellings are asked for (see [`Figure` = `Fig` = `Fig.`](#accent-insensitive-selection-aware)).
 
 ![Find Rem — surfacing a Rem that RemNote's own `[[` reference search can't find](assets/find-rem-finds-rems-normal-search-cannot.gif)
 
@@ -512,7 +520,7 @@ Both RemNote's native `[[` and this picker would normally **break a cloze deleti
 #### Accent-insensitive & selection-aware
 
 - **Accent/diacritic-insensitive:** typing `navegacao interior` matches `Navegação Interior`.
-- **`Figure` = `Fig` = `Fig.`:** figure abbreviations are treated interchangeably, so typing `fig 4.3` lists a Rem named `Figure 4.3`, and typing `figure 4.3` finds one named `Fig. 4.3` or `Fig 4.3`. Any capitalisation works and the trailing dot is optional. It's folded the same way accents are — the standalone word `fig`/`fig.` is canonicalised to `figure` in both your query and each Rem's name (and alias) before matching, so an exact match still ranks first with its `EXACT` badge. Only the whole word is affected: `figs`, `configure`, etc. are left alone.
+- **`Figure` = `Fig` = `Fig.`:** figure abbreviations are treated interchangeably, so typing `fig 4.3` lists a Rem named `Figure 4.3`, and typing `figure 4.3` finds one named `Fig. 4.3` or `Fig 4.3`. Any capitalisation works and the trailing dot is optional. It's folded the same way accents are — the standalone word `fig`/`fig.` is canonicalised to `figure` in both your query and each Rem's name (and alias) before matching, so an exact match still ranks first with its `EXACT` badge. Only the whole word is affected: `figs`, `configure`, etc. are left alone. The **search itself** is run in both spellings too, not just the matching: `fig. 6.4` is looked up as `fig. 6.4` *and* as `figure 6.4`, because RemNote's phrase lookup matches the words literally and would otherwise never return `Figure 6.4: …` for a query written `Fig.` (see [Why it finds Rems the normal search can't](#why-it-finds-rems-the-normal-search-cant)).
 - **Selected text seeds the search:** if you select text before invoking, the box opens pre-filled with it (and selected, so you can refine or overwrite). On insert, the selected text is **replaced** by the reference — exactly like RemNote's `[[` behaviour where selected text becomes the link.
 
 > The reference is inserted into the editor that was focused when you opened the picker. In the rare case RemNote has no active editor caret at insertion time, the picker copies the reference to your clipboard instead and tells you to paste it.
