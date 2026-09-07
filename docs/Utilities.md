@@ -542,6 +542,8 @@ Opens the **PDF or web article behind a reference pin** *without leaving the que
 
 It comes in **two variants** — a centered **modal popup** and a non-blocking **floating window** — that share the same reader; pick whichever fits the moment.
 
+![PDF Source shown in floating widget](assets/source-floating-widget.png){ width="900" }
+
 #### Two ways to open it
 
 Both are triggered the same way — **hover** the reference pin, then press a shortcut — and both only act on genuine **Reader sources** (see [What it opens](#what-it-opens)).
