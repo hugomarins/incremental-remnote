@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.83 - September 9th, 2026
+
+### 🐛 Fixed - sub-extracts inherited only one source pin, and none from web highlights
+
+An extract copies its parent's pin back to the original highlight so the way to the source stays short as you shred; it now carries **every** such pin rather than only the first, recognises **web** highlights alongside PDF ones, and looks on both sides of a card instead of the front alone.
+
+📖 [Source pins are inherited](IR-Flow--Reading-Extracting-and-Clozing.md#source-pins)
+
 ## v1.0.82 - September 7th, 2026
 
 ### ⚡ Improved - Find Rem marks results that hold an image
