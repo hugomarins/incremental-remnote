@@ -466,7 +466,7 @@ export function PluginHub() {
       scopeRemId: scopeRem?._id ?? null,
       scopeName,
     });
-    await plugin.widget.openPopup('review_document_creator');
+    await plugin.widget.openPopup('priority_queue_popup');
   }, [plugin]);
 
   /**
@@ -606,11 +606,11 @@ export function PluginHub() {
             className="hover:opacity-75"
             title={
               scopeName
-                ? `Create a Priority Review Document scoped to "${scopeName}"`
-                : 'Create a Priority Review Document'
+                ? `Priority Queue — refresh, practise and inspect the queue for "${scopeName}" or the whole knowledge base`
+                : 'Priority Queue — refresh, practise and inspect your persistent priority review document'
             }
           >
-            Priority Review
+            Priority Queue
           </button>
           <button
             onClick={openPriorityReviewQueue}

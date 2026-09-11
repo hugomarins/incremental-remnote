@@ -590,10 +590,15 @@ export const priorityQueueScopeSlotCode = 'scope';
 export const priorityQueueBurstSlotCode = 'burst';
 /** Timestamp (ms) of the last refresh. */
 export const priorityQueueLastRefreshSlotCode = 'lastRefresh';
+/** Share (0–1) of each burst filled strictly by priority before the lottery. */
+export const priorityQueueShieldSliceSlotCode = 'shieldSlice';
 export const PRIORITY_QUEUE_KB_SCOPE = 'kb';
 export const PRIORITY_QUEUE_DEFAULT_BURST = 25;
-/** Share of each burst filled strictly by priority, before the lottery — the "shield slice". */
+/** Default share of each burst filled strictly by priority, before the lottery — the "shield slice". */
 export const PRIORITY_QUEUE_SHIELD_SLICE = 0.2;
+export const PRIORITY_QUEUE_SHIELD_SLICE_MAX = 0.5;
+export const PRIORITY_QUEUE_BURST_MIN = 5;
+export const PRIORITY_QUEUE_BURST_MAX = 200;
 // Queue setting: refresh the Priority Queue document you just practised when
 // the session ends, so it is ready before the next Practice.
 export const autoRefreshPriorityQueueId = 'auto-refresh-priority-queue';

@@ -15,6 +15,7 @@ import {
   priorityQueueScopeSlotCode,
   priorityQueueBurstSlotCode,
   priorityQueueLastRefreshSlotCode,
+  priorityQueueShieldSliceSlotCode,
   pdfStateSlotCode,
   dismissedPowerupCode,
   dismissedHistorySlotCode,
@@ -249,6 +250,13 @@ export async function registerPluginPowerups(
         {
           code: priorityQueueLastRefreshSlotCode,
           name: 'Last Refresh',
+          propertyType: PropertyType.TEXT,
+          hidden: true,
+          onlyProgrammaticModifying: true,
+        },
+        {
+          code: priorityQueueShieldSliceSlotCode,
+          name: 'Shield Slice',
           propertyType: PropertyType.TEXT,
           hidden: true,
           onlyProgrammaticModifying: true,

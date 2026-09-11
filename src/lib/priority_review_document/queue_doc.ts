@@ -8,7 +8,13 @@ import {
   priorityQueueLastRefreshSlotCode,
   priorityQueuePowerupCode,
   priorityQueueScopeSlotCode,
+  priorityQueueShieldSliceSlotCode,
+  PRIORITY_QUEUE_SHIELD_SLICE_MAX,
+  PRIORITY_QUEUE_BURST_MIN,
+  PRIORITY_QUEUE_BURST_MAX,
+  allCardPriorityInfoKey,
 } from '../consts';
+import { CardPriorityInfo } from '../card_priority/types';
 import { getCardsPerRem } from '../sorting';
 import {
   attachToReviewQueueTag,
@@ -48,8 +54,15 @@ export interface PriorityQueueDocInfo {
   doc: PluginRem;
   scopeRemId: RemId | null;
   burst: number;
+  /** 0–1. See PRIORITY_QUEUE_SHIELD_SLICE. */
+  shieldSlice: number;
   lastRefresh: number | null;
 }
+
+export const clampBurst = (n: number) =>
+  Math.max(PRIORITY_QUEUE_BURST_MIN, Math.min(PRIORITY_QUEUE_BURST_MAX, Math.round(n)));
+export const clampShieldSlice = (f: number) =>
+  Math.max(0, Math.min(PRIORITY_QUEUE_SHIELD_SLICE_MAX, Math.round(f * 100) / 100));
 
 /** True when RemNote is on a flashcards route or the plugin's queue widget is mounted. */
 export async function isQueueOpen(plugin: RNPlugin): Promise<boolean> {
@@ -87,10 +100,13 @@ async function readInfo(doc: PluginRem): Promise<PriorityQueueDocInfo> {
   const scope = await readSlot(doc, priorityQueueScopeSlotCode);
   const burst = Number(await readSlot(doc, priorityQueueBurstSlotCode));
   const last = Number(await readSlot(doc, priorityQueueLastRefreshSlotCode));
+  const sliceRaw = await readSlot(doc, priorityQueueShieldSliceSlotCode);
+  const slice = sliceRaw === null ? NaN : Number(sliceRaw);
   return {
     doc,
     scopeRemId: scope && scope !== PRIORITY_QUEUE_KB_SCOPE ? scope : null,
     burst: Number.isFinite(burst) && burst > 0 ? burst : PRIORITY_QUEUE_DEFAULT_BURST,
+    shieldSlice: Number.isFinite(slice) ? clampShieldSlice(slice) : PRIORITY_QUEUE_SHIELD_SLICE,
     lastRefresh: Number.isFinite(last) && last > 0 ? last : null,
   };
 }
@@ -116,7 +132,13 @@ export async function findPriorityQueueDoc(
 }
 
 export async function setPriorityQueueBurst(plugin: RNPlugin, doc: PluginRem, burst: number): Promise<void> {
-  await doc.setPowerupProperty(priorityQueuePowerupCode, priorityQueueBurstSlotCode, [String(burst)]);
+  await doc.setPowerupProperty(priorityQueuePowerupCode, priorityQueueBurstSlotCode, [String(clampBurst(burst))]);
+}
+
+export async function setPriorityQueueShieldSlice(plugin: RNPlugin, doc: PluginRem, fraction: number): Promise<void> {
+  await doc.setPowerupProperty(priorityQueuePowerupCode, priorityQueueShieldSliceSlotCode, [
+    String(clampShieldSlice(fraction)),
+  ]);
 }
 
 export async function findOrCreatePriorityQueueDoc(
@@ -136,13 +158,14 @@ export async function findOrCreatePriorityQueueDoc(
     scopeRemId ?? PRIORITY_QUEUE_KB_SCOPE,
   ]);
   await setPriorityQueueBurst(plugin, doc, burst);
+  await setPriorityQueueShieldSlice(plugin, doc, PRIORITY_QUEUE_SHIELD_SLICE);
   await findOrCreateMetadataRem(plugin, doc);
   await attachToReviewQueueTag(plugin, doc);
   // The tag lookups the entries need, created up front so the first refill
   // does not create them mid-loop.
   await findOrCreateTag(plugin, 'INC');
   await findOrCreateTag(plugin, 'FC');
-  return { doc, scopeRemId, burst, lastRefresh: null };
+  return { doc, scopeRemId, burst: clampBurst(burst), shieldSlice: PRIORITY_QUEUE_SHIELD_SLICE, lastRefresh: null };
 }
 
 // --- refresh --------------------------------------------------------------
@@ -154,6 +177,8 @@ export interface RefreshOptions {
   mode?: RefreshMode;
   /** Overrides (and stores) the document's fill target. */
   burst?: number;
+  /** Overrides (and stores) the document's shield slice, 0–1. */
+  shieldSlice?: number;
   /** Skip the open-queue guard — for the QueueExit hook, which runs as the queue closes. */
   skipQueueGuard?: boolean;
   onProgress?: (message: string) => void;
@@ -226,8 +251,10 @@ export async function refreshPriorityQueue(plugin: RNPlugin, options: RefreshOpt
 
   const info = await findOrCreatePriorityQueueDoc(plugin, options.scopeRemId, options.burst);
   let doc = info.doc;
-  const burst = options.burst ?? info.burst;
-  if (options.burst && options.burst !== info.burst) await setPriorityQueueBurst(plugin, doc, options.burst);
+  const burst = clampBurst(options.burst ?? info.burst);
+  if (burst !== info.burst) await setPriorityQueueBurst(plugin, doc, burst);
+  const shieldSlice = clampShieldSlice(options.shieldSlice ?? info.shieldSlice);
+  if (shieldSlice !== info.shieldSlice) await setPriorityQueueShieldSlice(plugin, doc, shieldSlice);
 
   const scanner = new CoolingScanner(plugin, { scopeRemId: info.scopeRemId });
 
@@ -279,7 +306,7 @@ export async function refreshPriorityQueue(plugin: RNPlugin, options: RefreshOpt
     filterPaused: true,
     pausedPriorityThreshold: 20,
     excludeRemIds: remainingTargets,
-    shieldSliceFraction: PRIORITY_QUEUE_SHIELD_SLICE,
+    shieldSliceFraction: shieldSlice,
     coolingScanner: scanner,
   });
   await scanner.publish();
@@ -324,7 +351,7 @@ export async function refreshPriorityQueue(plugin: RNPlugin, options: RefreshOpt
   const cooling = scanner.sortedVerdicts();
   const statusText =
     `Scope: ${s.scopeName}\n` +
-    `Priority Queue · fill target ${burst}\n` +
+    `Priority Queue · fill target ${burst} · shield slice ${Math.round(shieldSlice * 100)}%\n` +
     `Holding: ${holding.total} items (${holding.flashcards} flashcard Rems, ${holding.incRems} IncRems)\n` +
     `Last refresh: ${formatStamp(now)} — drained ${drained.reviewed} reviewed` +
     (drained.cooling ? `, ${drained.cooling} cooling` : '') +
@@ -367,4 +394,37 @@ export async function refreshPriorityQueue(plugin: RNPlugin, options: RefreshOpt
 /** Opens Practice for the document: RemNote's own Practice button is this route. */
 export async function practicePriorityQueue(plugin: RNPlugin, doc: PluginRem): Promise<void> {
   await plugin.window.setURL(`/flashcards/${doc._id}`);
+}
+
+/**
+ * The card shield as it stands and as it would stand once every entry of the
+ * document is reviewed: the lowest priority among overdue, unpaused Rems that
+ * are neither cooling nor in the document. Read from the priority cache only.
+ */
+export async function computeShieldOutlook(
+  plugin: RNPlugin,
+  docTargetIds: ReadonlySet<RemId>,
+  coolingIds: ReadonlySet<RemId>,
+  scopeIds: ReadonlySet<RemId> | null
+): Promise<{ now: number | null; afterDocument: number | null; overdueRems: number }> {
+  const infos = (await plugin.storage.getSession<CardPriorityInfo[]>(allCardPriorityInfoKey)) || [];
+  let now: number | null = null;
+  let after: number | null = null;
+  let overdue = 0;
+  for (const info of infos) {
+    if ((info.dueCardsOverdue ?? 0) <= 0 || info.paused) continue;
+    if (scopeIds && !scopeIds.has(info.remId)) continue;
+    overdue++;
+    if (coolingIds.has(info.remId)) continue;
+    if (now === null || info.priority < now) now = info.priority;
+    if (docTargetIds.has(info.remId)) continue;
+    if (after === null || info.priority < after) after = info.priority;
+  }
+  return { now, afterDocument: after, overdueRems: overdue };
+}
+
+/** The entries' target Rem ids by kind, without a scan. */
+export async function readDocTargetIds(plugin: RNPlugin, doc: PluginRem): Promise<RemId[]> {
+  const fresh = (await plugin.rem.findOne(doc._id)) ?? doc;
+  return [...new Set((await readDocTargets(plugin, fresh)).values())];
 }

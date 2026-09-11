@@ -2,15 +2,7 @@ import { RNPlugin, PluginRem, RichTextInterface, RemId } from '@remnote/plugin-s
 import { priorityGraphPowerupCode } from '../consts';
 import { saveReviewGraphData, ReviewGraphData } from './graph_data';
 import { ensureReviewQueueTagPinnedOnce } from './sidebar_pin';
-import {
-  selectPriorityItems,
-  SelectedItem,
-  SelectionResult,
-  SkippedPausedItem,
-  SkippedAncestorItem,
-  SkippedCoolingItem,
-} from './select';
-import { CoolingScanner } from './cooling_gather';
+import { SelectedItem } from './select';
 
 export { hasCardClusterPowerup } from './cluster';
 export type { SkippedPausedItem, SkippedAncestorItem, SkippedCoolingItem, SelectedItem } from './select';
@@ -206,85 +198,4 @@ export async function findOrCreateMetadataRem(plugin: RNPlugin, doc: PluginRem):
   await metadataRem.setIsCode(true);
   await metadataRem.setParent(doc);
   return metadataRem;
-}
-
-// --- the snapshot creator (kept until the Priority Queue popup replaces it) ---
-
-export interface ReviewDocumentConfig {
-  scopeRemId: string | null;  // null = full KB
-  itemCount: number;
-  cardRatio: number | 'no-cards' | 'no-rem';
-  /** When true, flashcard rems inside paused documents are excluded and reported. Default: true. */
-  filterPaused: boolean;
-  /** Items with priority ≤ this value are kept even when filterPaused is true. Default: 20. */
-  pausedPriorityThreshold: number;
-}
-
-/**
- * Create a priority-based review document with mixed content — a one-off
- * snapshot of what is due now, timestamped in its title.
- */
-export async function createPriorityReviewDocument(
-  plugin: RNPlugin,
-  config: ReviewDocumentConfig
-): Promise<{
-  doc: PluginRem;
-  actualItemCount: number;
-  skippedPausedItems: SkippedPausedItem[];
-  skippedAncestorItems: SkippedAncestorItem[];
-  skippedCoolingItems: SkippedCoolingItem[];
-}> {
-  const { scopeRemId, itemCount, cardRatio, filterPaused, pausedPriorityThreshold } = config;
-
-  const timestamp = new Date().toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  const reviewDoc = await plugin.rem.createRem();
-  if (!reviewDoc) {
-    throw new Error('Failed to create the initial review document Rem.');
-  }
-  await reviewDoc.setText(await buildReviewDocTitle(plugin, 'Priority Review', scopeRemId, timestamp));
-  await reviewDoc.setIsDocument(true);
-
-  const scanner = new CoolingScanner(plugin, { scopeRemId });
-  const selection: SelectionResult = await selectPriorityItems(plugin, {
-    scopeRemId,
-    itemCount,
-    cardRatio,
-    filterPaused,
-    pausedPriorityThreshold,
-    coolingScanner: scanner,
-  });
-  await scanner.publish();
-
-  const { items, skippedPausedItems, skippedAncestorItems, skippedCoolingItems, stats, randomnessPct } = selection;
-
-  const skippedLine = skippedPausedItems.length > 0 ? `\nSkipped (paused docs): ${skippedPausedItems.length} flashcard rems` : '';
-  const ancestorLine =
-    skippedAncestorItems.length > 0
-      ? `\nHeld back (due ancestor): ${skippedAncestorItems.length} flashcard rems, ` +
-        `${skippedAncestorItems.filter((s) => s.ancestorAction === 'added').length} ancestors swapped in`
-      : '';
-  const coolingLine = skippedCoolingItems.length > 0 ? `\nCooling: ${skippedCoolingItems.length} flashcard rems left out` : '';
-
-  const metadataText = `Scope: ${stats.scopeName}
-Scope Size: ${stats.scopedIncRems} IncRems, ${stats.remsWithCards} Rems with Cards, ${stats.totalCardsInScope} Cards
-Due: ${stats.dueIncRems} IncRems, ${stats.dueCardRems} Rems with Cards, ${stats.dueCards} Cards
-Selected Items: ${items.length} (${items.filter((i) => i.type === 'incremental').length} IncRems, ${items.filter((i) => i.type === 'flashcard').length} Rems with Cards)${skippedLine}${ancestorLine}${coolingLine}
-Randomness: IncRem ${randomnessPct.incRem}%, Cards ${randomnessPct.card}%
-Created: ${timestamp}`;
-
-  const metadataRem = await findOrCreateMetadataRem(plugin, reviewDoc);
-  if (metadataRem) await metadataRem.setText([metadataText]);
-
-  await writeGraph(plugin, reviewDoc, buildGraphData(items, randomnessPct));
-  await attachToReviewQueueTag(plugin, reviewDoc);
-  await writeEntries(plugin, reviewDoc, items);
-
-  return { doc: reviewDoc, actualItemCount: items.length, skippedPausedItems, skippedAncestorItems, skippedCoolingItems };
 }
