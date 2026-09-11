@@ -2,6 +2,23 @@ import { QueueItemType, ReactRNPlugin, WidgetLocation } from '@remnote/plugin-sd
 import { pageRangeWidgetId, parentSelectorWidgetId, powerupCode, priorityGraphPowerupCode, incremNotesSidebarWidgetId, enableMasteryDrillId, pluginHubWidgetId, onboardingTipsWidgetId } from '../lib/consts';
 import { getIESetting } from '../lib/settings';
 
+/* RemNote wraps each location widget as
+     div.fade-in-first-load.rn-queue__widget-below-top-bar > div > iframe
+   inside .rn-queue, which carries .queue-beautiful-box only in the Beautiful
+   variant. Registering anything at QueueBelowTopBar also drops RemNote's own
+   h-2 spacer there (it renders only when the location is empty), so the wrapper
+   keeps that 0.5rem in both variants. The hidden iframe is also how the widget
+   learns it is in Compact mode (useHostShown in queue_beautiful_bar.tsx). */
+const QUEUE_BEAUTIFUL_BAR_CSS = `
+  .rn-queue__widget-below-top-bar:has(> div > iframe[data-plugin-id="incremental-everything"][src*="widgetName=queue_beautiful_bar&"]) {
+    min-height: 0.5rem;
+    flex-shrink: 0;
+  }
+  .rn-queue:not(.queue-beautiful-box) iframe[data-plugin-id="incremental-everything"][src*="widgetName=queue_beautiful_bar&"] {
+    display: none;
+  }
+`;
+
 export async function registerWidgets(plugin: ReactRNPlugin) {
   const masteryDrillEnabled = await getIESetting(plugin, enableMasteryDrillId);
 
@@ -162,6 +179,17 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
       height: 'auto',
     },
   });
+
+  // Beautiful queue variant: it renders no QueueToolbar, so the two widgets
+  // above never mount. This one carries both at QueueBelowTopBar (top of the
+  // card box), which both variants render — the CSS below hides it in Compact.
+  plugin.app.registerWidget('queue_beautiful_bar', WidgetLocation.QueueBelowTopBar, {
+    dimensions: {
+      width: '100%',
+      height: 'auto',
+    },
+  });
+  await plugin.app.registerCSS('queue-beautiful-bar', QUEUE_BEAUTIFUL_BAR_CSS);
 
   plugin.app.registerWidget('review_document_creator', WidgetLocation.Popup, {
     dimensions: {
