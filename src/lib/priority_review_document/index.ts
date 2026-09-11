@@ -25,7 +25,7 @@ const CARD_CLUSTER_POWERUP_CODES = ['cluster', 'cardCluster', 'card-cluster', 'c
  * Tries each known code variant first, then falls back to inspecting
  * the rem's tag-rems for text that contains "cluster" (case-insensitive).
  */
-async function hasCardClusterPowerup(plugin: RNPlugin, rem: PluginRem): Promise<boolean> {
+export async function hasCardClusterPowerup(plugin: RNPlugin, rem: PluginRem): Promise<boolean> {
   // Try every plausible powerup code
   for (const code of CARD_CLUSTER_POWERUP_CODES) {
     try {

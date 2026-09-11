@@ -565,3 +565,14 @@ export const sourceFloatingActiveIdKey = 'source-floating-active-id';
 // Convert literal \[..\] / \(..\) / **..** left by PDF text-layer extraction
 // into real RemNote rich text (formulas, bold, italic).
 export const convertExtractedMarkupCommandId = 'convert-extracted-markup';
+
+// --- Priority Queue cooling (lib/priority_review_document/cooling*.ts) ---
+// The cooling SET is never stored: it is a function of card data, recomputed on
+// every refresh. Two keys support it:
+//  - a SYNCED, per-KB record of the user's overrides (release now / extend /
+//    never cool) — the only cooling state that is a decision rather than a
+//    derivation. Shard per KB as `<prefix>_<kbId>`, like the history shards.
+//  - a SESSION cache of the last computed verdicts, read by the shields so a
+//    cooling Rem cannot set the Priority Shield, and by the Cooling list.
+export const coolingOverridesKeyPrefix = 'prq-cooling-overrides';
+export const coolingCacheKey = 'prq-cooling-cache';
