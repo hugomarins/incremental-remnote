@@ -32,6 +32,8 @@ import {
 } from '../lib/priority_review_document/cooling_store';
 import { scanCooling } from '../lib/priority_review_document/cooling_gather';
 import { CardPriorityInfo } from '../lib/card_priority/types';
+import { isPriorityReviewDocument, PRD_TAG_NAME } from '../lib/priority_review_document';
+import { buildComprehensiveScope } from '../lib/scope_helpers';
 
 const DOCS_PATH = 'Priority-Review-Document/';
 
@@ -120,6 +122,12 @@ export function PriorityQueuePopup() {
 
   const [tab, setTab] = useState<Tab>('queue');
   const [useFullKB, setUseFullKB] = useState<boolean | null>(null);
+  /**
+   * null = still checking; true = the Rem you came from is itself a review
+   * document (or the tag that lists them), so it cannot be a scope — a queue
+   * built from a queue would only ever re-select what is already in it.
+   */
+  const [scopeBlocked, setScopeBlocked] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
@@ -136,13 +144,39 @@ export function PriorityQueuePopup() {
   const burstRef = useRef<HTMLInputElement>(null);
   const sliceRef = useRef<HTMLInputElement>(null);
 
-  // Default scope: the document you came from, when there is one.
+  // Is the Rem you came from usable as a scope?
   useEffect(() => {
-    if (context !== undefined && useFullKB === null) setUseFullKB(!context?.scopeRemId);
-  }, [context, useFullKB]);
+    if (context === undefined) return;
+    let cancelled = false;
+    (async () => {
+      let blocked = false;
+      if (context?.scopeRemId) {
+        try {
+          const rem = await plugin.rem.findOne(context.scopeRemId);
+          const text = Array.isArray(rem?.text) ? rem!.text.filter((t) => typeof t === 'string').join('').trim() : '';
+          blocked = !rem || text === PRD_TAG_NAME || (await isPriorityReviewDocument(rem));
+        } catch {
+          blocked = true;
+        }
+      }
+      if (!cancelled) setScopeBlocked(blocked);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [plugin, context]);
 
-  const scopeRemId: RemId | null = useFullKB ? null : context?.scopeRemId ?? null;
-  const scopeLabel = useFullKB ? 'Full Knowledge Base' : context?.scopeName || 'Current document';
+  const docScopeAvailable = !!context?.scopeRemId && scopeBlocked === false;
+
+  // Default scope: the document you came from, when there is one and it qualifies.
+  useEffect(() => {
+    if (context === undefined || scopeBlocked === null) return;
+    if (useFullKB === null) setUseFullKB(!docScopeAvailable);
+    else if (!docScopeAvailable && useFullKB === false) setUseFullKB(true);
+  }, [context, scopeBlocked, docScopeAvailable, useFullKB]);
+
+  const scopeRemId: RemId | null = useFullKB || !docScopeAvailable ? null : context?.scopeRemId ?? null;
+  const scopeLabel = scopeRemId ? context?.scopeName || 'Current document' : 'Full Knowledge Base';
 
   const coolingVerdicts: CoolingVerdict[] = useMemo(() => {
     const now = Date.now();
@@ -157,6 +191,9 @@ export function PriorityQueuePopup() {
     setPhase('loading');
     setError('');
     try {
+      // The document scope, for a document-scoped shield: the same comprehensive
+      // scope the queue uses at QueueEnter (descendants, portals, references).
+      const scopeIds = scopeRemId ? await buildComprehensiveScope(plugin, scopeRemId) : null;
       const info = await findPriorityQueueDoc(plugin, scopeRemId);
       if (!info) {
         setStatus({
@@ -167,7 +204,7 @@ export function PriorityQueuePopup() {
           shieldSlice: PRIORITY_QUEUE_SHIELD_SLICE,
           lastRefresh: null,
           report: null,
-          outlook: scopeRemId ? null : await computeShieldOutlook(plugin, new Set(), coolingIds, null),
+          outlook: await computeShieldOutlook(plugin, new Set(), coolingIds, scopeIds),
         });
         setBurst(PRIORITY_QUEUE_DEFAULT_BURST);
         setSlicePct(Math.round(PRIORITY_QUEUE_SHIELD_SLICE * 100));
@@ -179,7 +216,7 @@ export function PriorityQueuePopup() {
         readDocTargetIds(plugin, info.doc),
       ]);
       const report = scan.docs[0] ?? null;
-      const outlook = scopeRemId ? null : await computeShieldOutlook(plugin, new Set(targets), coolingIds, null);
+      const outlook = await computeShieldOutlook(plugin, new Set(targets), coolingIds, scopeIds);
       setStatus({
         exists: true,
         docName: report?.docName ?? 'Priority Queue',
@@ -343,12 +380,12 @@ export function PriorityQueuePopup() {
 
   const controls: Control[] = useMemo(() => {
     const list: Control[] = [];
-    if (context?.scopeRemId) list.push('scope-doc');
+    if (docScopeAvailable) list.push('scope-doc');
     list.push('scope-kb', 'burst', 'slice', 'refresh', 'drain', 'refill', 'practice');
     if (status?.exists) list.push('open');
     list.push('cooling', 'sorting');
     return list;
-  }, [context?.scopeRemId, status?.exists]);
+  }, [docScopeAvailable, status?.exists]);
 
   const activate = (c: Control) => {
     switch (c) {
@@ -516,15 +553,20 @@ export function PriorityQueuePopup() {
         Scope
       </div>
       <div className="flex flex-col gap-1.5 min-w-0">
-        {context?.scopeRemId && (
+        {docScopeAvailable && (
           <label
             className="flex items-center gap-2 text-sm cursor-pointer rounded px-1"
             style={ring('scope-doc')}
             onMouseEnter={() => setControl('scope-doc')}
           >
             <input type="radio" checked={useFullKB === false} onChange={() => setUseFullKB(false)} onMouseDown={(e) => e.preventDefault()} />
-            <span className="truncate">Current document: {context.scopeName}</span>
+            <span className="truncate">Current document: {context?.scopeName}</span>
           </label>
+        )}
+        {context?.scopeRemId && scopeBlocked && (
+          <div className="text-xs" style={faint}>
+            “{context.scopeName}” is a review document, so it cannot be a scope.
+          </div>
         )}
         <label
           className="flex items-center gap-2 text-sm cursor-pointer rounded px-1"
@@ -584,7 +626,7 @@ export function PriorityQueuePopup() {
       )}
       {status?.outlook && (
         <div className="text-xs pt-1" style={{ ...muted, borderTop: '1px solid var(--rn-clr-border-opaque, rgba(128,128,128,0.2))' }}>
-          Card shield now{' '}
+          {scopeRemId ? 'Document card shield now' : 'KB card shield now'}{' '}
           <span className="font-bold" style={{ color: 'var(--rn-clr-content-primary)' }}>
             {status.outlook.now === null ? '—' : `P${status.outlook.now}`}
           </span>
@@ -597,7 +639,7 @@ export function PriorityQueuePopup() {
               </span>
             </>
           )}{' '}
-          · {status.outlook.overdueRems.toLocaleString()} overdue Rems
+          · {status.outlook.overdueRems.toLocaleString()} overdue Rems{scopeRemId ? ' in scope' : ''}
           {coolingVerdicts.length > 0 && (
             <>
               {' '}
