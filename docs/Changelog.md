@@ -2,6 +2,16 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.87 - September 11th, 2026
+
+### 🐛 Fixed - the queue priority badge was missing in RemNote's Beautiful queue variant
+
+**Queue Toolbar Priority**: The badge (and the *No Inc Rem* countdown) now shows in the Beautiful variant too, in the card's top-right corner, without shifting the card's layout.
+
+![The Beautiful queue variant with the P15 priority badge in the card's top-right corner, above the breadcrumbs](assets/beautiful-queue.png){ width="900" }
+
+📖 [In the Beautiful queue variant](Plugin-Widgets-Reference.md#beautiful-queue-variant)
+
 ## v1.0.83 - September 9th, 2026
 
 ### 🐛 Fixed - sub-extracts inherited only one source pin, and none from web highlights

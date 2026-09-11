@@ -8,7 +8,15 @@ import { getIESetting } from '../lib/settings';
    variant. Registering anything at QueueBelowTopBar also drops RemNote's own
    h-2 spacer there (it renders only when the location is empty), so the wrapper
    keeps that 0.5rem in both variants. The hidden iframe is also how the widget
-   learns it is in Compact mode (useHostShown in queue_beautiful_bar.tsx). */
+   learns it is in Compact mode (useHostShown in queue_beautiful_bar.tsx).
+
+   In Beautiful the wrapper leaves the flow and overlays the box's top-right
+   corner: the box already opens with 40px of blank space (that 0.5rem spacer +
+   the card content's pt-8) above the breadcrumbs, and the ~36px badge row fits
+   inside it. In flow it stacked on top of that blank space instead. The spacer
+   moves to the next sibling so the card sits exactly where RemNote puts it.
+   The width cap keeps the transparent iframe from swallowing clicks across the
+   whole strip when the card content scrolls under it. */
 const QUEUE_BEAUTIFUL_BAR_CSS = `
   .rn-queue__widget-below-top-bar:has(> div > iframe[data-plugin-id="incremental-everything"][src*="widgetName=queue_beautiful_bar&"]) {
     min-height: 0.5rem;
@@ -16,6 +24,17 @@ const QUEUE_BEAUTIFUL_BAR_CSS = `
   }
   .rn-queue:not(.queue-beautiful-box) iframe[data-plugin-id="incremental-everything"][src*="widgetName=queue_beautiful_bar&"] {
     display: none;
+  }
+  .queue-beautiful-box > .rn-queue__widget-below-top-bar:has(> div > iframe[data-plugin-id="incremental-everything"][src*="widgetName=queue_beautiful_bar&"]) {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: min(360px, 60%);
+    min-height: 0;
+    z-index: 5;
+  }
+  .queue-beautiful-box > .rn-queue__widget-below-top-bar:has(> div > iframe[data-plugin-id="incremental-everything"][src*="widgetName=queue_beautiful_bar&"]) + * {
+    margin-top: 0.5rem;
   }
 `;
 

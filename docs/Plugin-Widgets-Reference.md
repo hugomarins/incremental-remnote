@@ -40,6 +40,10 @@ Unlike the *Card Info Bar*, which lives at the bottom of flashcards and can be e
 
 ![Priority shown above Queue](assets/queue-toolbar-priority-widget.png){ width="600" }
 
+#### In the Beautiful queue variant { #beautiful-queue-variant }
+
+RemNote's **Beautiful** queue variant (Queue Menu → *Queue Variant*) has no toolbar for plugins to join, so there the badge sits in the **top-right corner of the card**, in the blank space above the breadcrumbs — the card layout itself is unchanged. The *No Inc Rem* countdown moves there with it. Switching back to *Compact* returns both to the toolbar.
+
 
 ### 1.3. Answer Buttons Info Bar
 *(Incremental Rems only)*
