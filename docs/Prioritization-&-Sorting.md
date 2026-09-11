@@ -546,7 +546,7 @@ In this example, the 22.3% of items you've processed happen to be disproportiona
 
 The **Weighted Shield value** (⚖️ %) shown in the shield header is precisely this "Weight processed" figure — making it a far more meaningful measure of your learning efficiency than a simple count of items reviewed.
 
-**Card Priority × Memory Analytics Tab:**
+#### Card Priority × Memory Analytics { #card-memory-analytics }
 
 When both Incremental Rems and Cards groups are present, the wide popup exposes a second tab — **Card Priority × Memory Analytics** — that replays FSRS over every card in your knowledge base and aggregates per priority-percentile bucket. Each bucket holds an equal number of cards (deciles by inherited Rem priority, so a Rem with multiple cards contributes one entry per card), plus a consolidated **All KB** row at the bottom for comparison.
 
