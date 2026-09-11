@@ -42,6 +42,7 @@ import {
   PriorityEditorDisplayMode,
   displayPriorityShieldId,
   deferSpoilerIncRemsId,
+  autoRefreshPriorityQueueId,
   displayWeightedShieldId,
   displayQueueToolbarPriorityId,
   isolatedQueueModeId,
@@ -104,6 +105,7 @@ export interface IESettings {
   [collapseQueueTopBar]: boolean;
   [displayPriorityShieldId]: boolean;
   [deferSpoilerIncRemsId]: boolean;
+  [autoRefreshPriorityQueueId]: boolean;
   [displayWeightedShieldId]: boolean;
   [displayQueueToolbarPriorityId]: boolean;
   [isolatedQueueModeId]: IsolatedQueueMode;
@@ -170,6 +172,7 @@ export const IE_SETTINGS_DEFAULTS: IESettings = {
   [collapseQueueTopBar]: false,
   [displayPriorityShieldId]: true,
   [deferSpoilerIncRemsId]: true,
+  [autoRefreshPriorityQueueId]: true,
   [displayWeightedShieldId]: true,
   [displayQueueToolbarPriorityId]: true,
   [isolatedQueueModeId]: 'highlights',
@@ -508,6 +511,15 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
       'you grade the card. The IncRem returns to the running once those cards are graded, ' +
       'and is released anyway once nothing else is due. Only applies to the normal queue — ' +
       'Practice All and In Order are unaffected.',
+  },
+  [autoRefreshPriorityQueueId]: {
+    kind: 'boolean',
+    group: 'queue',
+    title: 'Refresh the Priority Queue after each session',
+    description:
+      'When you leave the queue after practising a Priority Queue document, drains the entries ' +
+      'you reviewed and tops the document back up to its fill target, so it is ready before the ' +
+      'next Practice. Never runs while a queue is open.',
   },
   [displayWeightedShieldId]: {
     kind: 'boolean',

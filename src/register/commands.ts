@@ -65,6 +65,7 @@ import { removeIncrementalRemCache } from '../lib/incremental_rem/cache';
 import { IncrementalRep } from '../lib/incremental_rem/types';
 import { safeRemTextToString, getIncrementalReadingPosition, addPageToHistory, registerRemsAsPdfKnown, getActivePdfForIncRem, getAllPDFsInRem, getDescendantsToDepth, getRemCardContent, resolveSourcePopupTarget } from '../lib/pdfUtils';
 import { getHoveredReference } from './events';
+import { refreshPriorityQueue, practicePriorityQueue, findPriorityQueueDoc, isQueueOpen } from '../lib/priority_review_document/queue_doc';
 import { flashcardHistorySpec, clearHistoryShard } from '../lib/history_shards';
 import { transferToDismissed } from '../lib/dismissed';
 import { addToIncrementalHistory, addDismissalToIncrementalHistory } from '../lib/history_utils';
@@ -1619,6 +1620,67 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     quickCode: 'clean',
     action: async () => {
       await plugin.widget.openPopup('prd_cleanup_popup');
+    },
+  });
+
+  // --- Priority Queue (persistent, per-scope review document) ---
+  // Phase 2 test surface: three commands. The Priority Queue popup replaces
+  // them as the front door in Phase 3.
+  const describeRefresh = (r: Awaited<ReturnType<typeof refreshPriorityQueue>>) =>
+    r.blocked
+      ? 'Priority Queue: close the queue first — it is never edited during a session.'
+      : `Priority Queue holds ${r.holding.total} items (${r.holding.flashcards} FC, ${r.holding.incRems} INC) — ` +
+        `drained ${r.drained.reviewed} reviewed${r.drained.cooling ? `, ${r.drained.cooling} cooling` : ''}, ` +
+        `added ${r.added.total}${r.added.shieldSlice ? ` (${r.added.shieldSlice} shield slice)` : ''}; ` +
+        `${r.cooling.length} cooling in scope. ${(r.elapsedMs / 1000).toFixed(1)}s`;
+
+  plugin.app.registerCommand({
+    id: 'refresh-priority-queue-kb',
+    name: 'Refresh Priority Queue (Full Knowledge Base)',
+    description: 'Drains the reviewed and cooling entries out of the full-KB Priority Queue document and tops it back up to its fill target, then opens it.',
+    quickCode: 'prqkb',
+    action: async () => {
+      await plugin.app.toast('Refreshing the Priority Queue…');
+      const result = await refreshPriorityQueue(plugin, { scopeRemId: null });
+      await plugin.app.toast(describeRefresh(result));
+      if (!result.blocked && result.doc) await result.doc.openRemAsPage();
+    },
+  });
+
+  plugin.app.registerCommand({
+    id: 'refresh-priority-queue-doc',
+    name: 'Refresh Priority Queue (focused document)',
+    description: 'Same as the full-KB refresh, for a Priority Queue scoped to the focused Rem / document.',
+    quickCode: 'prqdoc',
+    action: async () => {
+      const focused = await plugin.focus.getFocusedRem();
+      if (!focused) {
+        await plugin.app.toast('Focus a Rem or document first.');
+        return;
+      }
+      await plugin.app.toast('Refreshing the Priority Queue…');
+      const result = await refreshPriorityQueue(plugin, { scopeRemId: focused._id });
+      await plugin.app.toast(describeRefresh(result));
+      if (!result.blocked && result.doc) await result.doc.openRemAsPage();
+    },
+  });
+
+  plugin.app.registerCommand({
+    id: 'practice-priority-queue-kb',
+    name: 'Practice Priority Queue (Full Knowledge Base)',
+    description: 'Opens the queue on the full-KB Priority Queue document — the same route as its Practice button.',
+    quickCode: 'prqgo',
+    action: async () => {
+      if (await isQueueOpen(plugin)) {
+        await plugin.app.toast('A queue is already open.');
+        return;
+      }
+      const info = await findPriorityQueueDoc(plugin, null);
+      if (!info) {
+        await plugin.app.toast('No Priority Queue yet — run "Refresh Priority Queue" first.');
+        return;
+      }
+      await practicePriorityQueue(plugin, info.doc);
     },
   });
 

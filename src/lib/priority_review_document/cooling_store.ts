@@ -151,3 +151,25 @@ export async function getCoolingRemIdSet(plugin: RNPlugin, now: number = Date.no
   if (!cache) return new Set();
   return new Set(cache.verdicts.filter((v) => v.until > now).map((v) => v.remId));
 }
+
+/**
+ * Merges a scan into the cache: Rems the scan judged replace their previous
+ * entry (so a Rem that stopped cooling disappears), Rems it did not look at
+ * keep theirs while their window lasts. This is what lets a document-scoped
+ * refresh and a full-KB refresh share one cache without one wiping the other's
+ * knowledge of the KB's top.
+ */
+export async function mergeCoolingCache(
+  plugin: RNPlugin,
+  scan: { computedAt: number; scopeRemId: RemId | null; checkedIds: ReadonlySet<RemId>; verdicts: CoolingVerdict[] }
+): Promise<void> {
+  const existing = await readCoolingCache(plugin);
+  const kept = (existing?.verdicts ?? []).filter(
+    (v) => v.until > scan.computedAt && !scan.checkedIds.has(v.remId)
+  );
+  await writeCoolingCache(plugin, {
+    computedAt: scan.computedAt,
+    scopeRemId: scan.scopeRemId,
+    verdicts: [...scan.verdicts, ...kept],
+  });
+}

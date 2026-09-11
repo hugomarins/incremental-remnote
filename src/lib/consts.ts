@@ -576,3 +576,24 @@ export const convertExtractedMarkupCommandId = 'convert-extracted-markup';
 //    cooling Rem cannot set the Priority Shield, and by the Cooling list.
 export const coolingOverridesKeyPrefix = 'prq-cooling-overrides';
 export const coolingCacheKey = 'prq-cooling-cache';
+
+// --- Priority Queue document (lib/priority_review_document/queue_doc.ts) ---
+// A PERSISTENT review document, one per scope, refilled in bursts and drained
+// as its entries are reviewed — as opposed to the timestamped snapshot the
+// creator popup builds. Same `Priority Review Queue` tag and same title shape
+// (so queue-enter detection and scope parsing are unchanged); this powerup is
+// what tells the two apart, and its hidden slots hold the document's config.
+export const priorityQueuePowerupCode = 'priority_queue_doc';
+/** The scope Rem id, or `kb` for the whole knowledge base. */
+export const priorityQueueScopeSlotCode = 'scope';
+/** How many items a refill tops the document up to. */
+export const priorityQueueBurstSlotCode = 'burst';
+/** Timestamp (ms) of the last refresh. */
+export const priorityQueueLastRefreshSlotCode = 'lastRefresh';
+export const PRIORITY_QUEUE_KB_SCOPE = 'kb';
+export const PRIORITY_QUEUE_DEFAULT_BURST = 25;
+/** Share of each burst filled strictly by priority, before the lottery — the "shield slice". */
+export const PRIORITY_QUEUE_SHIELD_SLICE = 0.2;
+// Queue setting: refresh the Priority Queue document you just practised when
+// the session ends, so it is ready before the next Practice.
+export const autoRefreshPriorityQueueId = 'auto-refresh-priority-queue';

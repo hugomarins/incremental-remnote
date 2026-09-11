@@ -11,6 +11,10 @@ import {
   originalIncrementalDateSlotCode,
   priorityGraphPowerupCode,
   priorityGraphDataSlotCode,
+  priorityQueuePowerupCode,
+  priorityQueueScopeSlotCode,
+  priorityQueueBurstSlotCode,
+  priorityQueueLastRefreshSlotCode,
   pdfStateSlotCode,
   dismissedPowerupCode,
   dismissedHistorySlotCode,
@@ -218,6 +222,40 @@ export async function registerPluginPowerups(
   });
 
 
+
+  // Marks a PERSISTENT Priority Queue document (one per scope, refilled in
+  // bursts and drained as it is reviewed) and carries its config. Every slot is
+  // hidden and programmatic: this is machine state the refresh command owns.
+  await plugin.app.registerPowerup({
+    name: 'Priority Queue',
+    code: priorityQueuePowerupCode,
+    description: 'A Priority Queue document: kept topped up with your highest-priority due items and drained as you review them.',
+    options: {
+      slots: [
+        {
+          code: priorityQueueScopeSlotCode,
+          name: 'Scope',
+          propertyType: PropertyType.TEXT,
+          hidden: true,
+          onlyProgrammaticModifying: true,
+        },
+        {
+          code: priorityQueueBurstSlotCode,
+          name: 'Fill Target',
+          propertyType: PropertyType.TEXT,
+          hidden: true,
+          onlyProgrammaticModifying: true,
+        },
+        {
+          code: priorityQueueLastRefreshSlotCode,
+          name: 'Last Refresh',
+          propertyType: PropertyType.TEXT,
+          hidden: true,
+          onlyProgrammaticModifying: true,
+        },
+      ],
+    },
+  });
 
   // Dismissed Powerup - stores history of previously Incremental Rems
   await plugin.app.registerPowerup({
