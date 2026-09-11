@@ -255,7 +255,7 @@ It reads *every* review document in your knowledge base, works out which entries
 
 "Due" here means **due at any point up to the end of today**, not due at this exact second. A card you answered *Forgot* an hour ago is sitting in a learning step ten minutes out: it is not due right now, but it is coming back in this very session, and deleting its entry would take it out of the document that is meant to bring it back.
 
-![Cleaning a PRD](assets/clean-PRD.png){ width="500" }
+![Cleaning a PRD](assets/clean-PRD.png){ width="650" }
 
 ### Finished documents are deleted too
 
