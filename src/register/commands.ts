@@ -1593,7 +1593,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     description:
       'Open the Priority Queue: a persistent review document topped up with your highest-priority due items and drained as you review them, with the Cooling list.',
     keyboardShortcut: 'opt+shift+r',
-    quickCode: 'prd',
+    quickCode: 'prq',
     action: async () => {
       const focused = await plugin.focus.getFocusedRem();
 
@@ -1638,7 +1638,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
       }
       const info = await findPriorityQueueDoc(plugin, null);
       if (!info) {
-        await plugin.app.toast('No Priority Queue yet — open the Priority Queue popup (quick code prd) and press Build.');
+        await plugin.app.toast('No Priority Queue yet — open the Priority Queue popup (quick code prq) and press Build.');
         return;
       }
       await practicePriorityQueue(plugin, info.doc);

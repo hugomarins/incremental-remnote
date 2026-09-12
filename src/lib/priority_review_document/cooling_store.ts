@@ -1,5 +1,6 @@
 import { RNPlugin, RemId } from '@remnote/plugin-sdk';
-import { coolingCacheKey, coolingOverridesKeyPrefix } from '../consts';
+import { coolingCacheKey, coolingOverridesKeyPrefix, coolingIntervalPercentId, coolingMinDaysId, coolingMaxDaysId } from '../consts';
+import { getIESettings } from '../settings';
 import {
   CoolingOverrides,
   CoolingParams,
@@ -25,6 +26,23 @@ import {
  */
 
 const FALLBACK_KB_ID = 'default';
+
+/** The cooling window parameters from the IE settings, with the defaults as fallback. */
+export async function getCoolingParams(plugin: RNPlugin): Promise<CoolingParams> {
+  try {
+    const s = await getIESettings(plugin, [coolingIntervalPercentId, coolingMinDaysId, coolingMaxDaysId]);
+    const pct = Number(s[coolingIntervalPercentId]);
+    const min = Number(s[coolingMinDaysId]);
+    const max = Number(s[coolingMaxDaysId]);
+    return {
+      intervalFraction: Number.isFinite(pct) ? Math.max(0, pct) / 100 : DEFAULT_COOLING_PARAMS.intervalFraction,
+      minDays: Number.isFinite(min) ? Math.max(0, min) : DEFAULT_COOLING_PARAMS.minDays,
+      maxDays: Number.isFinite(max) ? Math.max(0, max) : DEFAULT_COOLING_PARAMS.maxDays,
+    };
+  } catch {
+    return DEFAULT_COOLING_PARAMS;
+  }
+}
 
 async function getKbId(plugin: RNPlugin): Promise<string> {
   try {
@@ -58,12 +76,8 @@ export async function readCoolingOverrides(plugin: RNPlugin): Promise<CoolingOve
   }
 }
 
-async function writeCoolingOverrides(
-  plugin: RNPlugin,
-  overrides: CoolingOverrides,
-  params: CoolingParams = DEFAULT_COOLING_PARAMS
-): Promise<void> {
-  const pruned = pruneCoolingOverrides(overrides, Date.now(), params);
+async function writeCoolingOverrides(plugin: RNPlugin, overrides: CoolingOverrides): Promise<void> {
+  const pruned = pruneCoolingOverrides(overrides, Date.now(), await getCoolingParams(plugin));
   await plugin.storage.setSynced(await overridesKey(plugin), pruned);
 }
 

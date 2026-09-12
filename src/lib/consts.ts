@@ -602,3 +602,8 @@ export const PRIORITY_QUEUE_BURST_MAX = 200;
 // Queue setting: refresh the Priority Queue document you just practised when
 // the session ends, so it is ready before the next Practice.
 export const autoRefreshPriorityQueueId = 'auto-refresh-priority-queue';
+// Cooling window parameters (lib/priority_review_document/cooling.ts):
+//   days = clamp( ceil( interval × fraction ), min, max )
+export const coolingIntervalPercentId = 'cooling-interval-percent';
+export const coolingMinDaysId = 'cooling-min-days';
+export const coolingMaxDaysId = 'cooling-max-days';

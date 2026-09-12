@@ -21,6 +21,7 @@ import {
   buildGraphData,
   buildReviewDocTitle,
   findOrCreateMetadataRem,
+  findOrCreateGraphRem,
   findOrCreateTag,
   GraphItem,
   PRD_TAG_NAME,
@@ -159,7 +160,10 @@ export async function findOrCreatePriorityQueueDoc(
   ]);
   await setPriorityQueueBurst(plugin, doc, burst);
   await setPriorityQueueShieldSlice(plugin, doc, PRIORITY_QUEUE_SHIELD_SLICE);
+  // Status block first, graph second, entries after — created now so the
+  // first refill appends below them rather than above the graph.
   await findOrCreateMetadataRem(plugin, doc);
+  await findOrCreateGraphRem(plugin, doc);
   await attachToReviewQueueTag(plugin, doc);
   // The tag lookups the entries need, created up front so the first refill
   // does not create them mid-loop.
@@ -313,6 +317,9 @@ export async function refreshPriorityQueue(plugin: RNPlugin, options: RefreshOpt
 
   const addedFc = selection.items.filter((i) => i.type === 'flashcard').length;
   const addedInc = selection.items.length - addedFc;
+  // Entries are appended at the bottom; the status block and the graph must
+  // already be in place (and in that order) so they stay on top.
+  await ensureHeaderOrder(plugin, doc);
   if (selection.items.length) {
     progress(`Writing ${selection.items.length} entries…`);
     await writeEntries(plugin, doc, selection.items);
@@ -389,6 +396,24 @@ export async function refreshPriorityQueue(plugin: RNPlugin, options: RefreshOpt
     selection,
     elapsedMs,
   };
+}
+
+/**
+ * Status block at position 0, graph at position 1, whatever else the document
+ * holds after them. Creates either when missing; moves them when an earlier
+ * write left them below the entries.
+ */
+async function ensureHeaderOrder(plugin: RNPlugin, doc: PluginRem): Promise<void> {
+  const metadata = await findOrCreateMetadataRem(plugin, doc);
+  const graph = await findOrCreateGraphRem(plugin, doc);
+  const fresh = (await plugin.rem.findOne(doc._id)) ?? doc;
+  const children = (fresh.children as RemId[] | undefined) ?? [];
+  try {
+    if (metadata && children[0] !== metadata._id) await metadata.setParent(doc, 0);
+    if (graph && children[1] !== graph._id) await graph.setParent(doc, 1);
+  } catch (e) {
+    console.warn('[Priority Queue] Could not reorder the header children:', e);
+  }
 }
 
 /** Opens Practice for the document: RemNote's own Practice button is this route. */

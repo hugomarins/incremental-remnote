@@ -44,13 +44,13 @@ Once installed, the plugin adds a small **Incremental RemNote** 🌐 panel at th
 **Action buttons:**
 
 - **Sorting** — the [flashcard/incremental mix and randomness](Prioritization-&-Sorting.md#sorting-criteria) for your queue.
-- **Priority Review** — three actions on [Priority Review Documents](Priority-Review-Document.md), grouped into one control:
+- **Priority Queue** — three actions on the [Priority Queue](Priority-Review-Document.md), grouped into one control:
 
 | Button | What it does |
 |--------|--------------|
-| **Priority Review** | Creates a review document scoped to the document you currently have open. The same as **Create Priority Review Document** in the document menu, without opening the menu; the scope it will use is named under the button, and with no document open it falls back to the whole knowledge base |
-| 👁 | Opens the **Priority Review Queue** Rem — every review document you have built is tagged with it, so its references are the list of them. Go there to study from one you made earlier |
-| 🧹 | Runs [Clean Priority Review Documents](Priority-Review-Document.md#cleaning-a-review-document) — strips the entries you have already reviewed and offers to delete the documents that are finished |
+| **Priority Queue** | Opens the [Priority Queue popup](Priority-Review-Document.md#the-priority-queue-popup) with the document you currently have open offered as the scope — the scope it will use is named under the button — and the whole knowledge base as the alternative |
+| 👁 | Opens the **Priority Review Queue** Rem — every Priority Queue document is tagged with it, so its references are the list of them. Go there to practise one from your phone |
+| 🧹 | Runs [Clean Priority Review Documents](Priority-Review-Document.md#cleaning-up-leftovers) — drains reviewed entries out of every review document at once, and deletes leftover snapshot documents that are finished |
 
 The 👁 button says so if you have no review documents yet: the tag is created by the first one.
 

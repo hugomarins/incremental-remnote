@@ -16,7 +16,7 @@ import {
   evaluateCooling,
   isCardDue,
 } from './cooling';
-import { mergeCoolingCache, readCoolingOverrides } from './cooling_store';
+import { getCoolingParams, mergeCoolingCache, readCoolingOverrides } from './cooling_store';
 
 /**
  * Turns RemNote data into the plain facts the cooling engine judges.
@@ -132,7 +132,8 @@ function incRemLastReadAt(inc: IncrementalRem | undefined): number | null {
 
 export class CoolingScanner {
   readonly now: number;
-  readonly params: CoolingParams;
+  /** Set on load: the explicit option, else the IE settings, else the defaults. */
+  params: CoolingParams;
   /** Every Rem this scanner has judged, cooling or not. */
   readonly checkedIds = new Set<RemId>();
   /** Verdicts by Rem, for the Rems found cooling. */
@@ -159,7 +160,7 @@ export class CoolingScanner {
   private load(): Promise<void> {
     if (!this.loaded) {
       this.loaded = (async () => {
-        const [allCards, overrides, allIncRems, clozeExtractTag] = await Promise.all([
+        const [allCards, overrides, allIncRems, clozeExtractTag, params] = await Promise.all([
           this.plugin.card.getAll().catch((e) => {
             console.error('[Cooling] card.getAll failed:', e);
             return [] as CardLike[];
@@ -167,7 +168,9 @@ export class CoolingScanner {
           readCoolingOverrides(this.plugin),
           this.plugin.storage.getSession<IncrementalRem[]>(allIncrementalRemKey).then((v) => v || []),
           this.plugin.rem.findByName(['cloze-extract'], null).catch(() => null),
+          this.options.params ? Promise.resolve(this.options.params) : getCoolingParams(this.plugin),
         ]);
+        this.params = params;
         for (const card of allCards as any[]) {
           const owner = card.remId as RemId | undefined;
           if (!owner) continue;
