@@ -16,6 +16,8 @@ The **shield slice** keeps the first positions of each fill (20% by default, con
 
 📖 [Priority Queue](Priority-Review-Document.md)
 
+![The Priority Queue popup: scope, status card, fill target and shield slice, and the action buttons](assets/priority-queue-popup.png){ width="640" }
+
 ### 📝 Docs - what randomness does, and does not, guarantee
 
 The Sorting Criteria page said randomness left your high-priority core undisturbed. It does not: the lottery marks positions uniformly along the whole list, head included, so at 40% the most important due item is out of the first 25 positions in four draws out of ten. The page now says so, with measurements, and explains why that is brief in the live queue and why the Priority Queue's shield slice exists.
