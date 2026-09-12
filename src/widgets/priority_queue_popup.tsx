@@ -136,7 +136,8 @@ export function PriorityQueuePopup() {
   const [slicePct, setSlicePct] = useState<number>(Math.round(PRIORITY_QUEUE_SHIELD_SLICE * 100));
   const [result, setResult] = useState<RefreshResult | null>(null);
   const [notice, setNotice] = useState('');
-  const [control, setControl] = useState<Control>('refresh');
+  // Practice is the default action: it is where the daily loop ends up.
+  const [control, setControl] = useState<Control>('practice');
   const [coolingRow, setCoolingRow] = useState(0);
   const [rescanning, setRescanning] = useState(false);
 
@@ -381,9 +382,9 @@ export function PriorityQueuePopup() {
   const controls: Control[] = useMemo(() => {
     const list: Control[] = [];
     if (docScopeAvailable) list.push('scope-doc');
-    list.push('scope-kb', 'burst', 'slice', 'refresh', 'drain', 'refill', 'practice');
+    list.push('scope-kb', 'burst', 'slice', 'refresh', 'drain', 'refill');
     if (status?.exists) list.push('open');
-    list.push('cooling', 'sorting');
+    list.push('cooling', 'sorting', 'practice');
     return list;
   }, [docScopeAvailable, status?.exists]);
 
@@ -705,14 +706,28 @@ export function PriorityQueuePopup() {
   );
 
   const actionsRow = (
-    <div className="flex flex-wrap gap-2">
-      {actionButton('refresh', status?.exists ? 'Refresh' : 'Build', status?.exists ? 'Drain what you reviewed, then top up to the fill target' : 'Create the Priority Queue and fill it', primaryButton, () => runAction('refresh'))}
-      {actionButton('drain', 'Drain', 'Remove reviewed and cooling entries only', secondaryButton, () => runAction('drain'), !status?.exists)}
-      {actionButton('refill', 'Refill', 'Top up to the fill target without draining', secondaryButton, () => runAction('refill'), !status?.exists)}
-      {actionButton('practice', '▶ Practice', 'Open the queue on the Priority Queue document', secondaryButton, () => practice())}
-      {status?.exists && actionButton('open', 'Open document', 'Open the Priority Queue document as a page', secondaryButton, () => openDocument())}
-      {actionButton('cooling', `Cooling${coolingVerdicts.length ? ` (${coolingVerdicts.length})` : ''}`, 'Rems left out because a card that gives their answer away was reviewed recently', secondaryButton, () => { setTab('cooling'); setCoolingRow(0); })}
-      {actionButton('sorting', 'Sorting…', 'Sorting Criteria: randomness and flashcard ratio', secondaryButton, () => plugin.widget.openPopup('sorting_criteria'))}
+    <div className="flex items-stretch gap-3">
+      <div className="flex flex-wrap gap-2 flex-1 min-w-0 content-start">
+        {actionButton('refresh', status?.exists ? 'Refresh' : 'Build', status?.exists ? 'Drain what you reviewed, then top up to the fill target' : 'Create the Priority Queue and fill it', secondaryButton, () => runAction('refresh'))}
+        {actionButton('drain', 'Drain', 'Remove reviewed and cooling entries only', secondaryButton, () => runAction('drain'), !status?.exists)}
+        {actionButton('refill', 'Refill', 'Top up to the fill target without draining', secondaryButton, () => runAction('refill'), !status?.exists)}
+        {status?.exists && actionButton('open', 'Open document', 'Open the Priority Queue document as a page', secondaryButton, () => openDocument())}
+        {actionButton('cooling', `Cooling${coolingVerdicts.length ? ` (${coolingVerdicts.length})` : ''}`, 'Rems left out because a card that gives their answer away was reviewed recently', secondaryButton, () => { setTab('cooling'); setCoolingRow(0); })}
+        {actionButton('sorting', 'Sorting…', 'Sorting Criteria: randomness and flashcard ratio', secondaryButton, () => plugin.widget.openPopup('sorting_criteria'))}
+      </div>
+      {/* The default action, set apart: large, primary, and on the right. */}
+      <button
+        onClick={() => practice()}
+        onMouseEnter={() => setControl('practice')}
+        onMouseDown={(e) => e.preventDefault()}
+        disabled={phase === 'working'}
+        title={status?.exists ? 'Open the queue on the Priority Queue document' : 'Build the Priority Queue, then open the queue on it'}
+        className="px-5 rounded text-base font-semibold shrink-0 flex items-center justify-center gap-2"
+        style={{ ...primaryButton, minWidth: 150, minHeight: 56, ...(phase === 'working' ? disabledStyle : {}), ...ring('practice') }}
+      >
+        <span style={{ fontSize: 20 }}>▶</span>
+        <span>Practice</span>
+      </button>
     </div>
   );
 
