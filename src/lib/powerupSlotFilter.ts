@@ -3,7 +3,7 @@
 // These slots (Priority, Next Rep Date, Sources, PDF Metadata, View Modes, etc.) add clutter.
 
 import { RNPlugin, PluginRem, RemId, BuiltInPowerupCodes, PowerupSlotCodeMap } from '@remnote/plugin-sdk';
-import { powerupCode, prioritySlotCode, nextRepDateSlotCode, repHistorySlotCode, originalIncrementalDateSlotCode, dismissedPowerupCode, dismissedHistorySlotCode, dismissedDateSlotCode, videoExtractPowerupCode, videoExtractUrlSlotCode, videoExtractStartSlotCode, videoExtractEndSlotCode } from './consts';
+import { powerupCode, prioritySlotCode, nextRepDateSlotCode, repHistorySlotCode, originalIncrementalDateSlotCode, dismissedPowerupCode, dismissedHistorySlotCode, dismissedDateSlotCode, videoExtractPowerupCode, videoExtractUrlSlotCode, videoExtractStartSlotCode, videoExtractEndSlotCode, priorityQueuePowerupCode, priorityQueueScopeSlotCode, priorityQueueBurstSlotCode, priorityQueueLastRefreshSlotCode, priorityQueueShieldSliceSlotCode, priorityQueueSkipPausedSlotCode, priorityQueuePausedThresholdSlotCode, priorityGraphPowerupCode, priorityGraphDataSlotCode } from './consts';
 import { CARD_PRIORITY_CODE, PRIORITY_SLOT, SOURCE_SLOT, LAST_UPDATED_SLOT } from './card_priority/types';
 import { safeRemTextToString } from './pdfUtils';
 import { getPowerupSlotByCodeSafe } from './powerup_slot_compat';
@@ -27,6 +27,23 @@ const PLUGIN_POWERUP_SLOT_CONFIGS = [
   {
     powerupCode: videoExtractPowerupCode, // 'videoExtract'
     slotCodes: [videoExtractUrlSlotCode, videoExtractStartSlotCode, videoExtractEndSlotCode]
+  },
+  {
+    // A Priority Queue document's hidden config. Must be filtered, or its slot
+    // rows read as review-document entries (see priority_review_document/children.ts).
+    powerupCode: priorityQueuePowerupCode, // 'priority_queue_doc'
+    slotCodes: [
+      priorityQueueScopeSlotCode,
+      priorityQueueBurstSlotCode,
+      priorityQueueLastRefreshSlotCode,
+      priorityQueueShieldSliceSlotCode,
+      priorityQueueSkipPausedSlotCode,
+      priorityQueuePausedThresholdSlotCode,
+    ]
+  },
+  {
+    powerupCode: priorityGraphPowerupCode, // 'priority_review_graph'
+    slotCodes: [priorityGraphDataSlotCode]
   }
 ];
 

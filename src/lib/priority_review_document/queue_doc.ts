@@ -36,6 +36,7 @@ import { selectPriorityItems, SelectionResult } from './select';
 import { cleanPriorityReviewDocuments, PrdDocReport, scanPriorityReviewDocuments } from './clean';
 import { CoolingScanner } from './cooling_gather';
 import { CoolingVerdict } from './cooling';
+import { readContentChildren } from './children';
 
 /**
  * The persistent Priority Queue document — one per scope.
@@ -244,8 +245,7 @@ export interface RefreshResult {
 
 /** The target Rem ids the document's entries point at, by entry kind. */
 async function readDocTargets(plugin: RNPlugin, doc: PluginRem): Promise<Map<RemId, RemId>> {
-  const childIds = doc.children || [];
-  const children = childIds.length ? (await plugin.rem.findMany(childIds)) || [] : [];
+  const children = await readContentChildren(plugin, doc);
   const targets = new Map<RemId, RemId>(); // entryId -> targetId
   for (const child of children) {
     if (!Array.isArray(child.text)) continue;
@@ -452,11 +452,11 @@ export async function refreshPriorityQueue(plugin: RNPlugin, options: RefreshOpt
 async function ensureHeaderOrder(plugin: RNPlugin, doc: PluginRem): Promise<void> {
   const metadata = await findOrCreateMetadataRem(plugin, doc);
   const graph = await findOrCreateGraphRem(plugin, doc);
-  const fresh = (await plugin.rem.findOne(doc._id)) ?? doc;
-  const children = (fresh.children as RemId[] | undefined) ?? [];
+  // Positions are asked of each Rem: neither the lazy `children` field nor
+  // getChildrenRem() can be trusted for order (see children.ts).
   try {
-    if (metadata && children[0] !== metadata._id) await metadata.setParent(doc, 0);
-    if (graph && children[1] !== graph._id) await graph.setParent(doc, 1);
+    if (metadata && (await metadata.positionAmongstSiblings()) !== 0) await metadata.setParent(doc, 0);
+    if (graph && (await graph.positionAmongstSiblings()) !== 1) await graph.setParent(doc, 1);
   } catch (e) {
     console.warn('[Priority Queue] Could not reorder the header children:', e);
   }
