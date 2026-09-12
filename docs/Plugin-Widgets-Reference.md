@@ -578,7 +578,9 @@ The plugin's hub, at the bottom of the left sidebar. Header controls: **⌨** ([
 
 Two action buttons: **Sorting** ([Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria)), and a **Priority Queue** group of three — the label opens the [Priority Queue popup](#614-priority-queue-popup) with the document you currently have open as the offered scope (naming it under the button), **👁** opens the **Priority Review Queue** Rem that lists every Priority Queue document, and **▶** opens the queue on the full-KB Priority Queue, building it first if needed.
 
-![The Incremental RemNote panel in the sidebar](assets/panel-hub-2.png){ width="400" }
+![The Incremental RemNote panel in the sidebar](assets/panel-hub-3.png){ width="500" }
+
+![The Incremental RemNote panel in the sidebar - Tip expanded](assets/panel-hub-2.png){ width="500" }
 
 Below the shortcuts it shows **one onboarding tip per session**, with **I Got It** (retires the tip permanently, per knowledge base), **✕** (returns it to the pile; the panel also goes quiet for two hours), **Learn More** (opens the tip's documentation section) and **All Tips** (opens the full list). Either answer closes the tip area until the next start — it never chains into a second tip, and never swaps the tip for another one mid-session. Tips still in the pile are offered in rotation, least recently seen first, so none repeats until the others have had their turn.
 
