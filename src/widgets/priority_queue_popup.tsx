@@ -133,6 +133,13 @@ export function PriorityQueuePopup() {
    * built from a queue would only ever re-select what is already in it.
    */
   const [scopeBlocked, setScopeBlocked] = useState<boolean | null>(null);
+  /**
+   * Whether the document you came from already has a Priority Queue of its own.
+   * Only then does the popup open on it; otherwise it opens on the Full
+   * Knowledge Base, since a document scope with no queue has nothing to show
+   * and its shield takes seconds to compute on a large document.
+   */
+  const [docHasQueue, setDocHasQueue] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
@@ -168,7 +175,19 @@ export function PriorityQueuePopup() {
           blocked = true;
         }
       }
-      if (!cancelled) setScopeBlocked(blocked);
+      let hasQueue = false;
+      if (context?.scopeRemId && !blocked) {
+        try {
+          hasQueue = !!(await findPriorityQueueDoc(plugin, context.scopeRemId));
+        } catch {
+          hasQueue = false;
+        }
+      }
+      if (cancelled) return;
+      // docHasQueue first: the default-scope effect waits on scopeBlocked, and
+      // these two updates are not batched outside an event handler.
+      setDocHasQueue(hasQueue);
+      setScopeBlocked(blocked);
     })();
     return () => {
       cancelled = true;
@@ -177,12 +196,14 @@ export function PriorityQueuePopup() {
 
   const docScopeAvailable = !!context?.scopeRemId && scopeBlocked === false;
 
-  // Default scope: the document you came from, when there is one and it qualifies.
+  // Default scope: the document you came from, when it qualifies AND already has
+  // a Priority Queue of its own; the Full Knowledge Base otherwise. The document
+  // stays selectable either way.
   useEffect(() => {
     if (context === undefined || scopeBlocked === null) return;
-    if (useFullKB === null) setUseFullKB(!docScopeAvailable);
+    if (useFullKB === null) setUseFullKB(!(docScopeAvailable && docHasQueue));
     else if (!docScopeAvailable && useFullKB === false) setUseFullKB(true);
-  }, [context, scopeBlocked, docScopeAvailable, useFullKB]);
+  }, [context, scopeBlocked, docScopeAvailable, docHasQueue, useFullKB]);
 
   const scopeRemId: RemId | null = useFullKB || !docScopeAvailable ? null : context?.scopeRemId ?? null;
   const scopeLabel = scopeRemId ? context?.scopeName || 'Current document' : 'Full Knowledge Base';

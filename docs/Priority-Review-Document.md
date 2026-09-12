@@ -24,7 +24,7 @@ Everything happens from one popup: **Priority Queue** in the Command Palette (qu
 
 ![The Priority Queue popup: scope, status card, fill target and shield slice, and the action buttons](assets/priority-queue-popup.png){ width="640" }
 
-* **Scope** — the document you came from, or the whole knowledge base. A review document is never offered as a scope: a queue built from a queue would only re-select what it already holds.
+* **Scope** — the document you came from, or the whole knowledge base. The popup opens on the document only when it already has a Priority Queue of its own, and on the whole knowledge base otherwise; the document stays one click away to build one. A review document is never offered as a scope: a queue built from a queue would only re-select what it already holds.
 * **Status** — what the document holds, how many flashcard Rems and IncRems are still due, how many entries a refresh would drain and how many of those are cooling, the last refresh, and the current settings. Below it, the **card shield now** and **after this document** — the priority the shield would reach once every entry is reviewed — for the KB or for the document scope, with cooling Rems already excluded.
 * **Fill target** — how many items the document is topped up to. `25`, `50` and `100` are one click; any number from 5 to 200 works. This is the size of one *burst*: one session works through one fill, and the refresh at the end prepares the next.
 * **Shield slice** — the share of each fill taken strictly by priority before your randomness applies. See [why it exists](#the-shield-slice). `0%` follows your [Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria) exactly.

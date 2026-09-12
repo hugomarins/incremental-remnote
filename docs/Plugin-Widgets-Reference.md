@@ -643,7 +643,7 @@ Finds the Rems in an anchor's orbit that generate no flashcards, and fixes the t
 
 The front door to the persistent review document, one per scope.
 
-- **Scope** — the document you came from, or the whole knowledge base. A review document is never offered.
+- **Scope** — the document you came from, or the whole knowledge base. Opens on the document only if it already has its own Priority Queue, otherwise on the whole knowledge base. A review document is never offered.
 - **Status card** — what the document holds, what is still due, what a refresh would drain (and how much of it is cooling), the last refresh, and the **card shield now → after this document** for that scope, cooling Rems excluded.
 - **Fill target** (25 / 50 / 100 or any number), **shield slice** (% of each fill filled strictly by priority; 0 follows the Sorting Criteria exactly), and **Skip paused documents** with its always-keep priority, all stored on the document.
 - **Build / Refresh**, **Drain**, **Refill**, **▶ Practice** (the same route as the document's Practice button), **Open document**, **Cooling**, **Sorting…** — none of which runs while a queue is open.
