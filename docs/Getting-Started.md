@@ -30,7 +30,7 @@ For a deeper understanding, see [What is Incrementalism?](What-is-Incrementalism
 
 Once installed, the plugin adds a small **Incremental RemNote** 🌐 panel at the bottom of the left sidebar. It is the one fixed place to reach the plugin from, and where the onboarding tips live.
 
-![The Incremental RemNote panel in the sidebar: header controls, the Sorting button, the Priority Review group with its eye and broom actions, the scope line, and one onboarding tip with its I Got It, Learn More and All Tips buttons](assets/panel-hub-2.png){ width="400" }
+![The Incremental RemNote panel in the sidebar: header controls, the Sorting button, the Priority Queue group with its eye and play actions, the scope line, and one onboarding tip with its I Got It, Learn More and All Tips buttons](assets/panel-hub-2.png){ width="400" }
 
 **In the header:**
 
@@ -50,7 +50,7 @@ Once installed, the plugin adds a small **Incremental RemNote** 🌐 panel at th
 |--------|--------------|
 | **Priority Queue** | Opens the [Priority Queue popup](Priority-Review-Document.md#the-priority-queue-popup) with the document you currently have open offered as the scope — the scope it will use is named under the button — and the whole knowledge base as the alternative |
 | 👁 | Opens the **Priority Review Queue** Rem — every Priority Queue document is tagged with it, so its references are the list of them. Go there to practise one from your phone |
-| 🧹 | Runs [Clean Priority Review Documents](Priority-Review-Document.md#cleaning-up-leftovers) — drains reviewed entries out of every review document at once, and deletes leftover snapshot documents that are finished |
+| ▶ | Opens the queue on the **full-KB** Priority Queue, building the document first if there is none yet. Document-scoped queues are practised from the popup |
 
 The 👁 button says so if you have no review documents yet: the tag is created by the first one.
 

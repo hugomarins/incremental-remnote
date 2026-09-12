@@ -36,7 +36,7 @@ The popup is keyboard-driven: `←` `→` move the selection ring across the con
 
 ### Practise it
 
-**▶ Practice** opens the queue on the document — the same thing as its own Practice button. With no document yet, it builds one first. The command **Practice Priority Queue (Full Knowledge Base)** (quick code `prqgo`) does the same from anywhere.
+**▶ Practice** opens the queue on the document — the same thing as its own Practice button. With no document yet, it builds one first. The **▶** button of the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel) and the command **Practice Priority Queue (Full Knowledge Base)** (quick code `prqgo`) do the same for the whole knowledge base from anywhere.
 
 While you practise, the plugin knows where the items came from: the [Priority Shield](Prioritization-&-Sorting.md#priority-shield) and its history are computed against the **original scope** (the document you chose, or the whole knowledge base), not against the review document itself. See [Smart Scope](#smart-scope--priority-shield-integration).
 
@@ -225,7 +225,7 @@ Even though you are reviewing a generated list, the plugin knows where the items
 
 ## Cleaning up leftovers
 
-The **Clean Priority Review Documents** command (quick code `clean`, and the **🧹** button of the panel) is the manual counterpart of Drain, across every document tagged `#Priority Review Queue` at once: it works out which entries still have something due and removes the rest after you confirm, per document. It also handles any timestamped snapshot documents built by earlier versions of the plugin, and offers to delete those once no flashcard in them is due.
+The **Clean Priority Review Documents** command (quick code `clean`) is the manual counterpart of Drain, across every document tagged `#Priority Review Queue` at once: it works out which entries still have something due and removes the rest after you confirm, per document. It also handles any timestamped snapshot documents built by earlier versions of the plugin, and offers to delete those once no flashcard in them is due.
 
 A Priority Queue document is never deleted by it — it is emptied and refilled, not thrown away — and the same rules protect your own writing everywhere: an entry with notes written under it, an entry you typed next to, or a bullet of your own in the document is never touched, and a document holding any of these is never deleted.
 
