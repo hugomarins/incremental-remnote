@@ -1,5 +1,4 @@
 import { RNPlugin, PluginRem, RemId } from '@remnote/plugin-sdk';
-import { getAllPowerupSlotIds } from '../powerupSlotFilter';
 
 /**
  * Reading a Rem's children reliably.
@@ -10,19 +9,28 @@ import { getAllPowerupSlotIds } from '../powerupSlotFilter';
  * something loads the Rem's children — opening the document, expanding it.
  * For a document nobody has opened this session the field is `[]`.
  *
- * `getChildrenRem()` goes through `childrenRemAsync()`, which reads the child
- * ids off the always-loaded structure graph (`getTinyGraph().
- * orderedChildrenNumberIds`) and fetches the Rems — correct whether or not the
- * document was ever opened. It is one bridge call per parent.
+ * Two reliable reads, both walking the always-loaded structure graph
+ * (`childrenRemAsync()` → `getTinyGraph().orderedChildrenNumberIds`):
  *
- * Measured consequence of getting this wrong: the Priority Queue popup reported
- * "Holding 0 entries" for a full document until it was opened — and a Refresh in
- * that state would have refilled 25 duplicates and a second status block and
- * graph, while Clean could have offered to delete a document that still held due
- * entries and notes.
+ *   - `getChildrenRem()` — one bridge call, the direct children.
+ *   - `getDescendants()` — ONE bridge call for the whole subtree; RemNote does
+ *     the recursion on its side. Every returned Rem carries `parent`, so the
+ *     children of any node in the subtree, and their counts, come out of a
+ *     single call by grouping on it.
  *
- * ORDER is not promised by `getChildrenRem()`. Callers that care about position
- * must ask `positionAmongstSiblings()`.
+ * Cost matters: counting each entry's children with a `getChildrenRem()` per
+ * entry is one bridge call per entry. `readChildrenWithCounts` gets the same
+ * answer from one call per document.
+ *
+ * ORDER is promised by neither. Callers that care about position must ask
+ * `positionAmongstSiblings()`.
+ *
+ * Powerup slots are not filtered here. Every slot this plugin's review
+ * documents carry (the Priority Queue config, the graph data) is declared
+ * `hidden`, and hidden slots have no Rem representation — they never appear as
+ * children. The general slot filter (lib/powerupSlotFilter.ts) resolves slot
+ * definitions KB-wide on first use, which measured ~12 s, for rows that cannot
+ * exist here.
  */
 export async function readChildren(plugin: RNPlugin, rem: PluginRem): Promise<PluginRem[]> {
   try {
@@ -36,59 +44,45 @@ export async function readChildren(plugin: RNPlugin, rem: PluginRem): Promise<Pl
   }
 }
 
-/** True when the text is exactly one Rem reference to a powerup slot definition. */
-function isSlotRow(rem: PluginRem, slotIds: ReadonlySet<RemId>): boolean {
-  const text = rem.text;
-  if (!Array.isArray(text) || slotIds.size === 0) return false;
-  let refId: RemId | null = null;
-  for (const el of text) {
-    if (typeof el === 'string') {
-      if (el.trim()) return false;
-      continue;
-    }
-    if (el && typeof el === 'object' && (el as any).i === 'q' && (el as any)._id) {
-      if (refId) return false;
-      refId = (el as any)._id as RemId;
-      continue;
-    }
-    return false;
-  }
-  return !!refId && slotIds.has(refId);
+export interface ChildrenWithCounts {
+  children: PluginRem[];
+  /** Number of direct children of each child. Absent key = 0. */
+  childCounts: Map<RemId, number>;
 }
 
 /**
- * Children minus powerup slot rows.
+ * A Rem's direct children, and how many children each of THEM has, from one
+ * `getDescendants()` call. Used where "is there anything written under this
+ * entry" decides whether it may be deleted — a question a lazily empty list
+ * must never answer.
  *
- * A slot value can be stored as a child Rem whose text is a single reference to
- * the slot definition (`getOrCreateSlotChildAsync` in app.asar) — the very shape
- * of a review-document entry. Left in, a Priority Queue document's own hidden
- * config (scope, fill target, …) would be counted as entries, judged "stale",
- * and drained. Recognised locally against the cached slot-definition ids, so it
- * costs no call per child.
+ * Falls back to one `getChildrenRem()` per child if the descendants read throws.
  */
-export async function readContentChildren(plugin: RNPlugin, rem: PluginRem): Promise<PluginRem[]> {
-  const [children, slotIds] = await Promise.all([
-    readChildren(plugin, rem),
-    getAllPowerupSlotIds(plugin).catch(() => new Set<RemId>()),
-  ]);
-  return children.filter((c) => !isSlotRow(c, slotIds));
-}
-
-/**
- * How many content children each Rem has, read in concurrent windows. Used for
- * the "notes written under an entry" checks, which must never read a lazily
- * empty list as "no notes".
- */
-export async function contentChildCounts(
-  plugin: RNPlugin,
-  rems: PluginRem[],
-  windowSize = 16
-): Promise<Map<RemId, number>> {
-  const counts = new Map<RemId, number>();
-  for (let i = 0; i < rems.length; i += windowSize) {
-    const window = rems.slice(i, i + windowSize);
-    const results = await Promise.all(window.map((r) => readContentChildren(plugin, r)));
-    window.forEach((r, idx) => counts.set(r._id, results[idx].length));
+export async function readChildrenWithCounts(plugin: RNPlugin, rem: PluginRem): Promise<ChildrenWithCounts> {
+  try {
+    const descendants = ((await rem.getDescendants()) || []) as PluginRem[];
+    const children: PluginRem[] = [];
+    const childCounts = new Map<RemId, number>();
+    for (const d of descendants) {
+      const parent = d.parent as RemId | undefined;
+      if (!parent) continue;
+      if (parent === rem._id) children.push(d);
+      else childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
+    }
+    // Only keep counts for direct children; deeper parents were counted too.
+    const childIds = new Set(children.map((c) => c._id));
+    for (const id of [...childCounts.keys()]) if (!childIds.has(id)) childCounts.delete(id);
+    return { children, childCounts };
+  } catch (e) {
+    console.warn(`[Children] getDescendants failed for ${rem._id}, counting child by child:`, e);
+    const children = await readChildren(plugin, rem);
+    const childCounts = new Map<RemId, number>();
+    await Promise.all(
+      children.map(async (c) => {
+        const n = (await readChildren(plugin, c)).length;
+        if (n) childCounts.set(c._id, n);
+      })
+    );
+    return { children, childCounts };
   }
-  return counts;
 }

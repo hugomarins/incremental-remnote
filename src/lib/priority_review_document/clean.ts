@@ -2,7 +2,7 @@ import { RNPlugin, PluginRem, RemId, RichTextInterface } from '@remnote/plugin-s
 import dayjs from 'dayjs';
 import { IncrementalRem } from '../incremental_rem';
 import { allIncrementalRemKey, priorityGraphPowerupCode, priorityQueuePowerupCode } from '../consts';
-import { contentChildCounts, readContentChildren } from './children';
+import { readChildren, readChildrenWithCounts } from './children';
 
 /**
  * Cleaning a Priority Review Document of entries that are no longer due.
@@ -404,12 +404,11 @@ export async function scanPriorityReviewDocuments(
     const docName = (await flattenTitle(plugin, doc.text)) || 'Untitled review document';
     onProgress?.(`Document ${docIndex} of ${docs.length}: ${docName.slice(0, 60)}`);
 
-    // Read through getChildrenRem, never the lazy `children` field: for a
-    // document not opened this session that field is empty (see children.ts).
-    // The child counts guard the "notes written under it" checks below, which
-    // must never mistake an unloaded list for an empty one.
-    const children = await readContentChildren(plugin, doc);
-    const childCounts = await contentChildCounts(plugin, children);
+    // Never the lazy `children` field: for a document not opened this session
+    // it is empty (see children.ts). One getDescendants call gives the entries
+    // and how many children each holds — the "notes written under it" checks
+    // below must never mistake an unloaded list for an empty one.
+    const { children, childCounts } = await readChildrenWithCounts(plugin, doc);
     const countOf = (rem: PluginRem) => childCounts.get(rem._id) ?? 0;
 
     // One lookup for every target in this document, instead of one per entry.
@@ -728,7 +727,7 @@ async function stampMetadata(plugin: RNPlugin, doc: PrdDocReport, removed: numbe
   if (removed === 0) return;
   try {
     const docRem = await plugin.rem.findOne(doc.docRemId);
-    const children = docRem ? await readContentChildren(plugin, docRem) : [];
+    const children = docRem ? await readChildren(plugin, docRem) : [];
     const metadata = children.find((c) => flattenRichText(c.text).startsWith('Scope: '));
     if (!metadata) return;
 

@@ -19,7 +19,6 @@ import {
   findPriorityQueueDoc,
   isQueueOpen,
   practicePriorityQueue,
-  readDocTargetIds,
   refreshPriorityQueue,
   RefreshMode,
   RefreshResult,
@@ -196,15 +195,44 @@ export function PriorityQueuePopup() {
   }, [coolingCache]);
   const coolingIds = useMemo(() => new Set(coolingVerdicts.map((v) => v.remId)), [coolingVerdicts]);
 
+  /**
+   * Every load is numbered, and a result is applied only if no newer load has
+   * started since. Switching scope while a slow load is still running used to
+   * let the old load finish last and overwrite the new status — a document
+   * scope's "no Priority Queue yet" landing under the Full Knowledge Base label.
+   */
+  const loadGeneration = useRef(0);
+  /** Comprehensive scope per document, built once per popup — it can take seconds. */
+  const scopeIdsCache = useRef(new Map<RemId, Promise<Set<RemId>>>());
+  const [outlookPending, setOutlookPending] = useState(false);
+
+  const scopeIdsFor = (remId: RemId): Promise<Set<RemId>> => {
+    let pending = scopeIdsCache.current.get(remId);
+    if (!pending) {
+      pending = buildComprehensiveScope(plugin, remId);
+      // A failed build must not be cached as a permanent failure.
+      pending.catch(() => scopeIdsCache.current.delete(remId));
+      scopeIdsCache.current.set(remId, pending);
+    }
+    return pending;
+  };
+
   const loadStatus = useCallback(async () => {
     if (useFullKB === null) return;
+    const generation = ++loadGeneration.current;
+    const isCurrent = () => generation === loadGeneration.current;
     setPhase('loading');
     setError('');
+    setOutlookPending(false);
     try {
-      // The document scope, for a document-scoped shield: the same comprehensive
-      // scope the queue uses at QueueEnter (descendants, portals, references).
-      const scopeIds = scopeRemId ? await buildComprehensiveScope(plugin, scopeRemId) : null;
+      // Status first: finding the document and scanning it is quick. The
+      // document-scoped shield needs the comprehensive scope, which on a large
+      // document takes several seconds, so it fills in afterwards instead of
+      // holding the whole status back.
       const info = await findPriorityQueueDoc(plugin, scopeRemId);
+      if (!isCurrent()) return;
+
+      let targets: RemId[] = [];
       if (!info) {
         setStatus({
           exists: false,
@@ -216,21 +244,27 @@ export function PriorityQueuePopup() {
           pausedThreshold: PRIORITY_QUEUE_PAUSED_THRESHOLD,
           lastRefresh: null,
           report: null,
-          outlook: await computeShieldOutlook(plugin, new Set(), coolingIds, scopeIds),
+          outlook: null,
         });
         setBurst(PRIORITY_QUEUE_DEFAULT_BURST);
         setSlicePct(Math.round(PRIORITY_QUEUE_SHIELD_SLICE * 100));
         setSkipPaused(PRIORITY_QUEUE_SKIP_PAUSED);
         setPausedThreshold(PRIORITY_QUEUE_PAUSED_THRESHOLD);
         setPhase('ready');
-        return;
-      }
-      const [scan, targets] = await Promise.all([
-        scanPriorityReviewDocuments(plugin, undefined, { docIds: [info.doc._id], coolingRemIds: coolingIds }),
-        readDocTargetIds(plugin, info.doc),
-      ]);
+      } else {
+      // The entry targets come out of the scan itself: reading the document a
+      // second time only doubled the cost.
+      const scan = await scanPriorityReviewDocuments(plugin, undefined, {
+        docIds: [info.doc._id],
+        coolingRemIds: coolingIds,
+      });
+      if (!isCurrent()) return;
       const report = scan.docs[0] ?? null;
-      const outlook = await computeShieldOutlook(plugin, new Set(targets), coolingIds, scopeIds);
+      targets = report
+        ? [...report.dueEntries, ...report.removableEntries, ...report.keptEntries, ...report.unknownEntries]
+            .map((e) => e.targetRemId)
+            .filter((id): id is RemId => !!id)
+        : [];
       setStatus({
         exists: true,
         docName: report?.docName ?? 'Priority Queue',
@@ -241,16 +275,28 @@ export function PriorityQueuePopup() {
         pausedThreshold: info.pausedThreshold,
         lastRefresh: info.lastRefresh,
         report,
-        outlook,
+        outlook: null,
       });
       setBurst(info.burst);
       setSlicePct(Math.round(info.shieldSlice * 100));
       setSkipPaused(info.skipPaused);
       setPausedThreshold(info.pausedThreshold);
       setPhase('ready');
+      }
+
+      // Then the shield outlook, patched into the status it belongs to.
+      setOutlookPending(true);
+      const scopeIds = scopeRemId ? await scopeIdsFor(scopeRemId) : null;
+      if (!isCurrent()) return;
+      const outlook = await computeShieldOutlook(plugin, new Set(targets), coolingIds, scopeIds);
+      if (!isCurrent()) return;
+      setStatus((prev) => (prev ? { ...prev, outlook } : prev));
+      setOutlookPending(false);
     } catch (e) {
+      if (!isCurrent()) return;
       console.error('[Priority Queue] status failed:', e);
       setError((e as any)?.message ?? String(e));
+      setOutlookPending(false);
       setPhase('error');
     }
   }, [plugin, scopeRemId, useFullKB, coolingIds]);
@@ -657,6 +703,11 @@ export function PriorityQueuePopup() {
             {willAdd > 0 && phase === 'ready' && <> · a refresh adds up to {willAdd}</>}
           </div>
         </>
+      )}
+      {!status?.outlook && outlookPending && (
+        <div className="text-xs pt-1" style={{ ...faint, borderTop: '1px solid var(--rn-clr-border-opaque, rgba(128,128,128,0.2))' }}>
+          {scopeRemId ? 'Computing the document card shield…' : 'Computing the KB card shield…'}
+        </div>
       )}
       {status?.outlook && (
         <div className="text-xs pt-1" style={{ ...muted, borderTop: '1px solid var(--rn-clr-border-opaque, rgba(128,128,128,0.2))' }}>

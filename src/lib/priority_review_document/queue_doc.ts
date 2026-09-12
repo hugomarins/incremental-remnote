@@ -36,7 +36,7 @@ import { selectPriorityItems, SelectionResult } from './select';
 import { cleanPriorityReviewDocuments, PrdDocReport, scanPriorityReviewDocuments } from './clean';
 import { CoolingScanner } from './cooling_gather';
 import { CoolingVerdict } from './cooling';
-import { readContentChildren } from './children';
+import { readChildren } from './children';
 
 /**
  * The persistent Priority Queue document — one per scope.
@@ -245,7 +245,7 @@ export interface RefreshResult {
 
 /** The target Rem ids the document's entries point at, by entry kind. */
 async function readDocTargets(plugin: RNPlugin, doc: PluginRem): Promise<Map<RemId, RemId>> {
-  const children = await readContentChildren(plugin, doc);
+  const children = await readChildren(plugin, doc);
   const targets = new Map<RemId, RemId>(); // entryId -> targetId
   for (const child of children) {
     if (!Array.isArray(child.text)) continue;

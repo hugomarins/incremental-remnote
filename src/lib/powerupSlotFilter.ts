@@ -3,7 +3,7 @@
 // These slots (Priority, Next Rep Date, Sources, PDF Metadata, View Modes, etc.) add clutter.
 
 import { RNPlugin, PluginRem, RemId, BuiltInPowerupCodes, PowerupSlotCodeMap } from '@remnote/plugin-sdk';
-import { powerupCode, prioritySlotCode, nextRepDateSlotCode, repHistorySlotCode, originalIncrementalDateSlotCode, dismissedPowerupCode, dismissedHistorySlotCode, dismissedDateSlotCode, videoExtractPowerupCode, videoExtractUrlSlotCode, videoExtractStartSlotCode, videoExtractEndSlotCode, priorityQueuePowerupCode, priorityQueueScopeSlotCode, priorityQueueBurstSlotCode, priorityQueueLastRefreshSlotCode, priorityQueueShieldSliceSlotCode, priorityQueueSkipPausedSlotCode, priorityQueuePausedThresholdSlotCode, priorityGraphPowerupCode, priorityGraphDataSlotCode } from './consts';
+import { powerupCode, prioritySlotCode, nextRepDateSlotCode, repHistorySlotCode, originalIncrementalDateSlotCode, dismissedPowerupCode, dismissedHistorySlotCode, dismissedDateSlotCode, videoExtractPowerupCode, videoExtractUrlSlotCode, videoExtractStartSlotCode, videoExtractEndSlotCode } from './consts';
 import { CARD_PRIORITY_CODE, PRIORITY_SLOT, SOURCE_SLOT, LAST_UPDATED_SLOT } from './card_priority/types';
 import { safeRemTextToString } from './pdfUtils';
 import { getPowerupSlotByCodeSafe } from './powerup_slot_compat';
@@ -27,23 +27,6 @@ const PLUGIN_POWERUP_SLOT_CONFIGS = [
   {
     powerupCode: videoExtractPowerupCode, // 'videoExtract'
     slotCodes: [videoExtractUrlSlotCode, videoExtractStartSlotCode, videoExtractEndSlotCode]
-  },
-  {
-    // A Priority Queue document's hidden config. Must be filtered, or its slot
-    // rows read as review-document entries (see priority_review_document/children.ts).
-    powerupCode: priorityQueuePowerupCode, // 'priority_queue_doc'
-    slotCodes: [
-      priorityQueueScopeSlotCode,
-      priorityQueueBurstSlotCode,
-      priorityQueueLastRefreshSlotCode,
-      priorityQueueShieldSliceSlotCode,
-      priorityQueueSkipPausedSlotCode,
-      priorityQueuePausedThresholdSlotCode,
-    ]
-  },
-  {
-    powerupCode: priorityGraphPowerupCode, // 'priority_review_graph'
-    slotCodes: [priorityGraphDataSlotCode]
   }
 ];
 
@@ -174,8 +157,25 @@ function recordSlotNameOwner(index: Map<string, Set<string>>, name: string, code
  * Initializes the cache of powerup slot RemIds
  * These are the slot DEFINITION rems (the tag rems that property children reference)
  */
-export async function initPowerupSlotIdsCache(plugin: RNPlugin): Promise<void> {
-  powerupSlotIdsCache = new Map();
+let slotCacheInFlight: Promise<void> | null = null;
+
+/**
+ * Builds the slot caches once, however many callers ask at the same time.
+ * Concurrent callers share the in-flight build and only see the caches once they
+ * are complete — they used to be published empty at the start, so a second
+ * caller got a partial set and could let a slot row through.
+ */
+export function initPowerupSlotIdsCache(plugin: RNPlugin): Promise<void> {
+  if (!slotCacheInFlight) {
+    slotCacheInFlight = buildPowerupSlotIdsCache(plugin).finally(() => {
+      slotCacheInFlight = null;
+    });
+  }
+  return slotCacheInFlight;
+}
+
+async function buildPowerupSlotIdsCache(plugin: RNPlugin): Promise<void> {
+  const idCache = new Map<string, RemId>();
 
   // Seed the name -> owners index from the static tables. Anything resolved below
   // adds to it (including localized names), it never replaces these.
@@ -193,7 +193,7 @@ export async function initPowerupSlotIdsCache(plugin: RNPlugin): Promise<void> {
         const slotRem = await getPowerupSlotByCodeSafe(plugin, config.powerupCode, slotCode);
         if (slotRem) {
           const cacheKey = `${config.powerupCode}:${slotCode}`;
-          powerupSlotIdsCache.set(cacheKey, slotRem._id);
+          idCache.set(cacheKey, slotRem._id);
           // The rem's own text is the authoritative display name — a renamed or
           // localized slot only matches by name because of this.
           try {
@@ -233,7 +233,7 @@ export async function initPowerupSlotIdsCache(plugin: RNPlugin): Promise<void> {
             continue;
           }
           const slotName = await safeRemTextToString(plugin, child.text).catch(() => '');
-          powerupSlotIdsCache!.set(`builtin:${code}:${slotName || child._id}`, child._id);
+          idCache.set(`builtin:${code}:${slotName || child._id}`, child._id);
           if (slotName) recordSlotNameOwner(nameOwners, slotName, code);
         }
       } catch {
@@ -242,9 +242,10 @@ export async function initPowerupSlotIdsCache(plugin: RNPlugin): Promise<void> {
     })
   );
 
+  powerupSlotIdsCache = idCache;
   slotNameOwnersCache = nameOwners;
 
-  console.log(`[PowerupSlotFilter] Cached ${powerupSlotIdsCache.size} slot IDs total`);
+  console.log(`[PowerupSlotFilter] Cached ${idCache.size} slot IDs total`);
 }
 
 /**
@@ -252,7 +253,7 @@ export async function initPowerupSlotIdsCache(plugin: RNPlugin): Promise<void> {
  * Initializes the cache if needed.
  */
 async function getSlotNameOwners(plugin: RNPlugin): Promise<Map<string, Set<string>>> {
-  if (!slotNameOwnersCache) {
+  if (!slotNameOwnersCache || slotCacheInFlight) {
     await initPowerupSlotIdsCache(plugin);
   }
   return slotNameOwnersCache!;
@@ -263,7 +264,7 @@ async function getSlotNameOwners(plugin: RNPlugin): Promise<Map<string, Set<stri
  * Initializes cache if needed
  */
 export async function getAllPowerupSlotIds(plugin: RNPlugin): Promise<Set<RemId>> {
-  if (!powerupSlotIdsCache) {
+  if (!powerupSlotIdsCache || slotCacheInFlight) {
     await initPowerupSlotIdsCache(plugin);
   }
 
