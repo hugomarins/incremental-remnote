@@ -66,7 +66,9 @@ Formulae, in KaTeX:
 - ALWAYS write a formula containing \tag as display ($$...$$). KaTeX renders \tag only in display mode; written inline it fails and shows the raw source in red.
 - words inside formulae are enclosed in \text{} for better rendering.
 
-Emphasise keywords and key concepts or ideas (if you find them) using **bold** or *italic*. Use no other markup: no headings, no list syntax, no code.
+Lists: keep each item's own marker exactly as printed (•, –, 1., a), …), one item per line, separated by a single line break — no blank line between items. Never use markdown list syntax (* or - as a bullet): write the printed marker itself, e.g. "• geometrical similarity;".
+
+Emphasise keywords and key concepts or ideas (if you find them) using **bold** or *italic*. Use no other markup: no headings, no code.
 
 If part of the image is illegible, transcribe what you can and mark the gap inline as [illegible].
 """
@@ -160,6 +162,18 @@ def render_crops(pdf_path, boxes, rem_id):
     return images
 
 
+def bullets_to_markers(text):
+    """A markdown `* ` bullet would reach the rich-text converter as the opening
+    of an italic run, so write it as the printed bullet character instead."""
+    lines = []
+    for line in text.split('\n'):
+        body = line.lstrip()
+        if body.startswith('* '):
+            line = line[:len(line) - len(body)] + '• ' + body[2:]
+        lines.append(line)
+    return '\n'.join(lines)
+
+
 def transcribe(images, raw_text):
     content = [{'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/png',
                                             'data': base64.b64encode(img).decode()}} for img in images]
@@ -192,7 +206,7 @@ def transcribe(images, raw_text):
         if event.get('type') == 'result':
             if event.get('is_error'):
                 raise RuntimeError(event.get('result') or 'claude reported an error')
-            return event.get('result', '').strip()
+            return bullets_to_markers(event.get('result', '').strip())
     raise RuntimeError(f'claude exited {proc.returncode}: {proc.stderr.strip()[-400:]}')
 
 
