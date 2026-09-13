@@ -11,6 +11,7 @@ import {
 } from '@remnote/plugin-sdk';
 import { convertRemTree } from '../lib/markup_to_richtext';
 import { aiTranscribeHighlight, restoreHighlightBeforeAi } from '../lib/ai_ocr';
+import { probeClonePdfHighlight } from '../lib/pdf_highlight_create';
 import { markRemsAsFreshlyCreated } from '../lib/incRemHelpers';
 import {
   powerupCode,
@@ -30,6 +31,7 @@ import {
   convertExtractedMarkupCommandId,
   aiTranscribeHighlightCommandId,
   restoreHighlightBeforeAiCommandId,
+  probeClonePdfHighlightCommandId,
   currentIncrementalRemTypeKey,
   incremReviewStartTimeKey,
   allCardPriorityInfoKey,
@@ -259,6 +261,19 @@ export async function registerCommands(plugin: ReactRNPlugin) {
         return;
       }
       await restoreHighlightBeforeAi(plugin, focused._id);
+    },
+  });
+
+  await plugin.app.registerCommand({
+    id: probeClonePdfHighlightCommandId,
+    name: 'Test: Clone PDF Highlight',
+    action: async () => {
+      const focused = await plugin.focus.getFocusedRem();
+      if (!focused) {
+        await plugin.app.toast('No focused rem — place your cursor in a PDF highlight Rem first.');
+        return;
+      }
+      await probeClonePdfHighlight(plugin, focused._id);
     },
   });
 

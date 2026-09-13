@@ -570,6 +570,9 @@ export const convertExtractedMarkupCommandId = 'convert-extracted-markup';
 export const aiTranscribeHighlightCommandId = 'ai-transcribe-highlight';
 export const restoreHighlightBeforeAiCommandId = 'restore-highlight-before-ai';
 
+// Test: does a PDF highlight built through the plugin API show in the viewer? (lib/pdf_highlight_create.ts)
+export const probeClonePdfHighlightCommandId = 'probe-clone-pdf-highlight';
+
 // --- Priority Queue cooling (lib/priority_review_document/cooling*.ts) ---
 // The cooling SET is never stored: it is a function of card data, recomputed on
 // every refresh. Two keys support it:
