@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.91 - September 12th, 2026
+
+### ✨ New - AI Transcribe for PDF highlights
+
+A **✨** button in the PDF highlight toolbar (and the `ait` command) replaces a highlight's raw text with a clean transcription of the highlighted region — spaces restored, formulas as LaTeX with their equation numbers, key concepts emphasised, list markers kept — using your own Claude account. It needs a small helper running on your computer; the page walks you through the one-time setup.
+
+📖 [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md)
+
 ## v1.0.89 - September 12th, 2026
 
 ### ⚡ Improved - a session in the Practiced Queues history opens its queue, not its document
