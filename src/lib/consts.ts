@@ -566,6 +566,10 @@ export const sourceFloatingActiveIdKey = 'source-floating-active-id';
 // into real RemNote rich text (formulas, bold, italic).
 export const convertExtractedMarkupCommandId = 'convert-extracted-markup';
 
+// AI transcription of a PDF highlight via the local helper (lib/ai_ocr.ts).
+export const aiTranscribeHighlightCommandId = 'ai-transcribe-highlight';
+export const restoreHighlightBeforeAiCommandId = 'restore-highlight-before-ai';
+
 // --- Priority Queue cooling (lib/priority_review_document/cooling*.ts) ---
 // The cooling SET is never stored: it is a function of card data, recomputed on
 // every refresh. Two keys support it:

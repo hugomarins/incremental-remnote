@@ -10,6 +10,7 @@ import {
   QueueInteractionScore,
 } from '@remnote/plugin-sdk';
 import { convertRemTree } from '../lib/markup_to_richtext';
+import { aiTranscribeHighlight, restoreHighlightBeforeAi } from '../lib/ai_ocr';
 import { markRemsAsFreshlyCreated } from '../lib/incRemHelpers';
 import {
   powerupCode,
@@ -27,6 +28,8 @@ import {
   nextInQueueCommandId,
   togglePdfHighlightBordersCommandId,
   convertExtractedMarkupCommandId,
+  aiTranscribeHighlightCommandId,
+  restoreHighlightBeforeAiCommandId,
   currentIncrementalRemTypeKey,
   incremReviewStartTimeKey,
   allCardPriorityInfoKey,
@@ -227,6 +230,35 @@ export async function registerCommands(plugin: ReactRNPlugin) {
           ? `Nothing to convert (${scanned} rem${scanned === 1 ? '' : 's'} scanned).`
           : `Converted ${converted} of ${scanned} rem${scanned === 1 ? '' : 's'}.`
       );
+    },
+  });
+
+  // Replace a PDF highlight's raw text layer with an AI transcription of the
+  // highlighted region (formulae as KaTeX). Needs scripts/ai_ocr_helper.py running.
+  await plugin.app.registerCommand({
+    id: aiTranscribeHighlightCommandId,
+    name: 'AI Transcribe PDF Highlight',
+    quickCode: 'ait',
+    action: async () => {
+      const focused = await plugin.focus.getFocusedRem();
+      if (!focused) {
+        await plugin.app.toast('No focused rem — place your cursor in a PDF highlight Rem first.');
+        return;
+      }
+      await aiTranscribeHighlight(plugin, focused._id);
+    },
+  });
+
+  await plugin.app.registerCommand({
+    id: restoreHighlightBeforeAiCommandId,
+    name: 'Restore PDF Highlight Text Before AI',
+    action: async () => {
+      const focused = await plugin.focus.getFocusedRem();
+      if (!focused) {
+        await plugin.app.toast('No focused rem — place your cursor in the highlight Rem first.');
+        return;
+      }
+      await restoreHighlightBeforeAi(plugin, focused._id);
     },
   });
 
