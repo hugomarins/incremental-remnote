@@ -705,6 +705,8 @@ Shown only while the Mastery Drill runs in the regular queue. **Remove from Dril
 
 📖 **Full documentation:** [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs)
 
+![The Mastery Drill running in the regular queue: the queue titled "Mastery Drill" with 12 cards left, the drill bar above the card with Remove from Drill, Card List and the note that RemNote hid some drill cards, the card info bar with priority and FSRS figures under the cloze, and the Queue Dashboard on the right recording a Mastery Drill session with the card's forgetting curve](assets/native-drill.png){ width="900" }
+
 ---
 
 ### 7.4. Mastery Drill Card List

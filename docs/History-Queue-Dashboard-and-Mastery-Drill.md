@@ -308,6 +308,8 @@ The drill runs in one of two places, chosen with **Where the Drill Runs** in the
 
 #### The regular-queue drill
 
+![The Mastery Drill running in the regular queue: the queue titled "Mastery Drill" with 12 cards left, the drill bar above the card with Remove from Drill, Card List and the note that RemNote hid some drill cards, the card info bar with priority and FSRS figures under the cloze, and the Queue Dashboard on the right recording a Mastery Drill session with the card's forgetting curve](assets/native-drill.png){ width="900" }
+
 RemNote practises whole Rems, not a hand-picked set of cards. So each session creates a temporary **Mastery Drill** document holding the drill Rems, opens it in *Practice All*, and deletes it when you leave the queue. RemNote offers every card of those Rems, and the plugin skips the ones that are not ready drill cards.
 
 - **Reveal Delay** (default 500 ms): each card stays hidden this long, then fades in, so a skipped card is not seen. Most skips take under 150 ms; one that comes right after a rating can take longer and show briefly. A longer delay hides more of them, but every card appears that much later.

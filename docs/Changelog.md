@@ -10,6 +10,8 @@ The Mastery Drill now runs in RemNote's own queue, where the card info bar and o
 
 RemNote practises whole Rems, so the drill skips the other cards of a drill Rem behind a short **Reveal Delay**. If RemNote then shows "Time to Take a Break", press **Keep Practicing** to get the rest of the drill.
 
+![The Mastery Drill running in the regular queue: the queue titled "Mastery Drill" with 12 cards left, the drill bar above the card with Remove from Drill, Card List and the note that RemNote hid some drill cards, the card info bar with priority and FSRS figures under the cloze, and the Queue Dashboard on the right recording a Mastery Drill session with the card's forgetting curve](assets/native-drill.png){ width="900" }
+
 📖 [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs)
 
 ## v1.0.116 - September 22nd, 2026
