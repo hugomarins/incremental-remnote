@@ -629,7 +629,9 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
 
         // Verify Mastery Drill scope: if we labeled this session as Mastery Drill but the
         // card isn't in the drill list, it's an embedded/ad-hoc queue collision.
-        if (currentSession && currentSession.scopeName === 'Mastery Drill') {
+        // Not for the regular-queue drill: it is identified by its document, and it loads the
+        // drill Rems' other cards (which it then skips), so a non-drill card proves nothing.
+        if (currentSession && currentSession.scopeName === 'Mastery Drill' && !isNativeDrillActive()) {
           type FinalDrillItem = string | { cardId: string; kbId?: string };
           const finalDrillItems =
             ((await plugin.storage.getSynced('finalDrillIds')) as FinalDrillItem[]) || [];
