@@ -161,7 +161,10 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
 ## Utilities
 
 - **Mastery Drill** — `quick: dri`
-  Opens the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill) popup — a focused re-practice queue for cards rated *Forgot* or *Hard*. Cards are added automatically as you review; they leave the drill once rated *Good* or *Easy*.
+  Opens the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill) — a focused re-practice queue for cards rated *Forgot* or *Hard*. Cards are added automatically as you review; they leave the drill once rated *Good* or *Easy*. It opens in the popup or in RemNote's own queue, per [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs).
+
+- **Mastery Drill (popup)** / **Mastery Drill (regular queue)**
+  Open the drill in that place, whatever *Where the Drill Runs* says.
 
 - **Convert extracted markup to rich text** — `quick: cem`
   Turns markup left behind by PDF text-layer extraction into real RemNote rich text: `\[…\]` and `$$…$$` become a display formula, `\(…\)` and `$…$` an inline one, `**bold**` and `*italic*` become formatting.

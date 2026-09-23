@@ -229,7 +229,7 @@ export const IE_SETTINGS_DEFAULTS: IESettings = {
   [oldItemThresholdId]: 7,
   [masteryDrillMinDelayMinutesId]: 180,
   [disableFinalDrillNotificationId]: false,
-  [masteryDrillModeId]: 'popup',
+  [masteryDrillModeId]: 'native',
   [masteryDrillRevealDelayId]: 500,
 
   // Calibrated by default: an absolute cards-per-minute standard says little
@@ -805,7 +805,7 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     title: 'Where the Drill Runs',
     options: [
       { value: 'popup', label: 'Popup (embedded queue)' },
-      { value: 'native', label: 'Regular queue (new)' },
+      { value: 'native', label: 'Regular queue' },
     ],
     description:
       'Popup: the drill opens in its own window with an embedded queue. It holds exactly the ' +

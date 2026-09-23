@@ -130,14 +130,16 @@ Open the popup with the command **`Incremental RemNote: Settings`** (quick code 
 
 ## Mastery Drill
 
-*In the IE Settings popup. The three parameters appear only while the drill is enabled.*
+*In the IE Settings popup. The other settings appear only while the drill is enabled.*
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | **Enable Mastery Drill** | Boolean | `false` | Master switch for the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill). Off by default: while it is on, the plugin watches every flashcard rating and keeps a list of the ones to drill, and registers the drill popup, its command and the sidebar notification. Leave it off if you do not use the workflow and none of that work happens. Flashcard and Practiced Queue history are unaffected either way. Requires a reload. *(Replaces the former "Skip Mastery Drill", whose value is inverted and carried over automatically.)* |
 | **Old Items Threshold** | Number | `7` days | Number of days after which a card lingering in the Mastery Drill queue is flagged as stale. A warning appears in the widget and you can clear these items with a single click. |
-| **Mastery Drill Minimum Delay** | Number | `120` min | Cooldown after a card is rated *Again* or *Hard* before it appears in the drill, so the initial repetition has time to consolidate. 📖 [Minimum Delay](History-Queue-Dashboard-and-Mastery-Drill.md#minimum-delay). |
+| **Mastery Drill Minimum Delay** | Number | `180` min | Cooldown after a card is rated *Again* or *Hard* before it appears in the drill, so the initial repetition has time to consolidate. 📖 [Minimum Delay](History-Queue-Dashboard-and-Mastery-Drill.md#minimum-delay). |
 | **Disable Mastery Drill Notifications** | Boolean | `false` | Hides the periodic Left Sidebar notification widget that appears when ≥ 10 cards are pending in the Mastery Drill queue. |
+| **Where the Drill Runs** | Dropdown | `Regular queue` | *Regular queue*: RemNote's own queue, with the card info bar and every other plugin's widgets; the other cards of a drill Rem are skipped. *Popup*: the drill's own window with an embedded queue, where RemNote shows no plugin widgets. 📖 [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs). |
+| **Reveal Delay (regular-queue drill)** | Number | `500` ms | Shown only for the regular-queue drill. How long each card stays hidden before it fades in, so a card the plugin skips is not seen. Longer hides more skips but delays every card; `0` turns it off. |
 
 ---
 

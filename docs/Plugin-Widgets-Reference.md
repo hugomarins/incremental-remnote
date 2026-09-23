@@ -687,7 +687,7 @@ A focused sub-queue of flashcards rated *Forgot* or *Hard*, designed for deliber
 A periodic notification widget that appears in the Left Sidebar End when ≥ 10 cards are pending in the Mastery Drill queue.
 
 - Shows the count of pending cards with a rotating motivational phrase.
-- **Start Drill** button opens the Mastery Drill popup directly.
+- **Start Drill** button opens the Mastery Drill, in the popup or the regular queue per [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs).
 - Dismiss button hides the notification; it reappears automatically every 2 hours.
 - Can be disabled entirely via the `Disable Mastery Drill Notification` setting.
 - Not rendered while the [Incremental RemNote Panel](Getting-Started.md#collapsed-panel) is collapsed — the panel's 🎯 icon carries the drill and its count instead.
@@ -695,4 +695,20 @@ A periodic notification widget that appears in the Left Sidebar End when ≥ 10 
 📖 **Full documentation:** [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill)
 
 ![Mastery Drill Notification](assets/drill-notification.png){ width="350" }
+
+---
+
+### 7.3. Mastery Drill Bar
+*(Queue, below the top bar)*
+
+Shown only while the Mastery Drill runs in the regular queue. **Remove from Drill** takes the card on screen out of the drill; **Card List** opens the card list below. When RemNote has hidden drill cards ("Time to Take a Break"), the bar says to press **Keep Practicing**.
+
+📖 **Full documentation:** [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs)
+
+---
+
+### 7.4. Mastery Drill Card List
+*(Popup)*
+
+The [Card List](History-Queue-Dashboard-and-Mastery-Drill.md#card-list) of the popup drill, in a popup of its own, for the regular-queue drill.
 

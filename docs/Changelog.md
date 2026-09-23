@@ -2,6 +2,16 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.121 - September 23rd, 2026
+
+### ✨ New - the Mastery Drill runs in the regular queue
+
+The Mastery Drill now runs in RemNote's own queue, where the card info bar and other plugins' widgets show under each card. The popup is still there: switch back with the new **Where the Drill Runs** setting, or start either one with **Mastery Drill (popup)** and **Mastery Drill (regular queue)**.
+
+RemNote practises whole Rems, so the drill skips the other cards of a drill Rem behind a short **Reveal Delay**. If RemNote then shows "Time to Take a Break", press **Keep Practicing** to get the rest of the drill.
+
+📖 [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs)
+
 ## v1.0.116 - September 22nd, 2026
 
 ### ✨ New - forgetting curve for a card
