@@ -27,7 +27,7 @@ import {
 } from '@remnote/plugin-sdk';
 import React, { useMemo, useEffect, useState } from 'react';
 import { computeFSRSStatesPerReview, computeFSRSState, parseWeightsString } from '../lib/fsrs';
-import { formatStabilityDays, formatTimeAgo, getRetrievabilityColor } from '../lib/utils';
+import { formatStabilityDays, formatTimeAgo, getRetrievabilityColor, screenFittedHeight } from '../lib/utils';
 import { resolveRemTextForBreadcrumb } from '../lib/richTextRemRefs';
 import { displayFsrsDsrId, fsrsWeightsId, powerupCode, dismissedPowerupCode } from '../lib/consts';
 import { useIESetting } from '../lib/settings';
@@ -75,22 +75,12 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 /**
  * How tall this popup may grow.
  *
- * It is registered with `height: 'auto'`, so the frame follows its content and
- * this cap is what actually bounds the popup — a fixed 600px left half of a tall
- * screen empty while the card's history, curve and repetition table competed for
- * one small scroll area.
- *
- * The frame's own viewport is no use for deciding this: with `auto` it *is* the
- * content height, so reading it would be circular. The host window is
- * cross-origin and cannot be measured either. The display is the honest signal
- * left, so the cap tracks that, never going below the 600 it used to be and
- * stopping short of filling the screen edge to edge.
+ * Registered with `height: 'auto'`, so the frame follows its content and this
+ * cap is what actually bounds the popup — a fixed 600px left half of a tall
+ * screen empty while the card's history, curve and repetition table competed
+ * for one small scroll area. The floor keeps it from ever being worse than that.
  */
-const POPUP_MAX_HEIGHT_PX = (() => {
-    const available = typeof window !== 'undefined' ? window.screen?.availHeight : undefined;
-    if (typeof available !== 'number' || !Number.isFinite(available)) return 600;
-    return Math.min(Math.max(Math.round(available * 0.75), 600), 1500);
-})();
+const POPUP_MAX_HEIGHT_PX = screenFittedHeight(600);
 
 /**
  * A delay in the narrowest form that still reads: `+3d`, `−2w`, `+1.4y`, `0d`.
