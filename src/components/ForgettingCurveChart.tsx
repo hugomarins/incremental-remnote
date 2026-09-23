@@ -141,7 +141,18 @@ function LineSwatch({
         >
             {gradientId && (
                 <defs>
-                    <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+                    {/* `userSpaceOnUse`, not the default: a gradient in bounding
+                        box units needs a box with area, and a horizontal line
+                        has no height — SVG then declines to render the element
+                        at all, so the swatch came out empty. */}
+                    <linearGradient
+                        id={gradientId}
+                        gradientUnits="userSpaceOnUse"
+                        x1={0}
+                        y1={0}
+                        x2={SWATCH_LENGTH}
+                        y2={0}
+                    >
                         {CURVE_GRADIENT_STOPS.map((r) => (
                             <stop key={r} offset={`${r * 100}%`} stopColor={getRetrievabilityColor(r)} />
                         ))}

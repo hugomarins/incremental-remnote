@@ -73,6 +73,26 @@ function formatInterval(intervalMs: number): string {
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 /**
+ * How tall this popup may grow.
+ *
+ * It is registered with `height: 'auto'`, so the frame follows its content and
+ * this cap is what actually bounds the popup — a fixed 600px left half of a tall
+ * screen empty while the card's history, curve and repetition table competed for
+ * one small scroll area.
+ *
+ * The frame's own viewport is no use for deciding this: with `auto` it *is* the
+ * content height, so reading it would be circular. The host window is
+ * cross-origin and cannot be measured either. The display is the honest signal
+ * left, so the cap tracks that, never going below the 600 it used to be and
+ * stopping short of filling the screen edge to edge.
+ */
+const POPUP_MAX_HEIGHT_PX = (() => {
+    const available = typeof window !== 'undefined' ? window.screen?.availHeight : undefined;
+    if (typeof available !== 'number' || !Number.isFinite(available)) return 600;
+    return Math.min(Math.max(Math.round(available * 0.75), 600), 1500);
+})();
+
+/**
  * A delay in the narrowest form that still reads: `+3d`, `−2w`, `+1.4y`, `0d`.
  *
  * The history table carries four date-ish columns across two comparison groups,
@@ -908,7 +928,7 @@ function FlashcardRepetitionHistory() {
     };
 
     return (
-        <div style={{ padding: 16, maxHeight: '600px', overflow: 'auto', fontSize: 11, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <div style={{ padding: 16, maxHeight: `${POPUP_MAX_HEIGHT_PX}px`, overflow: 'auto', fontSize: 11, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                 <h3 style={{ margin: 0, fontSize: 14, color: 'var(--rn-clr-content-primary)' }}>
                     📊 Flashcard Repetition History
