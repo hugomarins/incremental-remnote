@@ -76,6 +76,9 @@ import {
   oldItemThresholdId,
   masteryDrillMinDelayMinutesId,
   disableFinalDrillNotificationId,
+  masteryDrillModeId,
+  MasteryDrillMode,
+  masteryDrillRevealDelayId,
   speedColorModeId,
   SpeedColorMode,
   speedColorRedCpmId,
@@ -155,6 +158,8 @@ export interface IESettings {
   [oldItemThresholdId]: number;
   [masteryDrillMinDelayMinutesId]: number;
   [disableFinalDrillNotificationId]: boolean;
+  [masteryDrillModeId]: MasteryDrillMode;
+  [masteryDrillRevealDelayId]: number;
 
   // Queue Dashboard
   [speedColorModeId]: SpeedColorMode;
@@ -224,6 +229,8 @@ export const IE_SETTINGS_DEFAULTS: IESettings = {
   [oldItemThresholdId]: 7,
   [masteryDrillMinDelayMinutesId]: 180,
   [disableFinalDrillNotificationId]: false,
+  [masteryDrillModeId]: 'popup',
+  [masteryDrillRevealDelayId]: 500,
 
   // Calibrated by default: an absolute cards-per-minute standard says little
   // about a knowledge base whose cards are long extracts or one-word clozes.
@@ -790,6 +797,46 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     showWhen: { id: enableMasteryDrillId, equals: true },
     title: 'Disable Mastery Drill Notifications',
     description: 'Stops the Mastery Drill sidebar notification from appearing.',
+  },
+  [masteryDrillModeId]: {
+    kind: 'dropdown',
+    group: 'masteryDrill',
+    showWhen: { id: enableMasteryDrillId, equals: true },
+    title: 'Where the Drill Runs',
+    options: [
+      { value: 'popup', label: 'Popup (embedded queue)' },
+      { value: 'native', label: 'Regular queue (new)' },
+    ],
+    description:
+      'Popup: the drill opens in its own window with an embedded queue. It holds exactly the ' +
+      'drill cards, but RemNote shows no plugin widgets inside an embedded queue: no card info ' +
+      'bar, and nothing from other plugins such as a context tree or repetition history.\n\n' +
+      "Regular queue: the drill runs in RemNote's own Practice queue, so every widget of every " +
+      'plugin shows, Card Clusters and keyboard shortcuts work natively, and ratings are recorded ' +
+      'like any review. RemNote can only practise whole Rems, though, so the other cards of a ' +
+      'drill Rem come up too and the plugin skips them. To keep a skipped card from flashing, each ' +
+      'card stays hidden for a moment before it fades in (see Reveal Delay). A skip that lands ' +
+      'right after a rating can still show briefly.\n\n' +
+      'Skipping a card counts as seeing it, so RemNote may hide ("bury") a drill card whose ' +
+      'sibling was skipped and end with "Time to Take a Break". Press Keep Practicing there to ' +
+      'get the hidden drill cards; it only affects the drill session.\n\n' +
+      'The commands "Mastery Drill (popup)" and "Mastery Drill (regular queue)" start either ' +
+      'one regardless of this setting.',
+  },
+  [masteryDrillRevealDelayId]: {
+    kind: 'number',
+    group: 'masteryDrill',
+    showWhen: { id: masteryDrillModeId, equals: 'native' },
+    min: 0,
+    max: 2000,
+    integer: true,
+    unit: 'ms',
+    title: 'Reveal Delay (regular-queue drill)',
+    description:
+      'How long each card stays hidden before it fades in during a regular-queue drill. A card ' +
+      'the plugin skips inside this window is never seen. Most skips take under 150 ms; the ones ' +
+      'right after a rating can take 600 ms or more. Longer hides more of them, but every card ' +
+      'appears that much later. 0 turns the mask off.',
   },
 
   // --- Queue Dashboard ---

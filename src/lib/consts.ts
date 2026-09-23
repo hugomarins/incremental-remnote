@@ -98,6 +98,11 @@ export const legacySkipMasteryDrillId = 'skip_mastery_drill';
 export const oldItemThresholdId = 'old_item_threshold';
 export const masteryDrillMinDelayMinutesId = 'mastery_drill_min_delay_minutes';
 export const disableFinalDrillNotificationId = 'disable_final_drill_notification';
+/** Where the drill runs: the popup's embedded queue, or RemNote's own queue. */
+export const masteryDrillModeId = 'mastery_drill_mode';
+export type MasteryDrillMode = 'popup' | 'native';
+/** Native drill: how long each card stays hidden before it fades in (hides skipped siblings). */
+export const masteryDrillRevealDelayId = 'mastery_drill_reveal_delay_ms';
 
 // --- Queue Dashboard: speed colour coding ---
 /** Fixed cpm thresholds, or thresholds derived from the user's own history. */

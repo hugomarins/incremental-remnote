@@ -9,7 +9,7 @@ import {
   RemType,
   QueueInteractionScore,
 } from '@remnote/plugin-sdk';
-import { runDrillNativeTest } from '../lib/mastery_drill_native_test';
+import { openMasteryDrill } from '../lib/mastery_drill_launch';
 import { convertRemTree } from '../lib/markup_to_richtext';
 import { aiTranscribeHighlight, restoreHighlightBeforeAi } from '../lib/ai_ocr';import { pinSourceQuote } from '../lib/pdf_source_pins';
 import { markRemsAsFreshlyCreated } from '../lib/incRemHelpers';
@@ -1351,21 +1351,6 @@ export async function registerCommands(plugin: ReactRNPlugin) {
   // displays has already passed through getIncrementalRemFromRem's `priority = 10`
   // read fallback, so a displayed 10 cannot be told apart from an unreadable slot.
   // This reads the property rems directly instead. Read-only.
-  // TEST: the Mastery Drill in RemNote's own Practice queue instead of the popup's
-  // embedded queue, so flashcard widgets (ours and other plugins') can show.
-  // Rebuilds a test document from the ready drill cards, opens it in Practice All,
-  // skips every non-drill card and reports what happened when the queue closes.
-  plugin.app.registerCommand({
-    id: 'mastery-drill-native-test',
-    name: 'Debug: Mastery Drill in the native queue (test)',
-    description:
-      'Builds a test document from the ready Mastery Drill cards, practises it in the regular queue, and reports skips, ratings and flash timings when you leave the queue.',
-    quickCode: 'mdnt',
-    action: async () => {
-      await runDrillNativeTest(plugin);
-    },
-  });
-
   plugin.app.registerCommand({
     id: 'dump-raw-powerup-slots',
     name: 'Debug: Dump Raw Powerup Slots (console)',
@@ -3733,12 +3718,32 @@ export async function registerCommands(plugin: ReactRNPlugin) {
 
   const masteryDrillEnabled = await getIESetting(plugin, enableMasteryDrillId);
   if (masteryDrillEnabled) {
+    // Follows "Where the Drill Runs"; the two below force either one.
     plugin.app.registerCommand({
       id: 'open_mastery_drill',
       name: 'Mastery Drill: deliberately practice poorly rated cards',
       quickCode: 'dri',
       action: async () => {
-        await plugin.widget.openPopup('mastery_drill');
+        await openMasteryDrill(plugin);
+      },
+    });
+
+    plugin.app.registerCommand({
+      id: 'open_mastery_drill_popup',
+      name: 'Mastery Drill (popup)',
+      description: 'Start the Mastery Drill in its popup with an embedded queue, whatever the setting says.',
+      action: async () => {
+        await openMasteryDrill(plugin, 'popup');
+      },
+    });
+
+    plugin.app.registerCommand({
+      id: 'open_mastery_drill_native',
+      name: 'Mastery Drill (regular queue)',
+      description:
+        "Start the Mastery Drill in RemNote's own queue, with every plugin widget, whatever the setting says.",
+      action: async () => {
+        await openMasteryDrill(plugin, 'native');
       },
     });
 

@@ -568,6 +568,21 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
       },
     });
 
+    // Regular-queue drill (lib/mastery_drill_native): its bar in the queue, empty unless that
+    // drill is on screen, and the card list it opens.
+    plugin.app.registerWidget('mastery_drill_queue_bar', WidgetLocation.QueueBelowTopBar, {
+      dimensions: {
+        width: '100%',
+        height: 'auto',
+      },
+    });
+    plugin.app.registerWidget('mastery_drill_list', WidgetLocation.Popup, {
+      dimensions: {
+        width: 900,
+        height: screenFittedHeight(560),
+      },
+    });
+
     // Mastery Drill notification banner
     plugin.app.registerWidget('mastery_drill_notification', WidgetLocation.SidebarEnd, {
       dimensions: {

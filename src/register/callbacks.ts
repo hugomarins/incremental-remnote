@@ -14,7 +14,7 @@ import {
   incremNotesSidebarRemIdKey,
 } from '../lib/consts';
 import { consumePendingScrollRequest } from '../lib/remHelpers';
-import { isDrillNativeTestQueue } from '../lib/mastery_drill_native_test';
+import { isNativeDrillQueue } from '../lib/mastery_drill_native';
 import {
   PrefetchQueueInfo,
   VERBOSE_QUEUE_INJECTION,
@@ -350,10 +350,10 @@ export function registerCallbacks(plugin: ReactRNPlugin) {
       // silently dropped in large KBs.
       // ---------------------------------------------------------------------
 
-      // Mastery Drill native-queue test: its document must hold drill cards only.
-      if (isDrillNativeTestQueue(queueInfo.subQueueId)) {
+      // The regular-queue Mastery Drill serves drill cards only (lib/mastery_drill_native).
+      if (isNativeDrillQueue(queueInfo.subQueueId)) {
         clearStaleIncRemSignals();
-        return finish(null, 'mastery-drill-native-test');
+        return finish(null, 'mastery-drill');
       }
 
       const gates = readGates();

@@ -12,6 +12,7 @@ import type { PracticedQueueSession } from '../widgets/practiced_queues';
 import { PRACTICED_QUEUES_HISTORY_KEY, rollOverOldSessions } from './queue_aggregates';
 import { computeFSRSState, parseWeightsString } from './fsrs';
 import { getIESetting } from './settings';
+import { isNativeDrillActive, isNativeDrillQueue } from './mastery_drill_native';
 
 const ACTIVE_SESSION_KEY = 'activeQueueSession';
 
@@ -458,10 +459,16 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
       const kbData = await plugin.kb.getCurrentKnowledgeBaseData();
 
       let scopeName = 'Ad-hoc Queue';
-      const queueId: string | undefined = data?.subQueueId;
+      const rawQueueId: string | undefined = data?.subQueueId;
+      // The regular-queue drill's document lives for one session: record it as "Mastery Drill",
+      // like the popup drill, rather than under a document id that is about to be deleted.
+      const isNativeDrill = isNativeDrillQueue(rawQueueId);
+      const queueId = isNativeDrill ? undefined : rawQueueId;
       const isValidId = queueId && typeof queueId === 'string' && !queueId.startsWith('0.');
 
-      if (isValidId) {
+      if (isNativeDrill) {
+        scopeName = 'Mastery Drill';
+      } else if (isValidId) {
         const rem = await plugin.rem.findOne(queueId);
         if (rem) {
           const text = rem.text ? await safeRemTextToString(plugin, rem.text) : '';
@@ -570,7 +577,7 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
             id: Math.random().toString(36).substring(7),
             startTime: now,
             kbId: kbData._id,
-            scopeName: isFinalDrillActive ? 'Mastery Drill' : (isMobile ? 'Restored Mobile Session' : 'Ad-hoc Session'),
+            scopeName: isFinalDrillActive || isNativeDrillActive() ? 'Mastery Drill' : (isMobile ? 'Restored Mobile Session' : 'Ad-hoc Session'),
             totalTime: 0,
             flashcardsCount: 0,
             flashcardsTime: 0,
