@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.122 - September 23rd, 2026
+
+### ✨ New - extend a PDF highlight past what the text selection reaches
+
+**AI Transcribe**: when the selection stops short of a passage (formulas set as pictures, OCR gaps in scanned PDFs), draw an area highlight over the rest and press ✨ on it: the area merges into the text highlight and the whole passage is transcribed.
+
+📖 [Passages the text selection can't reach](AI-Transcription-of-PDF-Highlights.md#merge)
+
 ## v1.0.121 - September 23rd, 2026
 
 ### ✨ New - the Mastery Drill runs in the regular queue

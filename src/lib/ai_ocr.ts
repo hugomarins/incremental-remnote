@@ -1,4 +1,5 @@
-import { BuiltInPowerupCodes, ReactRNPlugin, RichTextInterface } from '@remnote/plugin-sdk';
+import { BuiltInPowerupCodes, PluginRem, ReactRNPlugin, RichTextInterface } from '@remnote/plugin-sdk';
+import { isAreaHighlight, MergeSide, mergeAreaIntoText, pickMergeTarget } from './ai_ocr_merge';
 import { convertRichText } from './markup_to_richtext';
 import { getPdfInfoFromHighlight } from './pdfUtils';
 
@@ -25,6 +26,43 @@ export const markupToRichText = (markup: string): RichTextInterface => {
   ) as RichTextInterface;
 };
 
+const parseData = (raw: unknown): any => {
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return undefined;
+  }
+};
+
+/** Sends a highlight region to the helper; toasts and returns undefined on failure.
+ *  `extend`: the region runs past the raw text on that side (a merged area). */
+async function requestTranscription(
+  plugin: ReactRNPlugin,
+  req: { remId: string; pdfUrl: unknown; data: unknown; rawText: string; extend?: MergeSide }
+): Promise<{ markup: string; ms: number } | undefined> {
+  await plugin.app.toast('✨ Transcribing highlight with AI…');
+  let body: any;
+  try {
+    const res = await fetch(`${AI_OCR_HELPER_URL}/ocr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // kbId: the helper looks for the PDF's local copy only in this knowledge base's folder.
+      body: JSON.stringify({ ...req, kbId: (await plugin.kb.getCurrentKnowledgeBaseData())?._id }),
+    });
+    body = await res.json();
+  } catch (e) {
+    console.error('[AI-OCR] Helper unreachable:', e);
+    await plugin.app.toast(`AI helper is not running (${AI_OCR_HELPER_URL}). Start scripts/ai_ocr_helper.py.`);
+    return undefined;
+  }
+  if (!body?.ok || !body.markup) {
+    console.error('[AI-OCR] Transcription failed:', body);
+    await plugin.app.toast(`AI transcription failed: ${body?.error ?? 'empty result'}`);
+    return undefined;
+  }
+  return { markup: body.markup, ms: body.ms };
+}
+
 export async function aiTranscribeHighlight(plugin: ReactRNPlugin, remId: string): Promise<boolean> {
   const rem = await plugin.rem.findOne(remId);
   if (!rem || !(await rem.hasPowerup(BuiltInPowerupCodes.PDFHighlight))) {
@@ -42,29 +80,16 @@ export async function aiTranscribeHighlight(plugin: ReactRNPlugin, remId: string
   const host = pdfRemId ? await plugin.rem.findOne(pdfRemId) : undefined;
   const pdfUrl = host ? await host.getPowerupProperty(BuiltInPowerupCodes.UploadedFile, 'URL') : '';
 
+  const area = parseData(data);
+  if (isAreaHighlight(area)) {
+    const merge = await findMergeTarget(plugin, rem, area);
+    if (merge) return mergeAndTranscribe(plugin, { area: rem, areaData: area, ...merge, pdfUrl });
+  }
+
   const original = (rem.text ?? []) as RichTextInterface;
   const rawText = await plugin.richText.toString(original);
-
-  await plugin.app.toast('✨ Transcribing highlight with AI…');
-  let body: any;
-  try {
-    const res = await fetch(`${AI_OCR_HELPER_URL}/ocr`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      // kbId: the helper looks for the PDF's local copy only in this knowledge base's folder.
-      body: JSON.stringify({ remId, pdfUrl, data, rawText, kbId: (await plugin.kb.getCurrentKnowledgeBaseData())?._id }),
-    });
-    body = await res.json();
-  } catch (e) {
-    console.error('[AI-OCR] Helper unreachable:', e);
-    await plugin.app.toast(`AI helper is not running (${AI_OCR_HELPER_URL}). Start scripts/ai_ocr_helper.py.`);
-    return false;
-  }
-  if (!body?.ok || !body.markup) {
-    console.error('[AI-OCR] Transcription failed:', body);
-    await plugin.app.toast(`AI transcription failed: ${body?.error ?? 'empty result'}`);
-    return false;
-  }
+  const result = await requestTranscription(plugin, { remId, pdfUrl, data, rawText });
+  if (!result) return false;
 
   // The model takes seconds; if the user edited the highlight meanwhile, keep their edit.
   const fresh = await plugin.rem.findOne(remId);
@@ -74,8 +99,63 @@ export async function aiTranscribeHighlight(plugin: ReactRNPlugin, remId: string
   }
 
   await plugin.storage.setLocal(backupKey(remId), original);
-  await fresh.setText(markupToRichText(body.markup));
-  await plugin.app.toast(`✨ Highlight transcribed in ${(body.ms / 1000).toFixed(1)}s`);
+  await fresh.setText(markupToRichText(result.markup));
+  await plugin.app.toast(`✨ Highlight transcribed in ${(result.ms / 1000).toFixed(1)}s`);
+  return true;
+}
+
+/** The text highlight on the same page that an area highlight sits right above or below. */
+async function findMergeTarget(plugin: ReactRNPlugin, area: PluginRem, areaData: any) {
+  const siblings = (await (await area.getParentRem())?.getChildrenRem()) ?? [];
+  const candidates: { rem: PluginRem; data: any }[] = [];
+  for (const sibling of siblings) {
+    if (sibling._id === area._id || !(await sibling.hasPowerup(BuiltInPowerupCodes.PDFHighlight))) continue;
+    const data = parseData(await sibling.getPowerupProperty(BuiltInPowerupCodes.PDFHighlight, 'Data'));
+    if (data) candidates.push({ rem: sibling, data });
+  }
+  const picked = pickMergeTarget(areaData, candidates);
+  return picked && { target: picked.target.rem, targetData: picked.target.data, side: picked.side };
+}
+
+/**
+ * Area highlight next to a text highlight: the area covers what the text layer
+ * missed. The area's box becomes one more rect of the text highlight, the combined
+ * region is transcribed into the text highlight, and the area Rem is deleted
+ * (its children move over first). Nothing changes if the transcription fails.
+ */
+async function mergeAndTranscribe(
+  plugin: ReactRNPlugin,
+  opts: { area: PluginRem; areaData: any; target: PluginRem; targetData: any; side: MergeSide; pdfUrl: unknown }
+): Promise<boolean> {
+  const { area, target } = opts;
+  const merged = mergeAreaIntoText(opts.targetData, opts.areaData);
+  const original = (target.text ?? []) as RichTextInterface;
+  const rawText = await plugin.richText.toString(original);
+
+  const result = await requestTranscription(plugin, {
+    remId: target._id,
+    pdfUrl: opts.pdfUrl,
+    data: merged,
+    rawText,
+    extend: opts.side,
+  });
+  if (!result) return false;
+
+  const fresh = await plugin.rem.findOne(target._id);
+  const areaStill = await plugin.rem.findOne(area._id);
+  if (!fresh || !areaStill || JSON.stringify(fresh.text ?? []) !== JSON.stringify(original)) {
+    await plugin.app.toast('A highlight changed while the AI was working — not merging.');
+    return false;
+  }
+
+  await plugin.storage.setLocal(backupKey(target._id), original);
+  await fresh.setText(markupToRichText(result.markup));
+  await fresh.setPowerupProperty(BuiltInPowerupCodes.PDFHighlight, 'Data', [JSON.stringify(merged)]);
+  for (const child of (await areaStill.getChildrenRem()) ?? []) await child.setParent(fresh._id);
+  await areaStill.remove();
+  await plugin.app.toast(
+    `✨ Area merged into the text highlight ${opts.side === 'below' ? 'above' : 'below'} it and transcribed in ${(result.ms / 1000).toFixed(1)}s`
+  );
   return true;
 }
 

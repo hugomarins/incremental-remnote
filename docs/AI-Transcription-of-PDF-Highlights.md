@@ -116,13 +116,23 @@ On Windows or Linux the helper is the same Python script — start it by hand, o
 
 A toast says *Transcribing highlight with AI…*, and a few seconds later the highlight's text is replaced. Then carry on as usual — **Create Incremental Rem** extracts the clean text.
 
-- **Area highlights** (image selections) work too: the snapshot RemNote already saved is transcribed.
+- **Area highlights** (image selections) work too: the snapshot RemNote already saved is transcribed. Don't resize an area highlight afterwards: RemNote takes a new snapshot and puts it back in place of the text.
 - If you **edit the highlight** while the AI is working, your edit wins and nothing is overwritten.
 - Highlights made in the **PDF Text Reader** are not supported: they carry no position on the page.
 
+## Passages the text selection can't reach { #merge }
+
+On scanned PDFs the text layer often misses part of a passage (formulas pasted in as pictures, lines the OCR skipped), so the selection stops short. Cover the rest with an area highlight and merge the two:
+
+1. Select the text you can and highlight it (**Z**).
+2. Draw an **area highlight** (**V**) over the rest, right below or above it.
+3. Press **✨** on the area highlight.
+
+The area joins the text highlight, which is transcribed as a whole, and the area highlight is deleted. It applies when the area is in the same column as a text highlight and at most a few lines away; otherwise the area is transcribed on its own.
+
 ## Undoing a transcription { #restore }
 
-Run **Restore PDF Highlight Text Before AI** on the highlight's Rem to put back the text the transcription replaced. The previous text is kept **on the device where you transcribed**, and only the latest one: transcribing the same highlight twice keeps the text from before the second run.
+Run **Restore PDF Highlight Text Before AI** on the highlight's Rem to put back the text the transcription replaced. The previous text is kept **on the device where you transcribed**, and only the latest one: transcribing the same highlight twice keeps the text from before the second run. After a [merge](#merge), only the text comes back: the highlight keeps its extended area.
 
 ## Customising the instructions { #prompt }
 
