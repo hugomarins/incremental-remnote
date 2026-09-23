@@ -80,6 +80,9 @@ const GRADE_LABEL: Record<CurveGrade, string> = {
  * is actually in trouble.
  */
 const CURVE_GRADIENT_STOPS = [0, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1];
+
+/** A single colour off that scale, for the flat swatch a legend entry needs. */
+const CURVE_AT_TARGET_SWATCH = getRetrievabilityColor(0.85);
 const STABILITY_COLOR = '#6366f1';
 
 const Y_AXIS_WIDTH = 38;
@@ -222,6 +225,11 @@ function CurveTooltip({
             )}
             {isFuture && (
                 <div className="mt-1 pt-1 rn-clr-border-opaque border-t">
+                    {typeof row.noReview === 'number' && (
+                        <div className="rn-clr-content-secondary">
+                            If not reviewed: <strong>{row.noReview.toFixed(1)}%</strong>
+                        </div>
+                    )}
                     {CURVE_GRADES.map((g) => {
                         const v = row[g];
                         if (typeof v !== 'number') return null;
@@ -861,6 +869,19 @@ export function ForgettingCurveChart({
                         History
                     </span>
                 </span>
+                {grades.length > 0 && (
+                    <span className="flex items-center gap-1">
+                        <span
+                            style={{
+                                width: 14,
+                                height: 0,
+                                borderTop: `2px dashed ${CURVE_AT_TARGET_SWATCH}`,
+                                display: 'inline-block',
+                            }}
+                        />
+                        If not reviewed
+                    </span>
+                )}
                 {grades.map((g) => (
                     <span key={g} className="flex items-center gap-1">
                         <span
@@ -976,6 +997,21 @@ export function ForgettingCurveChart({
                         name="History"
                     />
 
+                    {/* The null action: this same memory, never answered again.
+                        Drawn in the history's own gradient because it is the
+                        history continuing, dashed because it has not happened. */}
+                    <Line
+                        type="monotone"
+                        dataKey="noReview"
+                        stroke={`url(#${gradientId})`}
+                        strokeWidth={1.8}
+                        strokeDasharray="2 3"
+                        dot={false}
+                        isAnimationActive={false}
+                        connectNulls
+                        name="If not reviewed"
+                    />
+
                     {grades.map((g) => (
                         <Line
                             key={g}
@@ -1037,6 +1073,17 @@ export function ForgettingCurveChart({
                             because stability only moves when a card is reviewed,
                             and in the branch colours so the two panels read as
                             one forecast. */}
+                        <Line
+                            type="linear"
+                            dataKey="noReviewSLog"
+                            stroke={STABILITY_COLOR}
+                            strokeWidth={1.8}
+                            strokeDasharray="2 3"
+                            dot={false}
+                            isAnimationActive={false}
+                            connectNulls
+                        />
+
                         {grades.map((g) => (
                             <Line
                                 key={g}
@@ -1070,8 +1117,8 @@ export function ForgettingCurveChart({
 
             {showStability && (
                 <div className="text-[10px] rn-clr-content-tertiary mt-0.5 text-center">
-                    Stability after each repetition (log scale), labelled with the ×SInc it bought —
-                    and what the next answer would leave it at
+                    Stability after each repetition (log scale), labelled with the ×SInc it bought
+                    {grades.length > 0 && ' — and what the next answer would leave it at'}
                 </div>
             )}
         </div>

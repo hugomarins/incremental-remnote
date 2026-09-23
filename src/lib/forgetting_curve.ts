@@ -102,6 +102,22 @@ const INITIAL_VIEW: Record<CurveScale, { grade: CurveGrade; offsetFromTarget: nu
 };
 
 /**
+ * A floor on how far the opening view reaches past `now`, as a share of the
+ * card's age.
+ *
+ * The retention rules above size the view by the *forecast's* own timescale,
+ * which breaks down after a lapse: stability collapses to days while the
+ * history is still years, so the window ends a few days past `now` and the four
+ * branches are squeezed into a fraction of a percent of the width — the one
+ * thing a reader looking at a just-lapsed card wants to see.
+ *
+ * Taking whichever is longer keeps the whole history on screen (the alternative
+ * was trimming the left edge, which loses it) and only binds when the forecast
+ * is short relative to the card's life, which is exactly the broken case.
+ */
+const MIN_FORECAST_AGE_SHARE = 0.4;
+
+/**
  * Elapsed days at which a memory of stability `s` has decayed to `retention`.
  *
  * The inversion of the forgetting curve. `intervalFactorForRetention` is the
@@ -201,6 +217,18 @@ export interface CurveRow {
     repSLog?: number | null;
     /** 1-based index of that repetition, for looking its label up. */
     repIndex?: number | null;
+    /**
+     * The card's own curve continued past `now` — what happens if it is never
+     * answered again.
+     *
+     * The null action, and the baseline the four branches are read against: it
+     * is the same memory on the same stability, so it carries straight on from
+     * where the history line stops. Without it the chart ends at `now` as though
+     * forgetting paused there, and the branches have nothing to be compared to.
+     */
+    noReview?: number | null;
+    /** Its stability, which is flat: doing nothing cannot move it. */
+    noReviewSLog?: number | null;
 }
 
 /** Row key carrying each grade's forecast stability. */
@@ -765,8 +793,15 @@ export function buildForgettingCurveSeries(
     const viewDays =
         forecast && viewBranch
             ? Math.min(
-                  nowDays +
-                      Math.max(daysUntilRetention(viewBranch.stability, viewRetention, decay, factor), 1 / 24),
+                  Math.max(
+                      nowDays +
+                          Math.max(
+                              daysUntilRetention(viewBranch.stability, viewRetention, decay, factor),
+                              1 / 24,
+                          ),
+                      // ...or far enough out to be worth looking at at all.
+                      nowDays * (1 + MIN_FORECAST_AGE_SHARE),
+                  ),
                   horizonDays,
               )
             : nowDays;
@@ -861,6 +896,15 @@ export function buildForgettingCurveSeries(
 
     const nowR = state.r * 100;
 
+    // Anchored on the last review rather than on `now`, so the projection is
+    // literally the same segment carrying on rather than a new curve that
+    // happens to start at the same height.
+    const lastReview = reviews[reviews.length - 1];
+    const lastReviewDays = toDays(lastReview.t);
+    const noReviewAt = (d: number) =>
+        forgettingCurve(d - lastReviewDays, lastReview.s, decay, factor) * 100;
+    const noReviewSLog = toSLog(lastReview.s);
+
     // --- Forecast branches ------------------------------------------------
     if (forecast) {
         // The junction row carries the end of the past curve and the start of
@@ -877,6 +921,11 @@ export function buildForgettingCurveSeries(
             junction[b.grade] = 100;
             junction[STABILITY_BRANCH_KEY[b.grade]] = toSLog(b.stability);
         }
+        // Evaluated rather than taken from `state.r`: the state reads the wall
+        // clock, so on any clock but the live one it lands a hair off the point
+        // the history segment actually closed on, and the seam shows.
+        junction.noReview = noReviewAt(nowDays);
+        junction.noReviewSLog = noReviewSLog;
         rows.push(junction);
 
         for (const d of sampleBranchDays(nowDays, horizonDays, SAMPLES_PER_BRANCH)) {
@@ -885,6 +934,8 @@ export function buildForgettingCurveSeries(
                 row[b.grade] = forgettingCurve(d - nowDays, b.stability, decay, factor) * 100;
                 row[STABILITY_BRANCH_KEY[b.grade]] = toSLog(b.stability);
             }
+            row.noReview = noReviewAt(d);
+            row.noReviewSLog = noReviewSLog;
             rows.push(row);
         }
 
@@ -897,6 +948,8 @@ export function buildForgettingCurveSeries(
             tail[b.grade] = forgettingCurve(horizonDays - nowDays, b.stability, decay, factor) * 100;
             tail[STABILITY_BRANCH_KEY[b.grade]] = toSLog(b.stability);
         }
+        tail.noReview = noReviewAt(horizonDays);
+        tail.noReviewSLog = noReviewSLog;
         rows.push(tail);
     }
 

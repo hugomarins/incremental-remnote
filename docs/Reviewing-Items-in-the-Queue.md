@@ -432,9 +432,11 @@ It appears in two places — at the top of the [Queue Dashboard](History-Queue-D
 
 The history line is coloured by retrievability, on the same scale the info bar uses for its **R** value: green at 100%, through yellow, to fully red at 70% and anything below. So a glance tells you whether the card was caught near its scheduled moment or left to decay well past it, and a card the info bar calls red draws a red curve.
 
+Past *now* that same line carries on, dashed, as **If not reviewed** — the card left alone, decaying on the stability it has. It is the baseline the four branches are measured against: each one shows what an answer buys you *over doing nothing*, which is the comparison that makes them mean anything.
+
 **Stability** (bottom). A staircase on a logarithmic axis, labelled with the **×SInc** each repetition bought — the same Stability Increase shown in the info bar, but for every review rather than the next one. This is the part a plain forgetting curve hides: two cards sitting at the same retrievability today can be on completely different paths. Where repetitions are too close together for their labels to fit, hovering a step gives the number and the stability either side of it.
 
-Past *now* the staircase fans out into the same four branches, in the same colours, showing what each answer would leave the card's stability at. They run flat, because stability only moves when a card is reviewed. Their ×SInc is not written on the chart — four more labels there would crowd it — so hover anywhere in the forecast to read all four, each with the multiplier it applies.
+Past *now* the staircase fans out into the same four branches, in the same colours, showing what each answer would leave the card's stability at — alongside a dashed flat line for **If not reviewed**, flat because doing nothing cannot move stability. They run flat, because stability only moves when a card is reviewed. Their ×SInc is not written on the chart — four more labels there would crowd it — so hover anywhere in the forecast to read all four, each with the multiplier it applies.
 
 #### Log and linear time
 
@@ -443,6 +445,8 @@ The **Log** / **Linear** toggle changes the time axis, and the two answer differ
 **Log** is the default. A mature card spends minutes in learning and years in review; on a linear axis its first day is a single pixel and everything interesting about its early life is invisible. The log axis gives both ends room, and it opens on the window where **Easy** reaches your target retention — the whole of the next stability, which costs almost no width because a log axis compresses its right-hand end.
 
 **Linear** shows real elapsed time, so intervals are comparable by eye. It opens on a much narrower window — ending where **Good** is still 6 points above target — because on a linear axis every day added to the right steals width from every day already drawn, and a window chosen for the far future would flatten the repetitions you are trying to read.
+
+Both rules size the window by the *forecast's* timescale, which collapses after a lapse: stability drops to days while the card's history is still years, and the branches would end up in a sliver at the right edge. So the window also never ends sooner than 40% of the card's age past *now*, whichever of the two reaches further. The whole history stays on screen either way.
 
 ![The same card on a linear time axis: its first six months are compressed against the left edge while the axis runs to 6.2 years, and a tooltip reads "2mo since first review, Retrievability 100.0%, Stability 1.1y"](assets/forgetting-curve-linear-scale.png){ width="900" }
 
