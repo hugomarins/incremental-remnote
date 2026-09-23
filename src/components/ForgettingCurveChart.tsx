@@ -83,6 +83,57 @@ const CURVE_GRADIENT_STOPS = [0, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1];
 
 /** A single colour off that scale, for the flat swatch a legend entry needs. */
 const CURVE_AT_TARGET_SWATCH = getRetrievabilityColor(0.85);
+
+/**
+ * How each line on the retrievability panel is drawn, in one table so the chart
+ * and its legend cannot drift apart.
+ *
+ * The hierarchy is deliberate. What the card is *actually* doing — its history,
+ * and that same history projected forward if it is never answered again — is
+ * the heaviest thing on the plot. The four branches are hypotheses, drawn
+ * lighter, with Good picked out because it describes the normal trajectory.
+ *
+ * The projection cannot rely on colour to separate it from the branches: it is
+ * painted by retrievability, so on a healthy card it is green — the same green
+ * as Good. The dash length is what distinguishes it, and the gap between `14 6`
+ * and `5 4` is wide enough to read at any zoom.
+ */
+const CURVE_STROKE = {
+    history: { width: 3, dash: undefined as string | undefined, opacity: 1 },
+    noReview: { width: 3, dash: '14 6', opacity: 1 },
+    good: { width: 2, dash: '5 4', opacity: 1 },
+    grade: { width: 1.2, dash: '2 3', opacity: 0.5 },
+};
+
+const strokeFor = (grade: CurveGrade) => (grade === 'good' ? CURVE_STROKE.good : CURVE_STROKE.grade);
+
+/** A legend key that draws the line it stands for, rather than a solid bar. */
+function LineSwatch({
+    color,
+    width,
+    dash,
+    opacity = 1,
+}: {
+    color: string;
+    width: number;
+    dash?: string;
+    opacity?: number;
+}) {
+    return (
+        <svg width={18} height={8} style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+            <line
+                x1={0}
+                y1={4}
+                x2={18}
+                y2={4}
+                stroke={color}
+                strokeWidth={width}
+                strokeDasharray={dash}
+                strokeOpacity={opacity}
+            />
+        </svg>
+    );
+}
 const STABILITY_COLOR = '#6366f1';
 
 const Y_AXIS_WIDTH = 38;
@@ -857,8 +908,8 @@ export function ForgettingCurveChart({
                 <span className="flex items-center gap-1">
                     <span
                         style={{
-                            width: 14,
-                            height: 3,
+                            width: 18,
+                            height: CURVE_STROKE.history.width,
                             background: `linear-gradient(90deg, ${CURVE_GRADIENT_STOPS.map(
                                 (r) => getRetrievabilityColor(r),
                             ).join(', ')})`,
@@ -871,27 +922,26 @@ export function ForgettingCurveChart({
                 </span>
                 {grades.length > 0 && (
                     <span className="flex items-center gap-1">
-                        <span
-                            style={{
-                                width: 14,
-                                height: 0,
-                                borderTop: `2px dashed ${CURVE_AT_TARGET_SWATCH}`,
-                                display: 'inline-block',
-                            }}
+                        <LineSwatch
+                            color={CURVE_AT_TARGET_SWATCH}
+                            width={CURVE_STROKE.noReview.width}
+                            dash={CURVE_STROKE.noReview.dash}
                         />
-                        If not reviewed
+                        <span
+                            style={{ fontWeight: 600 }}
+                            title="The card left alone: its own curve carried on past now, on the stability it already has"
+                        >
+                            If not reviewed
+                        </span>
                     </span>
                 )}
                 {grades.map((g) => (
                     <span key={g} className="flex items-center gap-1">
-                        <span
-                            style={{
-                                width: 14,
-                                height: g === 'good' ? 3 : 2,
-                                background: GRADE_COLOR[g],
-                                opacity: g === 'good' ? 1 : 0.6,
-                                display: 'inline-block',
-                            }}
+                        <LineSwatch
+                            color={GRADE_COLOR[g]}
+                            width={strokeFor(g).width}
+                            dash={strokeFor(g).dash}
+                            opacity={strokeFor(g).opacity}
                         />
                         <span style={{ fontWeight: g === 'good' ? 700 : 400 }}>
                             If {GRADE_LABEL[g]}
@@ -990,7 +1040,7 @@ export function ForgettingCurveChart({
                         type="monotone"
                         dataKey="r"
                         stroke={`url(#${gradientId})`}
-                        strokeWidth={1.8}
+                        strokeWidth={CURVE_STROKE.history.width}
                         dot={false}
                         isAnimationActive={false}
                         connectNulls={false}
@@ -1004,8 +1054,8 @@ export function ForgettingCurveChart({
                         type="monotone"
                         dataKey="noReview"
                         stroke={`url(#${gradientId})`}
-                        strokeWidth={1.8}
-                        strokeDasharray="2 3"
+                        strokeWidth={CURVE_STROKE.noReview.width}
+                        strokeDasharray={CURVE_STROKE.noReview.dash}
                         dot={false}
                         isAnimationActive={false}
                         connectNulls
@@ -1018,9 +1068,9 @@ export function ForgettingCurveChart({
                             type="monotone"
                             dataKey={g}
                             stroke={GRADE_COLOR[g]}
-                            strokeWidth={g === 'good' ? 2.4 : 1.2}
-                            strokeOpacity={g === 'good' ? 1 : 0.55}
-                            strokeDasharray={g === 'good' ? '6 3' : '3 3'}
+                            strokeWidth={strokeFor(g).width}
+                            strokeOpacity={strokeFor(g).opacity}
+                            strokeDasharray={strokeFor(g).dash}
                             dot={false}
                             isAnimationActive={false}
                             connectNulls
@@ -1073,26 +1123,15 @@ export function ForgettingCurveChart({
                             because stability only moves when a card is reviewed,
                             and in the branch colours so the two panels read as
                             one forecast. */}
-                        <Line
-                            type="linear"
-                            dataKey="noReviewSLog"
-                            stroke={STABILITY_COLOR}
-                            strokeWidth={1.8}
-                            strokeDasharray="2 3"
-                            dot={false}
-                            isAnimationActive={false}
-                            connectNulls
-                        />
-
                         {grades.map((g) => (
                             <Line
                                 key={g}
                                 type="linear"
                                 dataKey={STABILITY_BRANCH_KEY[g]}
                                 stroke={GRADE_COLOR[g]}
-                                strokeWidth={g === 'good' ? 2.4 : 1.2}
-                                strokeOpacity={g === 'good' ? 1 : 0.55}
-                                strokeDasharray={g === 'good' ? '6 3' : '3 3'}
+                                strokeWidth={strokeFor(g).width}
+                                strokeOpacity={strokeFor(g).opacity}
+                                strokeDasharray={strokeFor(g).dash}
                                 dot={false}
                                 isAnimationActive={false}
                                 connectNulls

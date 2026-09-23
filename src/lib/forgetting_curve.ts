@@ -227,8 +227,6 @@ export interface CurveRow {
      * forgetting paused there, and the branches have nothing to be compared to.
      */
     noReview?: number | null;
-    /** Its stability, which is flat: doing nothing cannot move it. */
-    noReviewSLog?: number | null;
 }
 
 /** Row key carrying each grade's forecast stability. */
@@ -903,7 +901,6 @@ export function buildForgettingCurveSeries(
     const lastReviewDays = toDays(lastReview.t);
     const noReviewAt = (d: number) =>
         forgettingCurve(d - lastReviewDays, lastReview.s, decay, factor) * 100;
-    const noReviewSLog = toSLog(lastReview.s);
 
     // --- Forecast branches ------------------------------------------------
     if (forecast) {
@@ -925,7 +922,6 @@ export function buildForgettingCurveSeries(
         // clock, so on any clock but the live one it lands a hair off the point
         // the history segment actually closed on, and the seam shows.
         junction.noReview = noReviewAt(nowDays);
-        junction.noReviewSLog = noReviewSLog;
         rows.push(junction);
 
         for (const d of sampleBranchDays(nowDays, horizonDays, SAMPLES_PER_BRANCH)) {
@@ -935,7 +931,6 @@ export function buildForgettingCurveSeries(
                 row[STABILITY_BRANCH_KEY[b.grade]] = toSLog(b.stability);
             }
             row.noReview = noReviewAt(d);
-            row.noReviewSLog = noReviewSLog;
             rows.push(row);
         }
 
@@ -949,7 +944,6 @@ export function buildForgettingCurveSeries(
             tail[STABILITY_BRANCH_KEY[b.grade]] = toSLog(b.stability);
         }
         tail.noReview = noReviewAt(horizonDays);
-        tail.noReviewSLog = noReviewSLog;
         rows.push(tail);
     }
 

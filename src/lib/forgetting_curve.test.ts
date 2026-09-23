@@ -329,9 +329,6 @@ describe('buildForgettingCurveSeries', () => {
         // It meets the history line where that one stops.
         const junction = future[0];
         assert.ok(Math.abs(junction.days - s.nowDays) < 1e-6);
-        // Doing nothing cannot move stability, so its panel line is flat.
-        const levels = new Set(future.map((r) => (r.noReviewSLog as number).toFixed(9)));
-        assert.equal(levels.size, 1, 'the do-nothing stability never moves');
 
         // At `now` every branch starts from a fresh review, so all four are
         // above the card's untouched curve.

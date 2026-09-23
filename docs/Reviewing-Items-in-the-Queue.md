@@ -432,11 +432,13 @@ It appears in two places — at the top of the [Queue Dashboard](History-Queue-D
 
 The history line is coloured by retrievability, on the same scale the info bar uses for its **R** value: green at 100%, through yellow, to fully red at 70% and anything below. So a glance tells you whether the card was caught near its scheduled moment or left to decay well past it, and a card the info bar calls red draws a red curve.
 
-Past *now* that same line carries on, dashed, as **If not reviewed** — the card left alone, decaying on the stability it has. It is the baseline the four branches are measured against: each one shows what an answer buys you *over doing nothing*, which is the comparison that makes them mean anything.
+Past *now* that same line carries on, in long dashes, as **If not reviewed** — the card left alone, decaying on the stability it has. It is the baseline the four branches are measured against: each one shows what an answer buys you *over doing nothing*, which is the comparison that makes them mean anything.
+
+The weights say which is which. What the card is really doing — its history and that projection — is drawn heaviest; the four branches are hypotheses and sit lighter, with **Good** picked out among them. The projection cannot rely on colour to separate itself, since it is painted by retrievability and so is green on a healthy card, exactly like Good: its much longer dashes are what tell them apart.
 
 **Stability** (bottom). A staircase on a logarithmic axis, labelled with the **×SInc** each repetition bought — the same Stability Increase shown in the info bar, but for every review rather than the next one. This is the part a plain forgetting curve hides: two cards sitting at the same retrievability today can be on completely different paths. Where repetitions are too close together for their labels to fit, hovering a step gives the number and the stability either side of it.
 
-Past *now* the staircase fans out into the same four branches, in the same colours, showing what each answer would leave the card's stability at — alongside a dashed flat line for **If not reviewed**, flat because doing nothing cannot move stability. They run flat, because stability only moves when a card is reviewed. Their ×SInc is not written on the chart — four more labels there would crowd it — so hover anywhere in the forecast to read all four, each with the multiplier it applies.
+Past *now* the staircase fans out into the same four branches, in the same colours, showing what each answer would leave the card's stability at. There is no "if not reviewed" line here: stability only moves when a card is answered, so leaving it alone would draw a flat continuation of the last step and say nothing. They run flat, because stability only moves when a card is reviewed. Their ×SInc is not written on the chart — four more labels there would crowd it — so hover anywhere in the forecast to read all four, each with the multiplier it applies.
 
 #### Log and linear time
 
