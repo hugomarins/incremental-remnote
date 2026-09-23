@@ -81,8 +81,6 @@ const GRADE_LABEL: Record<CurveGrade, string> = {
  */
 const CURVE_GRADIENT_STOPS = [0, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1];
 
-/** A single colour off that scale, for the flat swatch a legend entry needs. */
-const CURVE_AT_TARGET_SWATCH = getRetrievabilityColor(0.85);
 
 /**
  * How each line on the retrievability panel is drawn, in one table so the chart
@@ -107,26 +105,55 @@ const CURVE_STROKE = {
 
 const strokeFor = (grade: CurveGrade) => (grade === 'good' ? CURVE_STROKE.good : CURVE_STROKE.grade);
 
+/**
+ * How long a legend swatch is.
+ *
+ * Long enough for the longest dash pattern to repeat: at 18px a `14 6` drew one
+ * dash and a sliver of gap, so the line the reader most needs to recognise —
+ * the projection — was the one whose key looked solid.
+ */
+const SWATCH_LENGTH = 30;
+
 /** A legend key that draws the line it stands for, rather than a solid bar. */
 function LineSwatch({
     color,
     width,
     dash,
     opacity = 1,
+    gradientId,
 }: {
-    color: string;
+    color?: string;
     width: number;
     dash?: string;
     opacity?: number;
+    /**
+     * Paints the swatch with the retrievability scale instead of a flat colour,
+     * for the two lines that are drawn that way on the chart. Needs an id of its
+     * own: a gradient defined in the plot's svg cannot be referenced from here.
+     */
+    gradientId?: string;
 }) {
     return (
-        <svg width={18} height={8} style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+        <svg
+            width={SWATCH_LENGTH}
+            height={8}
+            style={{ display: 'inline-block', verticalAlign: 'middle' }}
+        >
+            {gradientId && (
+                <defs>
+                    <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+                        {CURVE_GRADIENT_STOPS.map((r) => (
+                            <stop key={r} offset={`${r * 100}%`} stopColor={getRetrievabilityColor(r)} />
+                        ))}
+                    </linearGradient>
+                </defs>
+            )}
             <line
                 x1={0}
                 y1={4}
-                x2={18}
+                x2={SWATCH_LENGTH}
                 y2={4}
-                stroke={color}
+                stroke={gradientId ? `url(#${gradientId})` : color}
                 strokeWidth={width}
                 strokeDasharray={dash}
                 strokeOpacity={opacity}
@@ -135,6 +162,14 @@ function LineSwatch({
     );
 }
 const STABILITY_COLOR = '#6366f1';
+
+/**
+ * The rule marking a lapse. Deeper and far more opaque than the other three,
+ * which sit back as context: a lapse is the one repetition worth spotting from
+ * across the chart, because it is what explains a collapse in the staircase
+ * below and a curve that restarts from a much lower stability.
+ */
+const LAPSE_MARKER_COLOR = '#dc2626';
 
 const Y_AXIS_WIDTH = 38;
 
@@ -908,7 +943,7 @@ export function ForgettingCurveChart({
                 <span className="flex items-center gap-1">
                     <span
                         style={{
-                            width: 18,
+                            width: SWATCH_LENGTH,
                             height: CURVE_STROKE.history.width,
                             background: `linear-gradient(90deg, ${CURVE_GRADIENT_STOPS.map(
                                 (r) => getRetrievabilityColor(r),
@@ -923,7 +958,7 @@ export function ForgettingCurveChart({
                 {grades.length > 0 && (
                     <span className="flex items-center gap-1">
                         <LineSwatch
-                            color={CURVE_AT_TARGET_SWATCH}
+                            gradientId={`${gradientId}-swatch`}
                             width={CURVE_STROKE.noReview.width}
                             dash={CURVE_STROKE.noReview.dash}
                         />
@@ -1018,23 +1053,21 @@ export function ForgettingCurveChart({
                         strokeDasharray="4 4"
                         strokeOpacity={0.5}
                     />
-                    <ReferenceLine
-                        x={series.nowX}
-                        stroke="currentColor"
-                        strokeOpacity={0.45}
-                        label={{ value: 'now', position: 'insideTopRight', fontSize: 9, fill: 'currentColor' }}
-                    />
-
-                    {/* One tick per repetition, coloured by the answer given. */}
-                    {series.reps.map((r) => (
-                        <ReferenceLine
-                            key={`rep-${r.index}`}
-                            x={r.x}
-                            stroke={scoreColor(r.score)}
-                            strokeOpacity={0.35}
-                            strokeWidth={1}
-                        />
-                    ))}
+                    {/* One tick per repetition, coloured by the answer given —
+                        and a lapse drawn to be found, since it is the event that
+                        explains the stability collapse underneath it. */}
+                    {series.reps.map((r) => {
+                        const lapse = r.score === QueueInteractionScore.AGAIN;
+                        return (
+                            <ReferenceLine
+                                key={`rep-${r.index}`}
+                                x={r.x}
+                                stroke={lapse ? LAPSE_MARKER_COLOR : scoreColor(r.score)}
+                                strokeOpacity={lapse ? 0.9 : 0.35}
+                                strokeWidth={lapse ? 1.6 : 1}
+                            />
+                        );
+                    })}
 
                     <Line
                         type="monotone"
@@ -1077,6 +1110,21 @@ export function ForgettingCurveChart({
                             name={GRADE_LABEL[g]}
                         />
                     ))}
+
+                    {/* Declared after the series so it paints over them: it is a
+                        marker for reading the chart against, and a curve running
+                        across its label makes the label the thing being read. */}
+                    <ReferenceLine
+                        x={series.nowX}
+                        stroke="currentColor"
+                        strokeOpacity={0.5}
+                        label={{
+                            value: 'now',
+                            position: 'insideTopRight',
+                            fontSize: 9,
+                            fill: 'currentColor',
+                        }}
+                    />
 
                     {drag && (
                         <ReferenceArea x1={drag.from} x2={drag.to} strokeOpacity={0.3} fill="#8884d8" />
