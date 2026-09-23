@@ -3,5 +3,6 @@
         "**/node_modules": false
     },
     "search.useIgnoreFiles": false,
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "claudeCode.useTerminal": true
 }

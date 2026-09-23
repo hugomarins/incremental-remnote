@@ -14,6 +14,7 @@ import {
   incremNotesSidebarRemIdKey,
 } from '../lib/consts';
 import { consumePendingScrollRequest } from '../lib/remHelpers';
+import { isDrillNativeTestQueue } from '../lib/mastery_drill_native_test';
 import {
   PrefetchQueueInfo,
   VERBOSE_QUEUE_INJECTION,
@@ -348,6 +349,12 @@ export function registerCallbacks(plugin: ReactRNPlugin) {
       // front of any return below is exactly what caused injections to be
       // silently dropped in large KBs.
       // ---------------------------------------------------------------------
+
+      // Mastery Drill native-queue test: its document must hold drill cards only.
+      if (isDrillNativeTestQueue(queueInfo.subQueueId)) {
+        clearStaleIncRemSignals();
+        return finish(null, 'mastery-drill-native-test');
+      }
 
       const gates = readGates();
       if (gates.blocked) {

@@ -1,4 +1,5 @@
 import { AppEvents, ReactRNPlugin, RemId, PluginRem, BuiltInPowerupCodes, RichTextElementRemInterface, QueueInteractionScore } from '@remnote/plugin-sdk';
+import { deferIfDrillNativeTest, registerDrillNativeTestListeners } from '../lib/mastery_drill_native_test';
 import * as _ from 'remeda';
 import {
   allIncrementalRemKey,
@@ -815,6 +816,8 @@ export function registerQueueCompleteCardListener(plugin: ReactRNPlugin) {
       if (!data || !data.cardId) {
         return;
       }
+      // Mastery Drill native-queue test: let a sibling skip reach the bridge first.
+      await deferIfDrillNativeTest();
 
       const card = await plugin.card.findOne(data.cardId);
       const remId = card?.remId;
@@ -1484,6 +1487,7 @@ export function registerEventListeners(
   registerGlobalOpenRemListener(plugin);
   registerQueueSessionTracking(plugin);
   registerDrillCardRatingListener(plugin);
+  registerDrillNativeTestListeners(plugin);
 
   registerHoveredReferenceTracking(plugin);
   registerQueueDashboardRefocusListener(plugin);
