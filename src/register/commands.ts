@@ -215,6 +215,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     id: convertExtractedMarkupCommandId,
     name: 'Convert extracted markup to rich text',
     quickCode: 'cem',
+    keyboardShortcut: 'opt+shift+m',
     action: async () => {
       const focused = await plugin.focus.getFocusedRem();
       if (!focused) {

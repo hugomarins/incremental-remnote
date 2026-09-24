@@ -70,6 +70,7 @@ This table lists all the custom keyboard shortcuts that are unique to the Increm
 | `Shift` + `F8` | [Bulletize Inline Selected Text](Utilities.md#bulletize-inline-selected-text) | Toggles a `• ` prefix on each line of a multi-line selection **within a single rem**. Restores bullets that a PDF highlight flattened into soft-wrapped text; a collapsed cursor bulletizes the whole rem. *(Uses `Shift+F8` because `Opt+Shift+8` types `°` on macOS and `Ctrl+Opt+Shift+8` is RemNote's blue-highlight shortcut.)* | Editor Only |
 | `Alt` + `Shift` + `F` | [Find Rem — Reference or Open](Utilities.md#find-rem-reference-or-open) | Floating picker that finds Rems RemNote's `[[` search can't surface (all-common-word names). Enter/click inserts a reference at the cursor (cloze-aware, accent-insensitive); Ctrl/Cmd+Enter inserts it as a pin (no text); Opt/Alt+Enter inserts the Rem's text then a pin ("Text with Pin", preserving formatting/images); Shift+Enter/Shift+click opens the Rem in a new pane; Ctrl/Cmd+Shift+Enter appends a pin at the end of the Rem while keeping the selected text (linking a card to its source). | Editor Only |
 | `Shift` + `F3` | [Text Case Converter](Utilities.md#text-case-converter) | Cycles the selection through **Title Case** → **UPPERCASE** → **lowercase**, auto-detecting the current case. Rich-text safe; also works on multi-rem selections. | Editor Only |
+| `Alt` + `Shift` + `M` | [Convert Extracted Markup to Rich Text](Plugin-Commands-Reference.md#convert-extracted-markup-to-rich-text) | Turns literal `\[…\]`, `$…$`, `**bold**` and `*italic*` left by PDF highlight extraction into real formulas and formatting, in the focused Rem and all its descendants. | Editor Only |
 
 > **No default shortcut (run by quick code or from the Omnibar).** The list-from-PDF-highlight commands ship **unbound** to avoid conflicts — invoke them by quick code: **`inl`** ([Inlinize Detected List](Utilities.md#inlinize-detected-list-inl)), **`brl`** ([Break Inline List Into Children](Utilities.md#break-inline-list-into-children-brl)), and **`rlr`** ([Restore List Rem](Utilities.md#restore-list-rem-rlr)). They act on the **focused rem** (no selection needed). Assign your own bindings in RemNote's keyboard-shortcut settings if you use them often.
 
@@ -150,6 +151,7 @@ Function keys carry the utilities whose natural letter combination was already t
 | `Alt` + `Shift` + `F` | [Find Rem — Reference or Open](Utilities.md#find-rem-reference-or-open) | Editor |
 | `Alt` + `Shift` + `I` | Open Incremental Rems Main View | Global |
 | `Alt` + `Shift` + `L` | [Priority Queue](Priority-Review-Document.md#the-priority-queue-popup) | Editor |
+| `Alt` + `Shift` + `M` | [Convert Extracted Markup to Rich Text](Plugin-Commands-Reference.md#convert-extracted-markup-to-rich-text) | Editor |
 | `Alt` + `Shift` + `O` | [Open Hovered Source in Floating Window](Utilities.md#floating-window-interaction-closing) | Editor and Queue |
 | `Alt` + `Shift` + `Q` | [Pin Source Quote](Source-Pins.md) | Editor |
 | `Alt` + `Shift` + `V` | [Paste Rem Sources](PDF-Incremental-Reading-Workflow.md#2-copying-and-pasting-sources) | Editor |

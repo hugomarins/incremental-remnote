@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.124 - September 24th, 2026
+
+### ⚡ Improved - Convert extracted markup has a shortcut
+
+**Convert extracted markup to rich text** now runs with `Opt+Shift+M` / `Alt+Shift+M` (M for markup), as well as by its quick code `cem`.
+
+📖 [Convert extracted markup to rich text](Plugin-Commands-Reference.md#convert-extracted-markup-to-rich-text)
+
 ## v1.0.123 - September 24th, 2026
 
 ### ✨ New - a larger highlight absorbs the ones inside it
