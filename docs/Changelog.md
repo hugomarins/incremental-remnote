@@ -12,6 +12,12 @@ This page documents the major changes and improvements for each version of the I
 
 📖 [A larger highlight over earlier ones](AI-Transcription-of-PDF-Highlights.md#absorb)
 
+### 🐛 Fixed
+
+**AI Transcribe**: Fixed text that is both bold and italic showing literal asterisks instead of the formatting.
+
+📖 [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md)
+
 ## v1.0.122 - September 23rd, 2026
 
 ### ✨ New - extend a PDF highlight past what the text selection reaches

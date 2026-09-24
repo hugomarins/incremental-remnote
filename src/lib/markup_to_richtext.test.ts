@@ -50,6 +50,57 @@ describe('convertRichText', () => {
     ]);
   });
 
+  it('reads ***text*** as bold italic', () => {
+    assert.deepEqual(convert('o primeiro sobrepasso – ***overshoot***.'), [
+      'o primeiro sobrepasso – ',
+      { i: 'm', text: 'overshoot', b: true, l: true },
+      '.',
+    ]);
+  });
+
+  it('keeps an italic nested at the end of a bold run', () => {
+    assert.deepEqual(convert('obtidas pelo **primeiro *overshoot*** sejam'), [
+      'obtidas pelo ',
+      { i: 'm', text: 'primeiro ', b: true },
+      { i: 'm', text: 'overshoot', b: true, l: true },
+      ' sejam',
+    ]);
+  });
+
+  it('keeps an italic nested at the start or middle of a bold run', () => {
+    assert.deepEqual(convert('**de *sway* e** e **(*overshoot*)**'), [
+      { i: 'm', text: 'de ', b: true },
+      { i: 'm', text: 'sway', b: true, l: true },
+      { i: 'm', text: ' e', b: true },
+      ' e ',
+      { i: 'm', text: '(', b: true },
+      { i: 'm', text: 'overshoot', b: true, l: true },
+      { i: 'm', text: ')', b: true },
+    ]);
+    assert.deepEqual(convert('***sway* e yaw**'), [
+      { i: 'm', text: 'sway', b: true, l: true },
+      { i: 'm', text: ' e yaw', b: true },
+    ]);
+  });
+
+  it('keeps a bold run nested inside an italic one', () => {
+    assert.deepEqual(convert('*see **this***, then'), [
+      { i: 'm', text: 'see ', l: true },
+      { i: 'm', text: 'this', l: true, b: true },
+      ', then',
+    ]);
+  });
+
+  it('handles bold and italic side by side', () => {
+    assert.deepEqual(convert('*a* and **b** and ***c***'), [
+      { i: 'm', text: 'a', l: true },
+      ' and ',
+      { i: 'm', text: 'b', b: true },
+      ' and ',
+      { i: 'm', text: 'c', b: true, l: true },
+    ]);
+  });
+
   it('returns null when there is nothing to convert', () => {
     assert.equal(convert('plain text, $5 and $10'), null);
   });
