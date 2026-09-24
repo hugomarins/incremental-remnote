@@ -102,3 +102,48 @@ export function mergeAreaIntoText(text: any, area: any): any {
   }
   return { ...text, position: { ...text.position, boundingRect, rects } };
 }
+
+/** Share of a highlight's area that must lie inside the larger one for it to count as contained. */
+export const MIN_CONTAINED = 0.8;
+
+const area = (b: Box) => Math.max(0, b.x2 - b.x1) * Math.max(0, b.y2 - b.y1);
+const intersection = (a: Box, b: Box): Box => ({
+  x1: Math.max(a.x1, b.x1),
+  y1: Math.max(a.y1, b.y1),
+  x2: Math.min(a.x2, b.x2),
+  y2: Math.min(a.y2, b.y2),
+});
+
+/** The pages a highlight's rects lie on. */
+export const pagesOf = (data: any): number[] => [...new Set(rectsOf(data).map((r) => r.pageNumber))];
+
+/** Share of `inner`'s rect area that `outer`'s rects cover, page by page (0..1). */
+export function coveredShare(inner: any, outer: any): number {
+  const outerBoxes = rectsOf(outer)
+    .filter((r) => r.width && r.height)
+    .map((r) => ({ page: r.pageNumber, box: fraction(r) }));
+  let total = 0;
+  let covered = 0;
+  for (const r of rectsOf(inner)) {
+    if (!r.width || !r.height) continue;
+    const box = fraction(r);
+    const a = area(box);
+    if (!a) continue;
+    total += a;
+    const hit = outerBoxes
+      .filter((o) => o.page === r.pageNumber)
+      .reduce((sum, o) => sum + area(intersection(box, o.box)), 0);
+    covered += Math.min(a, hit);
+  }
+  return total ? covered / total : 0;
+}
+
+/**
+ * The text highlights lying inside `outer` (a larger highlight made later over the
+ * same passage). Area highlights are never absorbed: their Rem holds an image.
+ */
+export function pickContainedHighlights<T extends { data: any }>(outer: any, candidates: T[]): T[] {
+  return candidates.filter(
+    (c) => !isAreaHighlight(c.data) && !c.data?.temp && coveredShare(c.data, outer) >= MIN_CONTAINED
+  );
+}

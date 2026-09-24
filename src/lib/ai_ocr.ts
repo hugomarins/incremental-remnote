@@ -1,7 +1,24 @@
 import { BuiltInPowerupCodes, PluginRem, ReactRNPlugin, RichTextInterface } from '@remnote/plugin-sdk';
-import { isAreaHighlight, MergeSide, mergeAreaIntoText, pickMergeTarget } from './ai_ocr_merge';
+import {
+  isAreaHighlight,
+  MergeSide,
+  mergeAreaIntoText,
+  pagesOf,
+  pickContainedHighlights,
+  pickMergeTarget,
+} from './ai_ocr_merge';
+import { CARD_PRIORITY_CODE } from './card_priority/types';
+import {
+  dismissedPowerupCode,
+  hasImagePowerupCode,
+  pdfAreaHighlightPowerupCode,
+  powerupCode,
+  preservedHistoryPowerupCode,
+} from './consts';
+import { BAND_COUNT, bandPowerupCode } from './priority_bands';
 import { convertRichText } from './markup_to_richtext';
-import { getPdfInfoFromHighlight } from './pdfUtils';
+import { getAllIncrementsForPDF, getPdfInfoFromHighlight } from './pdfUtils';
+import { readRawPdfState, repointBookmarksInState, writeRawPdfState } from './pdf_state';
 
 /**
  * AI transcription of a PDF highlight (prototype).
@@ -83,7 +100,7 @@ export async function aiTranscribeHighlight(plugin: ReactRNPlugin, remId: string
   const area = parseData(data);
   if (isAreaHighlight(area)) {
     const merge = await findMergeTarget(plugin, rem, area);
-    if (merge) return mergeAndTranscribe(plugin, { area: rem, areaData: area, ...merge, pdfUrl });
+    if (merge) return mergeAndTranscribe(plugin, { area: rem, areaData: area, ...merge, pdfUrl, pdfRemId });
   }
 
   const original = (rem.text ?? []) as RichTextInterface;
@@ -100,9 +117,13 @@ export async function aiTranscribeHighlight(plugin: ReactRNPlugin, remId: string
 
   await plugin.storage.setLocal(backupKey(remId), original);
   await fresh.setText(markupToRichText(result.markup));
-  await plugin.app.toast(`✨ Highlight transcribed in ${(result.ms / 1000).toFixed(1)}s`);
+  const absorbed = await absorbContainedHighlights(plugin, fresh, parseData(data), pdfRemId);
+  await plugin.app.toast(`✨ Highlight transcribed in ${(result.ms / 1000).toFixed(1)}s${absorbedNote(absorbed)}`);
   return true;
 }
+
+const absorbedNote = (n: number) =>
+  n ? ` — merged the ${n === 1 ? 'highlight' : `${n} highlights`} it contains` : '';
 
 /** The text highlight on the same page that an area highlight sits right above or below. */
 async function findMergeTarget(plugin: ReactRNPlugin, area: PluginRem, areaData: any) {
@@ -125,7 +146,15 @@ async function findMergeTarget(plugin: ReactRNPlugin, area: PluginRem, areaData:
  */
 async function mergeAndTranscribe(
   plugin: ReactRNPlugin,
-  opts: { area: PluginRem; areaData: any; target: PluginRem; targetData: any; side: MergeSide; pdfUrl: unknown }
+  opts: {
+    area: PluginRem;
+    areaData: any;
+    target: PluginRem;
+    targetData: any;
+    side: MergeSide;
+    pdfUrl: unknown;
+    pdfRemId?: string | null;
+  }
 ): Promise<boolean> {
   const { area, target } = opts;
   const merged = mergeAreaIntoText(opts.targetData, opts.areaData);
@@ -153,10 +182,121 @@ async function mergeAndTranscribe(
   await fresh.setPowerupProperty(BuiltInPowerupCodes.PDFHighlight, 'Data', [JSON.stringify(merged)]);
   for (const child of (await areaStill.getChildrenRem()) ?? []) await child.setParent(fresh._id);
   await areaStill.remove();
+  const absorbed = await absorbContainedHighlights(plugin, fresh, merged, opts.pdfRemId);
   await plugin.app.toast(
-    `✨ Area merged into the text highlight ${opts.side === 'below' ? 'above' : 'below'} it and transcribed in ${(result.ms / 1000).toFixed(1)}s`
+    `✨ Area merged into the text highlight ${opts.side === 'below' ? 'above' : 'below'} it and transcribed in ${(result.ms / 1000).toFixed(1)}s${absorbedNote(absorbed)}`
   );
   return true;
+}
+
+/** Page highlights on the given pages: children of the PDF's "Page NNN" Rems. */
+async function highlightsOnPages(plugin: ReactRNPlugin, highlight: PluginRem, pages: number[]) {
+  const pageRem = await highlight.getParentRem();
+  const container = await pageRem?.getParentRem();
+  const pageRems = [];
+  for (const candidate of (await container?.getChildrenRem()) ?? []) {
+    const number = Number((await plugin.richText.toString(candidate.text ?? [])).match(/(\d+)\s*$/)?.[1]);
+    if (pages.includes(number)) pageRems.push(candidate);
+  }
+  if (pageRem && !pageRems.some((r) => r._id === pageRem._id)) pageRems.push(pageRem);
+
+  const found: { rem: PluginRem; data: any }[] = [];
+  for (const page of pageRems) {
+    for (const rem of (await page.getChildrenRem()) ?? []) {
+      if (rem._id === highlight._id || !(await rem.hasPowerup(BuiltInPowerupCodes.PDFHighlight))) continue;
+      const data = parseData(await rem.getPowerupProperty(BuiltInPowerupCodes.PDFHighlight, 'Data'));
+      if (data) found.push({ rem, data });
+    }
+  }
+  return found;
+}
+
+/** Tags derived from a highlight's state, recomputed by the plugin: never carried over. */
+const DERIVED_POWERUPS = [
+  hasImagePowerupCode,
+  pdfAreaHighlightPowerupCode,
+  ...Array.from({ length: BAND_COUNT }, (_, band) => bandPowerupCode(band)),
+];
+/** Plugin state the larger highlight keeps when both have it; otherwise it moves over. */
+const KEPT_BY_LARGER = [powerupCode, CARD_PRIORITY_CODE, dismissedPowerupCode, preservedHistoryPowerupCode];
+
+/**
+ * Highlights lying inside `outer` (made earlier over part of the same passage) are
+ * merged into it with RemNote's own merge, which repoints every reference, pin,
+ * inline link, tag, source and portal inclusion to `outer` in the same shape, moves
+ * children, aliases and cards (with their history), then deletes the merged Rem.
+ *
+ * Merge also copies every powerup slot of the merged Rem onto the kept one, so the
+ * inner highlight first loses what must not overwrite `outer`: its PDF Highlight
+ * powerup (Data, PdfId), the derived tags, and plugin state `outer` already has.
+ */
+async function absorbContainedHighlights(
+  plugin: ReactRNPlugin,
+  outer: PluginRem,
+  outerData: any,
+  pdfRemId: string | null | undefined
+) {
+  // An area highlight's text reverts to an image when its rectangle is resized: never a merge target.
+  if (!outerData || isAreaHighlight(outerData)) return 0;
+  const inner = pickContainedHighlights(outerData, await highlightsOnPages(plugin, outer, pagesOf(outerData)));
+  const moved: Record<string, string> = {};
+  for (const { rem } of inner) {
+    try {
+      if (await mergeHighlightInto(plugin, outer, rem)) moved[rem._id] = outer._id;
+    } catch (e) {
+      console.error('[AI-OCR] Merging a contained highlight failed:', rem._id, e);
+    }
+  }
+  const merged = Object.keys(moved).length;
+  if (merged && pdfRemId) await repointBookmarks(plugin, pdfRemId, outer._id, moved);
+  return merged;
+}
+
+/**
+ * Bookmarks are page-history entries holding a highlight id, inside the PDF state
+ * of an Incremental or Dismissed Rem: plain JSON that RemNote's merge cannot see.
+ * The hosts are the Rems reading this PDF (as the bookmark popup finds them), the
+ * PDF itself, and the outer highlight, which inherits a merged highlight's own
+ * Incremental state when it had none.
+ */
+async function repointBookmarks(plugin: ReactRNPlugin, pdfRemId: string, outerId: string, moved: Record<string, string>) {
+  const hostIds = new Set([pdfRemId, outerId]);
+  for (const entry of await getAllIncrementsForPDF(plugin as any, pdfRemId)) hostIds.add(entry.remId);
+  for (const id of hostIds) {
+    const host = await plugin.rem.findOne(id);
+    if (!host) continue;
+    for (const powerup of [powerupCode, dismissedPowerupCode]) {
+      if (!(await host.hasPowerup(powerup))) continue;
+      const repointed = repointBookmarksInState(await readRawPdfState(host, powerup), moved);
+      if (repointed) {
+        await writeRawPdfState(host, powerup, repointed);
+        console.log('[AI-OCR] Moved bookmark(s) to the merged highlight on', id);
+      }
+    }
+  }
+}
+
+async function mergeHighlightInto(plugin: ReactRNPlugin, outer: PluginRem, inner: PluginRem): Promise<boolean> {
+  const code = BuiltInPowerupCodes.PDFHighlight;
+  const data = await outer.getPowerupProperty(code, 'Data');
+  const pdfId = await outer.getPowerupPropertyAsRichText(code, 'PdfId');
+  const color = await outer.getHighlightColor();
+
+  await inner.removePowerup(code);
+  for (const powerup of DERIVED_POWERUPS) if (await inner.hasPowerup(powerup)) await inner.removePowerup(powerup);
+  for (const powerup of KEPT_BY_LARGER) {
+    if ((await inner.hasPowerup(powerup)) && (await outer.hasPowerup(powerup))) await inner.removePowerup(powerup);
+  }
+
+  await outer.merge(inner._id);
+
+  // Belt and braces: the outer highlight's own position, PDF and colour must survive.
+  if ((await outer.getPowerupProperty(code, 'Data')) !== data) await outer.setPowerupProperty(code, 'Data', [data]);
+  if (JSON.stringify(await outer.getPowerupPropertyAsRichText(code, 'PdfId')) !== JSON.stringify(pdfId)) {
+    await outer.setPowerupProperty(code, 'PdfId', pdfId);
+  }
+  if (color && (await outer.getHighlightColor()) !== color) await outer.setHighlightColor(color as any);
+  return !(await plugin.rem.findOne(inner._id));
 }
 
 /** Put back the text a transcription replaced (kept per rem, on this device). */

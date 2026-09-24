@@ -2,6 +2,16 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.123 - September 24th, 2026
+
+### ✨ New - a larger highlight absorbs the ones inside it
+
+**AI Transcribe**: highlighting a passage that already holds a smaller highlight and pressing ✨ on the larger one merges the smaller into it, moving its pins, references, inline links, tags, flashcards and bookmarks.
+
+![After AI Transcribe on the larger highlight: one Rem with the clean list, and the pins, references and bookmark of the smaller highlight point to it](assets/highlight-merge-3-after.png){ width="900" }
+
+📖 [A larger highlight over earlier ones](AI-Transcription-of-PDF-Highlights.md#absorb)
+
 ## v1.0.122 - September 23rd, 2026
 
 ### ✨ New - extend a PDF highlight past what the text selection reaches
@@ -585,7 +595,7 @@ The case it was built for is an **Anki import**: hundreds of Rems arrive with th
 
 #### Technical explanation
 
-The walk is Rem-driven rather than card-driven, which is the whole point: a Rem at `direction=none` produces zero rows in `card.getAll()`, so the Suppressed Cards breakdown is structurally blind to it however it is filtered. Verdicts follow `CARD_STATE_REFERENCE.md` and are ordered by what a fix would accomplish — a disabling ancestor outranks the Rem's own direction, since setting a direction under one writes the slot and produces nothing.
+The walk is Rem-driven rather than card-driven, which is the whole point: a Rem at `direction=none` produces zero rows in `card.getAll()`, so the Suppressed Cards breakdown is structurally blind to it however it is filtered. Verdicts follow `findings/CARD_STATE_REFERENCE.md` and are ordered by what a fix would accomplish — a disabling ancestor outranks the Rem's own direction, since setting a direction under one writes the slot and produces nothing.
 
 Three things make it usable at scale, where the single-Rem debug probe is not: the card table is fetched once and indexed by `remId` instead of once per Rem; ancestor chains are memoised per parent id, so the hundreds of rows of an imported deck resolve one shared chain and get their breadcrumb from the same walk; and plain-string rich text is joined locally rather than paying a `normalize` + `toString` round trip per Rem. Writes are sequential under a suppression lease, and the cards created are counted by reading back afterwards rather than predicted.
 

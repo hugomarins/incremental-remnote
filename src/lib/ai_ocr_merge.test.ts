@@ -3,7 +3,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeAreaIntoText, pickMergeTarget } from './ai_ocr_merge';
+import { coveredShare, mergeAreaIntoText, pagesOf, pickContainedHighlights, pickMergeTarget } from './ai_ocr_merge';
 
 const W = 580.32;
 const H = 837.24;
@@ -80,5 +80,39 @@ describe('mergeAreaIntoText', () => {
     text.position.boundingRect = rect(60, 1294, 558, 1344, 57, W * 2, H * 2);
     const merged = mergeAreaIntoText(text, areaHighlight());
     assert.deepEqual(merged.position.boundingRect, rect(50, 1294, 570, 1504, 57, W * 2, H * 2));
+  });
+});
+
+/** A text highlight made of one rect per line. */
+const lines = (...rects: ReturnType<typeof rect>[]) => ({
+  content: { text: 't' },
+  position: { boundingRect: rects[0], rects, pageNumber: rects[0].pageNumber },
+  id: 'x',
+  temp: false,
+});
+
+describe('pickContainedHighlights', () => {
+  // The Section 5 case: "(d) The rate at which ... rudder." first, then the whole list around it.
+  const outer = lines(rect(36, 250, 290, 262), rect(36, 262, 290, 274), rect(36, 500, 290, 512), rect(36, 512, 290, 524));
+  const inner = { remId: 'd', data: lines(rect(60, 500, 290, 511), rect(38, 513, 200, 523)) };
+
+  it('finds a highlight lying inside the larger one', () => {
+    assert.equal(coveredShare(inner.data, outer), 1);
+    assert.deepEqual(pickContainedHighlights(outer, [inner]).map((c) => c.remId), ['d']);
+  });
+
+  it('leaves highlights that only partly overlap, sit elsewhere, or are areas', () => {
+    const straddling = { remId: 's', data: lines(rect(36, 512, 290, 524), rect(36, 530, 290, 560)) };
+    const elsewhere = { remId: 'e', data: lines(rect(36, 700, 290, 712)) };
+    const otherPage = { remId: 'p', data: lines(rect(60, 500, 290, 511, 58)) };
+    const area = { remId: 'a', data: areaHighlight(rect(40, 500, 280, 520)) };
+    assert.deepEqual(pickContainedHighlights(outer, [straddling, elsewhere, otherPage, area]), []);
+  });
+
+  it('follows a larger highlight across pages', () => {
+    const spanning = lines(rect(36, 700, 290, 800, 57), rect(36, 40, 290, 120, 58));
+    const onSecondPage = { remId: 'p2', data: lines(rect(40, 60, 280, 72, 58)) };
+    assert.deepEqual(pagesOf(spanning), [57, 58]);
+    assert.deepEqual(pickContainedHighlights(spanning, [onSecondPage]).map((c) => c.remId), ['p2']);
   });
 });
