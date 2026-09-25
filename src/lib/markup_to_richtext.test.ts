@@ -101,6 +101,30 @@ describe('convertRichText', () => {
     ]);
   });
 
+  it('turns TeX-style dashes into en and em dashes', () => {
+    assert.deepEqual(convert('VIAS INTERIORES -- Corpos hídricos'), [
+      'VIAS INTERIORES \u2013 Corpos hídricos',
+    ]);
+    assert.deepEqual(convert('1988--1989, e ---- acima --- abaixo'), [
+      '1988\u20131989, e ---- acima \u2014 abaixo',
+    ]);
+  });
+
+  it('converts dashes inside emphasis but never inside a formula', () => {
+    assert.deepEqual(convert('**VIAS INTERIORES --** Corpos, \\(a--b\\)'), [
+      { i: 'm', text: 'VIAS INTERIORES \u2013', b: true },
+      ' Corpos, ',
+      { i: 'x', text: 'a--b' },
+    ]);
+  });
+
+  it('converts a dash in an already formatted run', () => {
+    assert.deepEqual(convertRichText([{ i: 'm', text: 'AG -- Agência', b: true }] as any), [
+      { i: 'm', b: true, text: 'AG \u2013 Agência' },
+    ]);
+    assert.equal(convertRichText([{ i: 'm', text: 'AG \u2013 Agência', b: true }] as any), null);
+  });
+
   it('returns null when there is nothing to convert', () => {
     assert.equal(convert('plain text, $5 and $10'), null);
   });
