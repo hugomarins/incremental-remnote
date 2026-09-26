@@ -71,14 +71,14 @@ mkdocs serve      # http://127.0.0.1:8000
 
 **Links between pages** point at the Markdown file, not the published URL — `[Utilities](Utilities.md)`, `[the Shield](Prioritization-&-Sorting.md#weighted-shield)`. MkDocs rewrites them and warns when a target disappears. The old wiki-style `[[Page#anchor|label]]` syntax does **not** work here.
 
-**Published URLs** are `https://hugomarins.github.io/incremental-remnote/<Page-File-Name>/` (directory URLs, no `.md`), with anchors appended after the trailing slash: `.../Utilities/#find-rem--reference-or-open`. Use this form only when linking from outside the docs (README, plugin manifest, Discord).
+**Published URLs** are `https://hugomarins.github.io/incremental-remnote/<Page-File-Name>/` (directory URLs, no `.md`), with anchors appended after the trailing slash: `.../Utilities-Finding-and-Navigating/#find-rem-reference-or-open`. Use this form only when linking from outside the docs (README, plugin manifest, Discord).
 
 **Assets** live in `docs/assets/`, referenced relatively: `![Alt](assets/thing.png)`. Images that had been pasted straight into the old GitHub Wiki (and so lived on GitHub's CDN under opaque UUID filenames) were downloaded into `docs/assets/uploaded/`.
 
 ## Shipping a feature — do BOTH, together
 
 1. **Add a `docs/Changelog.md` entry**, newest at the top, headed `## vX.Y.Z - Month Dth, Year`, with emoji-prefixed subheadings (✨ New / 🐛 Fixed / ♻️ Changed / ⚡ Improved). Bump `public/manifest.json` → `version.patch` to match. (`package.json` is stuck at `0.0.1` and is not the version of record.)
-2. **Update the page that documents the feature itself** — `Utilities.md`, `Plugin-Widgets-Reference.md`, `Plugin-Commands-Reference.md`, `Keyboard-Shortcuts.md`, `Plugin-Settings-Reference.md`, as applicable. Several of these have their own table of contents or item numbering that must be kept in sync when inserting a section.
+2. **Update the page that documents the feature itself** — a `Utilities-*.md` category page (one per category, with `Utilities.md` as the section overview listing them — add new utilities to both), `Plugin-Widgets-Reference.md`, `Plugin-Commands-Reference.md`, `Keyboard-Shortcuts.md`, `Plugin-Settings-Reference.md`, as applicable. Several of these have their own table of contents or item numbering that must be kept in sync when inserting a section.
 
 **Every changelog entry ends with a 📖 link to the page section** that explains the feature in full, e.g. `📖 See [Widgets → Card Priority Display](Plugin-Widgets-Reference.md#11-card-priority-display).` The changelog is *what changed*; the feature page is *how it works*. Never leave the changelog as the only place a feature is described.
 

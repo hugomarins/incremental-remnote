@@ -497,7 +497,7 @@ A **floating** picker (it doesn't cover the editor like a popup) that finds Rems
 - **Accent-insensitive** (`navegacao interior` → `Navegação Interior`) and **selection-aware** (selected text seeds the box and is replaced by the reference on insert, like native `[[`).
 - Each result row shows a **type badge**, the Rem's **back text**, and a short **`root / … / parent` breadcrumb**; a **Concepts only** toggle narrows the list.
 
-📖 **Full documentation:** [Find Rem — Reference or Open](Utilities.md#find-rem-reference-or-open) · root-cause explainer: [Search / Linkage Diagnostics](Troubleshooting.md#search-linkage-diagnostics-debug-widget)
+📖 **Full documentation:** [Find Rem — Reference or Open](Utilities-Finding-and-Navigating.md#find-rem-reference-or-open) · root-cause explainer: [Search / Linkage Diagnostics](Troubleshooting.md#search-linkage-diagnostics-debug-widget)
 
 ### 6.5. Source Popup (modal, queue-safe PDF/HTML viewer)
 **Trigger:** **Hover** a reference pin → press `Opt+O` / `Alt+O` (command: `Open Hovered Source in Popup`)
@@ -511,7 +511,7 @@ A centered **modal** popup that renders the **PDF or web article behind a hovere
 - **🔖 Scroll to Highlight button** in the header re-centers on the highlight after you've scrolled around the document.
 - **Queue-safe:** uses a modal overlay (not a pane), so the queue, your position, and the rating buttons stay intact underneath.
 
-📖 **Full documentation:** [Open Source in Popup](Utilities.md#open-source-in-popup)
+📖 **Full documentation:** [Open Source in Popup](Utilities-Finding-and-Navigating.md#open-source-in-popup)
 
 ### 6.6. Source Popup (floating, non-blocking)
 **Trigger:** **Hover** a reference pin → press `Opt+Shift+O` / `Alt+Shift+O` (command: `Open Hovered Source in Floating Window`)
@@ -527,7 +527,7 @@ The **non-blocking** sibling of 6.5: the *same* reader, but opened as a **floati
 
 Shares the source-detection and 🔖 Scroll to Highlight behaviors with 6.5.
 
-📖 **Full documentation:** [Open Source in Popup → Floating window](Utilities.md#floating-window-interaction-closing)
+📖 **Full documentation:** [Open Source in Popup → Floating window](Utilities-Finding-and-Navigating.md#floating-window-interaction-closing)
 
 ### 6.7. Restructure Outline Preview Popup
 **Command:** `Restructure Outline by Headings` (quick code `roh`)
@@ -542,7 +542,7 @@ A side-by-side popup that opens before any restructure change is applied. It re-
 - **Right panel (After):** the proposed restructured tree. Rows that would move are highlighted.
 - **⏷ Preserve / ⏵ Flatten toggle:** opt in/out of pulling each non-heading subtree into the candidate flow.
 
-📖 **Full documentation:** [Restructure Outline by Headings](Utilities.md#restructure-outline-by-headings)
+📖 **Full documentation:** [Restructure Outline by Headings](Utilities-Outline-and-Headings.md#restructure-outline-by-headings)
 
 ### 6.8. Read Points Popup
 **Trigger:** `View Read Points (History)` command (`Ctrl+Shift+F7`, quick code `vrp`)
@@ -571,7 +571,7 @@ The confirmation *and* the report for the image scan, in one popup that stays op
 - **Scan again** returns to the scope choice without reopening the command; **?** in the header opens this feature's documentation.
 - **Keyboard-driven:** `↑`/`↓` move between the scopes, `Enter` runs the selected one (and closes the popup from the report), `Esc` cancels — ignored while a scan is running so a reflex press can't abort it.
 
-📖 **Full documentation:** [Filter a Document by Images](Utilities.md#filter-a-document-by-images)
+📖 **Full documentation:** [Filter a Document by Images](Utilities-Finding-and-Navigating.md#filter-a-document-by-images)
 
 ### 6.10. Incremental RemNote Panel
 *(Left Sidebar)*
@@ -612,7 +612,7 @@ Scan, review and delete in one popup — but deliberately in **two stages**, bec
 - **Live progress** during the delete, and `Esc` is ignored while it runs so a reflex press can't abort it.
 - **The report stays on screen**: how many were deleted, how many failed, and how long it took. **Scan again** starts over; **?** in the header opens this feature's documentation.
 
-📖 **Full documentation:** [Delete Empty Extra Card Detail Rems](Utilities.md#delete-empty-extra-card-detail-rems)
+📖 **Full documentation:** [Delete Empty Extra Card Detail Rems](Utilities-Cleaning-Up.md#delete-empty-extra-card-detail-rems)
 
 ### 6.12. Clean Priority Review Documents Popup
 **Trigger:** `Clean Priority Review Documents` command (quick code `clean`)
@@ -644,7 +644,7 @@ Finds the Rems in an anchor's orbit that generate no flashcards, and fixes the t
 - **Reports what actually happened:** how many Rems changed and how many cards **appeared**, read back from the Rems rather than predicted.
 - **Keyboard-driven:** `↑`/`↓` move, `Space` selects, `A` selects everything shown, `Enter` applies, `Esc` closes — ignored mid-write so a reflex press cannot lose the undo snapshot.
 
-📖 **Full documentation:** [Card Enablement Audit](Utilities.md#card-enablement-audit)
+📖 **Full documentation:** [Card Enablement Audit](Utilities-Cleaning-Up.md#card-enablement-audit)
 
 ### 6.14. Priority Queue Popup
 **Trigger:** `Priority Queue` command (quick code `prq`, `Opt+Shift+L` / `Alt+Shift+L`), the **Document Menu** (⋯) of any document, the queue's ⋮ menu, or the **Priority Queue** button of the panel

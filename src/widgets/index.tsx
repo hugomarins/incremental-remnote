@@ -32,6 +32,7 @@ import { autoRefreshPriorityQueueId, enableHideInQueueIntegrationId, enableFlash
 import { refreshAllPriorityQueuesAtStartup } from '../lib/priority_review_document/queue_doc';
 import { bandVerboseLogsEnabled } from '../lib/priority_bands';
 import { registerIncrementalRemTracker } from '../register/tracker';
+import { registerLogosBridge } from '../lib/logos_bridge';
 import { cleanupOrphanedReviewGraphs } from '../lib/priority_review_document/cleanup';
 import { migrateAuthoritativeAggregatesToShards } from '../lib/authoritative_aggregates';
 import { registerJumpToRemHelper } from '../register/window';
@@ -121,6 +122,8 @@ async function onActivate(plugin: ReactRNPlugin) {
   // index widget: plugin.track subscriptions belong to the realm that owns the
   // callback, and this is the same realm registerCallbacks runs in.
   registerPrefetchTrackers(plugin);
+  // Long-polls the local Logos helper while the Logos Bridge setting is on.
+  registerLogosBridge(plugin);
   await registerWidgets(plugin);
 
   // Register CSS rules

@@ -11,7 +11,8 @@ import {
 } from '@remnote/plugin-sdk';
 import { openMasteryDrill } from '../lib/mastery_drill_launch';
 import { convertRemTree } from '../lib/markup_to_richtext';
-import { aiTranscribeHighlight, restoreHighlightBeforeAi } from '../lib/ai_ocr';import { pinSourceQuote } from '../lib/pdf_source_pins';
+import { aiTranscribeHighlight, restoreHighlightBeforeAi } from '../lib/ai_ocr';
+import { pinSourceQuote } from '../lib/pdf_source_pins';
 import { markRemsAsFreshlyCreated } from '../lib/incRemHelpers';
 import {
   powerupCode,

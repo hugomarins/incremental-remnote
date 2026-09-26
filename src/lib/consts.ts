@@ -614,6 +614,11 @@ export const restoreHighlightBeforeAiCommandId = 'restore-highlight-before-ai';
 // Pin the source passage of the focused Rem's text in the open PDF (lib/source_pins).
 export const pinSourceQuoteCommandId = 'pin-source-quote';
 
+// Logos Bible Software bridge (lib/logos_bridge.ts + scripts/logos_bridge/).
+export const logosBridgeEnabledId = 'logos-bridge-enabled';
+export const logosAutoOpenId = 'logos-auto-open';
+export const openInLogosCommandId = 'open-in-logos';
+
 // --- Priority Queue cooling (lib/priority_review_document/cooling*.ts) ---
 // The cooling SET is never stored: it is a function of card data, recomputed on
 // every refresh. Two keys support it:

@@ -59,6 +59,8 @@ import {
   hideDismissedTagSettingId,
   showPinRingIndicatorsSettingId,
   enableHideInQueueIntegrationId,
+  logosBridgeEnabledId,
+  logosAutoOpenId,
   enableFlashcardPrioritisationId,
   performanceModeId,
   alwaysUseLightModeOnMobileId,
@@ -136,6 +138,8 @@ export interface IESettings {
 
   // Integrations / performance
   [enableHideInQueueIntegrationId]: boolean;
+  [logosBridgeEnabledId]: boolean;
+  [logosAutoOpenId]: boolean;
   [enableFlashcardPrioritisationId]: boolean;
   [performanceModeId]: PerformanceMode;
   [alwaysUseLightModeOnMobileId]: boolean;
@@ -210,6 +214,8 @@ export const IE_SETTINGS_DEFAULTS: IESettings = {
   [showPinRingIndicatorsSettingId]: false,
 
   [enableHideInQueueIntegrationId]: false,
+  [logosBridgeEnabledId]: false,
+  [logosAutoOpenId]: false,
   [enableFlashcardPrioritisationId]: false,
   [performanceModeId]: 'light',
   [alwaysUseLightModeOnMobileId]: true,
@@ -956,7 +962,7 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     kind: 'boolean',
     group: 'integrations',
     reloadRequired: true,
-    helpPath: 'Utilities/#hide-in-queue',
+    helpPath: 'Utilities-Queue-Display/#hide-in-queue',
     title: 'Enable Hide-in-Queue Powerups and Commands',
     description:
       'Registers the "Hide in Queue", "Remove from Queue", "No Hierarchy", "Hide Parent" and ' +
@@ -966,6 +972,29 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
       'Uninstall the standalone plugin first, then reload RemNote.\n\n' +
       '"Remove Parent" and "Remove Grandparent" are always registered, since the Cloze and Extract ' +
       'creators depend on them.',
+  },
+  [logosBridgeEnabledId]: {
+    kind: 'boolean',
+    group: 'integrations',
+    helpPath: 'Logos-Bible-Software-Integration/#setup',
+    title: 'Logos Bible Software Bridge',
+    description:
+      'Receives extracts and reading bookmarks from Logos (macOS) through the local LogosBridge ' +
+      'helper (scripts/logos_bridge/build.sh). In Logos: ⌃⌥X extracts the selection under the ' +
+      'IncRem you are reviewing, ⌃⌥⇧X does it without asking priority and interval, ⌃⌥B saves ' +
+      'the reading position, ⌃⌥N creates an IncRem for the open book (a top-level document tagged ' +
+      '#Logos). Leave off unless the helper is installed.',
+  },
+  [logosAutoOpenId]: {
+    kind: 'boolean',
+    group: 'integrations',
+    showWhen: { id: logosBridgeEnabledId, equals: true },
+    helpPath: 'Logos-Bible-Software-Integration/#settings',
+    title: 'Open in Logos Automatically',
+    description:
+      'When an Incremental Rem comes up — in the queue, or when an Editor Review timer starts — ' +
+      'run "Open in Logos" for it: Logos comes forward at its bookmark (or, for an extract, at its ' +
+      'passage). Incremental Rems with no Logos link are left alone.',
   },
 
   // --- Misc ---
