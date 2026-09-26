@@ -6,6 +6,8 @@ This page documents the major changes and improvements for each version of the I
 
 ### ✨ New - Logos Bible Software integration (macOS)
 
+![Logos Bible Software](assets/Logos.webp){ width="200" }
+
 **Logos Bible Software**: Added incremental reading of Logos books from inside Logos, through a small helper app — import a book, extract passages and keep a bookmark with keyboard shortcuts pressed in Logos.
 
 - `Ctrl+Opt+N` imports the open book as a top-level Incremental Rem tagged #Logos, once per book.

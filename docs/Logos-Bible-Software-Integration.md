@@ -1,5 +1,7 @@
 # Logos Bible Software Integration
 
+![Logos Bible Software](assets/Logos.webp){ width="200" }
+
 Read your **Logos Bible Software** books incrementally without leaving Logos: import a book as an Incremental Rem, send passages to RemNote as extracts, and keep a bookmark of where you stopped — all with keyboard shortcuts pressed in Logos. **macOS only.**
 
 What you get:
