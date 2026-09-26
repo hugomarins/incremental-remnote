@@ -44,6 +44,20 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 /** One minute, expressed in days: the hard floor for the log axis. */
 const MIN_FLOOR_DAYS = 1 / 1440;
 
+/**
+ * Where the log axis starts once a card has lived a day, whatever its learning
+ * steps did.
+ *
+ * Every decade gets the same width on a log axis, so a card whose second rep
+ * came four minutes after its first used to open at two minutes and spend
+ * nearly half the chart on its first day — hours nobody reviews against. Half
+ * a day, rather than one, so a rep at one day still sits clear of the left
+ * edge instead of stacking on the first review. Sub-day reps collapse onto
+ * that edge. A card younger than a day has nothing else to show, so it keeps
+ * the minute-level axis.
+ */
+const LOG_AXIS_FLOOR_DAYS = 0.5;
+
 /** Samples drawn across each inter-review segment of the past curve. */
 const SAMPLES_PER_SEGMENT = 48;
 
@@ -601,8 +615,12 @@ function buildTicks(
             }
         }
     } else {
+        // An axis that starts at half a day has no sub-day stretch left to mark
+        // but its own edge, and a "12h" there costs the 1d tick its place.
+        const firstCandidate = minDays >= LOG_AXIS_FLOOR_DAYS ? 1 : 0;
         for (const candidate of TICK_CANDIDATES) {
             if (candidate.value < minDays || candidate.value > maxDays) continue;
+            if (candidate.value < firstCandidate) continue;
             const x = toX(candidate.value);
             if (out.length > 0 && x - out[out.length - 1].value < minGap) continue;
             out.push({ value: x, label: candidate.label });
@@ -814,6 +832,7 @@ export function buildForgettingCurveSeries(
     const floorDays = Math.max(
         MIN_FLOOR_DAYS,
         positives.length > 0 ? Math.min(...positives) / 2 : MIN_FLOOR_DAYS,
+        nowDays >= 1 ? LOG_AXIS_FLOOR_DAYS : 0,
     );
 
     /** Stability can be a fraction of a day; keep the log finite. */

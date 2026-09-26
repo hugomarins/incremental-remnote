@@ -639,6 +639,30 @@ describe('buildForgettingCurveSeries', () => {
         }
     });
 
+    it('starts the log axis at half a day once the card is older than its learning steps', () => {
+        // Learning steps at 0, 4m and 20m, then a rep at one day: the minutes
+        // must not claim the left of the axis, and the one-day rep must not be
+        // pinned to its edge.
+        const start = 2000;
+        const history = [
+            rep(start, QueueInteractionScore.GOOD),
+            rep(start - 4 / 1440, QueueInteractionScore.GOOD),
+            rep(start - 20 / 1440, QueueInteractionScore.GOOD),
+            rep(start - 1, QueueInteractionScore.GOOD),
+            rep(start - 5, QueueInteractionScore.GOOD),
+        ];
+        const s = build(history, { scale: 'log' })!;
+        assert.ok(Math.abs(s.xDomain[0] - Math.log10(0.5)) < 1e-9, `axis starts at ${Math.pow(10, s.xDomain[0])}d`);
+        assert.ok(s.reps[3].x > s.xDomain[0] + 0.25, 'the one-day rep sits clear of the left edge');
+        assert.ok(!s.ticks.some((t) => /m$|h$/.test(t.label)), `no sub-day ticks: ${s.ticks.map((t) => t.label)}`);
+
+        // A card still inside its first day has nothing else to show.
+        const young = build([rep(0.02, QueueInteractionScore.GOOD), rep(0.01, QueueInteractionScore.GOOD)], {
+            scale: 'log',
+        })!;
+        assert.ok(Math.pow(10, young.xDomain[0]) < 0.1);
+    });
+
     it('covers a short-lived card without flooding it with ticks', () => {
         // Three reps inside twenty minutes: the axis is minutes wide, and the
         // step has to shrink with it without producing a tick per minute.

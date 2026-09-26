@@ -444,7 +444,11 @@ Past *now* the staircase fans out into the same four branches, in the same colou
 
 The **Log** / **Linear** toggle changes the time axis, and the two answer different questions.
 
-**Log** is the default. A mature card spends minutes in learning and years in review; on a linear axis its first day is a single pixel and everything interesting about its early life is invisible. The log axis gives both ends room, and it opens on the window where **Easy** reaches your target retention — the whole of the next stability, which costs almost no width because a log axis compresses its right-hand end.
+**Log** is the default. A mature card spends days in its first intervals and years in review; on a linear axis its first weeks are a few pixels and everything interesting about its early life is invisible. The log axis gives both ends room. Once a card is a day old the axis starts at 12 hours, so its same-day learning steps sit on the left edge rather than claiming the width and a one-day interval stays clear of it. The axis opens on the window where **Easy** reaches your target retention — the whole of the next stability, which costs almost no width because a log axis compresses its right-hand end.
+
+![The Forgetting Curve on the log axis with five numbered notes: (1) the axis starts at 12 hours, with the first review and its same-day learning steps on the left edge; (2) two brackets of equal width, the first two weeks and the 5.6 years without a review, both a 28-fold stretch of time; (3) the gentle-looking slide from the 90% target to 64% over those years; (4) the two-year forecast past "now" squeezed into a sliver at the right end; (5) the stability step of ×10.61 bought by the review just made](assets/forgetting-curve-log-axis-explained.png){ width="900" }
+
+*How to read the log axis: equal widths are equal ratios of time, not equal durations.*
 
 **Linear** shows real elapsed time, so intervals are comparable by eye. It opens on a much narrower window — ending where **Good** is still 6 points above target — because on a linear axis every day added to the right steals width from every day already drawn, and a window chosen for the far future would flatten the repetitions you are trying to read.
 

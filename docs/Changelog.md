@@ -2,6 +2,16 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.128 - September 26th, 2026
+
+### ⚡ Improved - Forgetting Curve log axis starts at 12 hours
+
+**Forgetting Curve**: the log time axis no longer spends up to half its width on the minutes and hours of a card's learning steps; it starts at 12 hours, keeping the one-day review in view.
+
+![The Forgetting Curve on the log axis with five numbered notes: (1) the axis starts at 12 hours, with the first review and its same-day learning steps on the left edge; (2) two brackets of equal width, the first two weeks and the 5.6 years without a review, both a 28-fold stretch of time; (3) the gentle-looking slide from the 90% target to 64% over those years; (4) the two-year forecast past "now" squeezed into a sliver at the right end; (5) the stability step of ×10.61 bought by the review just made](assets/forgetting-curve-log-axis-explained.png){ width="900" }
+
+📖 [Log and linear time](Reviewing-Items-in-the-Queue.md#log-and-linear-time)
+
 ## v1.0.126 - September 26th, 2026
 
 ### ✨ New - Logos Bible Software integration (macOS)
