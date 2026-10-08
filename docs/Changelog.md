@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.152 - October 8th, 2026
+
+### ⚡ Improved
+
+**Editor Review Timer**: The timer bar now stays pinned to the top of the document while you scroll, instead of scrolling away with the title.
+
+📖 [Always in view](Reviewing-Items-in-the-Editor.md#timer-stays-in-view)
+
 ## v1.0.151 - October 8th, 2026
 
 ### 🐛 Fixed

@@ -60,3 +60,20 @@ The only hook is the class `cluster-answer-container`, put on the wrapper of the
 ## Text import cannot name a powerup
 
 Pasting `#[[TFT]]` (RemNote's flashcards-from-text syntax) resolves the name among ordinary Rems only. With a powerup of that name registered, it still creates a plain tag Rem. The plain tag slugifies to the same `data-rem-tags` value, so CSS keyed on the slug applies either way; converting it to the powerup takes a command (`convertPlainTags` in `src/register/true_false.ts`). Observed 2026-10-03.
+
+## A document pane's scroller, and pinning a DocumentAboveToolbar widget
+
+Measured Oct 8 2026 from a pane's DOM:
+
+```
+div#tile__document.rn-pane__body          <- the scroller (overflow-y-scroll)
+  div.w-full.h-full.relative
+    div.document-inner-container          <- overflow-hidden
+      div.fade-in-first-load.relative     <- one per DocumentAboveToolbar widget
+        div > iframe[data-plugin-id]
+      div.rn-document-wrapper             <- the document
+```
+
+`position: sticky` on the widget's wrapper does nothing by itself: `overflow: hidden` makes `.document-inner-container` the wrapper's scroll container, and that box never scrolls. Setting it to `overflow: clip` keeps the clipping without creating a scroll container, so the wrapper sticks to `#tile__document`. Shipped in v1.0.152 for the Editor Review Timer (`EDITOR_REVIEW_TIMER_STICKY_CSS` in `src/register/widgets.ts`).
+
+The PDF viewer does not render this location at all; only the "Notes" view of the Rem does.
