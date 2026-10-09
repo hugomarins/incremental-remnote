@@ -6,17 +6,31 @@ Every colour the plugin draws in one place. Nothing here is configurable per-col
 
 ## The priority ramp
 
-One scale underlies every priority colour in the plugin. An item's **percentile** within its population — Incremental Rems ranked against Incremental Rems, flashcards against flashcards — maps onto a hue:
-
-`hsl(percentile ÷ 100 × 240, 80%, 55%)`
+One scale underlies every priority colour in the plugin. An item's **percentile** within its population — Incremental Rems ranked against Incremental Rems, flashcards against flashcards — maps onto a hue, drawn as `hsl(hue, 80%, 55%)`:
 
 | Percentile | Hue | Reads as |
 |---|---|---|
-| 1 | 0° | red |
-| 25 | 60° | yellow |
-| 50 | 120° | green |
-| 75 | 180° | cyan |
+| 0 | 0° | red |
+| 10 | 28° | orange |
+| 20 | 52° | yellow |
+| 30 | 85° | lime |
+| 40 | 130° | green |
+| 60 | 175° | teal |
+| 80 | 210° | sky blue |
 | 100 | 240° | blue |
+
+Between two rows the hue shifts evenly, so a percentile of 15 sits halfway between orange and yellow.
+
+### More colour where it matters { #steeper-at-the-top }
+
+The ramp is **deliberately uneven**. The top 40% of your material — where a difference in rank changes what you do today — is spread over 130° of hue and five colours you can name at a glance. The remaining 60% shares the 110° from green to blue, where telling a 70 from an 80 matters far less.
+
+| Zone | Hue span | Hue per percentile point |
+|---|---|---|
+| **Top 40%** | 0° → 130° | about 3.3° |
+| **Lower 60%** | 130° → 240° | about 1.8° |
+
+A straight line from red to blue would give every point 2.4°, and would spend much of that on the wide band of greens the eye cannot tell apart.
 
 **Red is urgent, blue is background.** The ramp is relative, not absolute: a Rem at priority 30 is red in a knowledge base where everything else is lower-numbered, and green in one where it is typical. That is deliberate — the colour answers "how does this rank against my other material?", which a fixed scale cannot.
 

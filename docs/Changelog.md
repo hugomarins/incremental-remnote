@@ -4,6 +4,12 @@ This page documents the major changes and improvements for each version of the I
 
 ## v1.0.153 - October 9th, 2026
 
+### ⚡ Improved
+
+**Priority colours**: The red → blue ramp now changes fastest across the top 40% of your material, so high-priority items are easier to tell apart on PDF highlights, table badges, priority badges and the priority slider.
+
+📖 [More colour where it matters](Colour-Coding-Reference.md#steeper-at-the-top)
+
 ### 🐛 Fixed
 
 **Editor Review Timer**: RemNote's sticky headers now appear just below the pinned timer instead of on top of it.
