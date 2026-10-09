@@ -59,20 +59,21 @@ export async function getDailyDocReferenceForDate(plugin: RNPlugin, date: Date) 
  * The priority ramp: [percentile, hue] stops, interpolated linearly in between.
  *
  * Deliberately NOT a straight line from red to blue. What a priority colour has
- * to tell apart is the top of the list, so the top 40% is given 130° of hue —
- * five colours with names (red, orange, yellow, lime, green) — and the remaining
- * 60% shares the 110° from green to blue. Stops rather than a curve because HSL
+ * to tell apart is the top of the list, so the top 35% is given 130° of hue —
+ * five colours with names (red, orange, yellow, lime, green) — the next quarter
+ * runs through teal to sky blue, and everything below the 60th percentile shares
+ * the last 30° of blue. Stops rather than a curve because HSL
  * hue is not perceptually even: 90–150° all reads as "green", and a power curve
  * would spend part of the top zone's extra range there.
  */
 export const PRIORITY_HUE_STOPS: ReadonlyArray<readonly [number, number]> = [
   [0, 0],
   [10, 28],
-  [20, 52],
-  [30, 85],
-  [40, 130],
-  [60, 175],
-  [80, 210],
+  [19, 52],
+  [27, 85],
+  [35, 130],
+  [45, 175],
+  [60, 210],
   [100, 240],
 ];
 
@@ -93,7 +94,7 @@ export function percentileToHue(percentile: number): number {
  * Converts a percentile (1-100) into an HSL color string.
  * Lower percentiles (higher priority) are mapped to red/orange (hue ~0).
  * Higher percentiles (lower priority) are mapped to green/blue (hue ~240).
- * The mapping follows PRIORITY_HUE_STOPS, so it is steeper in the top 40%.
+ * The mapping follows PRIORITY_HUE_STOPS, so it is steeper in the top 35%.
  * @param percentile A number from 1 to 100.
  * @returns An HSL color string (e.g., "hsl(130, 80%, 55%)").
  */

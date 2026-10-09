@@ -6,7 +6,7 @@ This page documents the major changes and improvements for each version of the I
 
 ### ⚡ Improved
 
-**Priority colours**: The red → blue ramp now changes fastest across the top 40% of your material, so high-priority items are easier to tell apart on PDF highlights, table badges, priority badges and the priority slider.
+**Priority colours**: The red → blue ramp now changes fastest across the top 35% of your material and flattens into blue below the 60th percentile, so high-priority items are easier to tell apart on PDF highlights, table badges, priority badges and the priority slider.
 
 📖 [More colour where it matters](Colour-Coding-Reference.md#steeper-at-the-top)
 
