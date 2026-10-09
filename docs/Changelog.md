@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.153 - October 9th, 2026
+
+### 🐛 Fixed
+
+**Editor Review Timer**: RemNote's sticky headers now appear just below the pinned timer instead of on top of it.
+
+📖 [Always in view](Reviewing-Items-in-the-Editor.md#timer-stays-in-view)
+
 ## v1.0.152 - October 8th, 2026
 
 ### ⚡ Improved
