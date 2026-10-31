@@ -492,7 +492,6 @@ export function registerURLChangeListener(plugin: ReactRNPlugin) {
     // describes a card nobody is looking at. See lib/queue_visible_card.
     if (!/\/(flashcards|need_to_learn)/.test(url)) {
       await plugin.storage.setSession('clusterVisibleCardId', undefined);
-      await plugin.storage.setSession('clusterVisibleCardLoadTime', undefined);
     }
 
     // Trigger inc rem counter widget reactivity by updating current document ID
@@ -867,32 +866,18 @@ export function registerQueueCompleteCardListener(plugin: ReactRNPlugin) {
         }
       }
 
-      // Cluster-aware: prefer the sibling cardId signaled by card_info_bar widget.
-      // Falls back to data.cardId when the widget hasn't mounted or hasn't signaled yet.
-      // Note: do NOT clear clusterVisibleCardId here — queue_session.ts also reads it in
-      // its own QueueCompleteCard listener, and clear order across listeners is not
-      // guaranteed. Staleness is instead prevented by queue_session.ts clearing it at the
-      // start of each QueueLoadCard.
-      //
-      // Guard: clusterVisibleCardId may be stale from a previously-rendered sibling when
-      // events fire across card transitions. Only trust it if it belongs to the same rem
-      // as data.cardId. Otherwise it's contamination from an unrelated card.
-      const rawClusterVisibleCardId =
-        (await plugin.storage.getSession<string>('clusterVisibleCardId')) || undefined;
-      let effectiveCardId = data.cardId;
-      if (rawClusterVisibleCardId && rawClusterVisibleCardId !== data.cardId && remId) {
-        const clusterCard = await plugin.card.findOne(rawClusterVisibleCardId);
-        if (clusterCard?.remId === remId) {
-          effectiveCardId = rawClusterVisibleCardId;
-        }
-      }
+      // data.cardId is always the card rated. Do NOT refine it with clusterVisibleCardId:
+      // Card Cluster ratings never reach this event (findings/QUEUE_AND_PRACTICE.md; they
+      // are handled in the GlobalRemChanged listener below), and by the time this runs the
+      // widget may already have broadcast the NEXT card, which can be a sibling cloze of
+      // the same Rem. That sent ratings, and drill entries, to a card never rated.
 
       // Flashcard History: record the completed card for the sidebar widget.
       // This block runs unconditionally (regardless of Light Mode) so the history
       // sidebar always receives entries with a score badge.
       await recordFlashcardHistory(plugin, {
         remId,
-        cardId: effectiveCardId,
+        cardId: data.cardId,
         rem,
         score,
         context: 'entry',
@@ -944,12 +929,12 @@ export function registerQueueCompleteCardListener(plugin: ReactRNPlugin) {
             if (score === QueueInteractionScore.AGAIN || score === QueueInteractionScore.HARD) {
               // Re-adding restarts the cooling of a card that was already in the drill.
               finalDrillIds = [
-                ...finalDrillIds.filter((item) => getCardId(item) !== effectiveCardId),
-                await buildDrillEntry(plugin, effectiveCardId, currentKbId, score),
+                ...finalDrillIds.filter((item) => getCardId(item) !== data.cardId),
+                await buildDrillEntry(plugin, data.cardId, currentKbId, score),
               ];
               await plugin.storage.setSynced('finalDrillIds', finalDrillIds);
             } else if (score >= QueueInteractionScore.GOOD) {
-              const filtered = finalDrillIds.filter((item) => getCardId(item) !== effectiveCardId);
+              const filtered = finalDrillIds.filter((item) => getCardId(item) !== data.cardId);
               if (filtered.length !== finalDrillIds.length) {
                 await plugin.storage.setSynced('finalDrillIds', filtered);
               }

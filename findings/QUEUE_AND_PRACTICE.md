@@ -40,6 +40,8 @@ Read from the bundle and confirmed in the database, 2026-10-04. The queue's `ans
 
 Two cards of `cc` parents had Good ratings stored with the drill document as `subQueueId` and were still in `finalDrillIds`. The card's `repetitionHistory` is the only reliable source: read it back after the next card change (`reconcileRatings` in `src/lib/mastery_drill_native.ts`; the popup drill's `registerDrillCardRatingListener` does the same for the card `QueueLoadCard` named).
 
+Rechecked in the bundle on 2026-10-31. `answerCardOverride` is assigned once, in `SpacedRepetitionCardCluster`, and every path returns `true`. The other emitters with a card id are the leech screen's Skip and Edit Myself, which pass that card's own id. So `cardId` in `QueueCompleteCard` is always the card rated, never a cluster anchor. Don't refine it with `clusterVisibleCardId`: that key names the card on screen, which may already be the next one. Replacing it when both cards shared a Rem put a never-reviewed cloze into the drill in place of the sibling rated Again.
+
 ## A skip buries the card's siblings
 
 `removeCurrentCardFromQueue` runs every provider's "before pop" hook. The bury provider records the card in `UserDataStore.recentlySeenCardsTuples` (synced, entries last 60 minutes), exactly as if it had been answered.

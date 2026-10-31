@@ -570,7 +570,6 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
       // Inside a cluster, QueueLoadCard does not fire per sibling, so the widget's writes
       // for subsequent siblings are preserved (only overwritten, not cleared, between them).
       await plugin.storage.setSession('clusterVisibleCardId', undefined);
-      await plugin.storage.setSession('clusterVisibleCardLoadTime', undefined);
 
       // Lazy session init (mobile fix: QueueEnter sometimes doesn't fire on iOS)
       if (!currentSession) {
@@ -659,31 +658,13 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
     try {
       const { cardId, score } = message as { cardId: string; score: QueueInteractionScore };
 
-      // Cluster-aware: RemNote keeps the FlashcardUnder widget mounted across cluster
-      // siblings and only getWidgetContext().cardId advances; QueueLoadCard + the event's
-      // cardId both stick to the anchor. card_info_bar.tsx broadcasts the actually
-      // visible sibling id + load time so we can still record count and time per sibling.
-      const clusterCardId = cardId
-        ? await plugin.storage.getSession<string>('clusterVisibleCardId')
-        : undefined;
-      const clusterLoadTime = cardId
-        ? (await plugin.storage.getSession<number>('clusterVisibleCardLoadTime')) || undefined
-        : undefined;
-      const effectiveCardId = clusterCardId || cardId;
+      // cardId is always the card rated: Card Cluster ratings never reach this event
+      // (findings/QUEUE_AND_PRACTICE.md), and clusterVisibleCardId may already name the next card.
 
       if (currentSession && cardId) {
-        // Prefer the QueueLoadCard-recorded start time (more accurate for anchor / first card);
-        // fall back to the widget-recorded sibling load time only for cluster siblings, where
-        // QueueLoadCard does NOT fire per sibling and effectiveCardId differs from data.cardId.
-        // For non-cluster cards (effectiveCardId === cardId) where cardStartTimes was already
-        // consumed, the fallback is wrong: clusterLoadTime is stale (the original load time)
-        // and using it would inflate the session counters when RemNote fires QueueCompleteCard
-        // repeatedly for a stuck card. Drop the fallback in that case so the duplicate
-        // completion is silently ignored.
-        const isClusterSibling = effectiveCardId !== cardId;
-        const startTime =
-          cardStartTimes.get(effectiveCardId) ??
-          (isClusterSibling ? clusterLoadTime : undefined);
+        // When cardStartTimes was already consumed there is nothing to add: RemNote can fire
+        // QueueCompleteCard repeatedly for a stuck card, and the duplicate is silently ignored.
+        const startTime = cardStartTimes.get(cardId);
         if (startTime) {
           const rawTimeSpent = Date.now() - startTime;
           const timeLimitSec = await getIESetting(plugin, flashcardResponseTimeLimitId);
@@ -697,13 +678,13 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
           }
 
           if (score !== QueueInteractionScore.TOO_EARLY) {
-            if (currentSession.currentCardId === effectiveCardId) {
+            if (currentSession.currentCardId === cardId) {
               currentSession.currentCardTotalTime =
                 (currentSession.currentCardTotalTime || 0) + timeSpent;
               currentSession.currentCardRepCount =
                 (currentSession.currentCardRepCount || 0) + 1;
             }
-            if (currentSession.prevCardId === effectiveCardId) {
+            if (currentSession.prevCardId === cardId) {
               currentSession.prevCardTotalTime =
                 (currentSession.prevCardTotalTime || 0) + timeSpent;
               currentSession.prevCardRepCount =
@@ -711,7 +692,7 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
             }
           }
 
-          cardStartTimes.delete(effectiveCardId);
+          cardStartTimes.delete(cardId);
         }
       } else if (incRemEngagementStart !== null && currentSession) {
         // No cardId — IncRem rep completion. Close any open engagement so
@@ -723,10 +704,10 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
       // Update prev-card interval/coverage now that scheduler has updated
       if (currentSession && cardId && score !== QueueInteractionScore.TOO_EARLY) {
         if (
-          currentSession.currentCardId === effectiveCardId ||
-          currentSession.prevCardId === effectiveCardId
+          currentSession.currentCardId === cardId ||
+          currentSession.prevCardId === cardId
         ) {
-          const card = await plugin.card.findOne(effectiveCardId);
+          const card = await plugin.card.findOne(cardId);
           if (card) {
             const dates = card.repetitionHistory?.map((h) => h.date) || [];
             const lastRepTime =
