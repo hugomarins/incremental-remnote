@@ -1,8 +1,9 @@
 import { clearSelectionCache } from '../lib/editor_selection';
 import { AppEvents, ReactRNPlugin, RemId, PluginRem, BuiltInPowerupCodes, RichTextElementRemInterface, QueueInteractionScore } from '@remnote/plugin-sdk';
 import { deferDuringNativeDrill, isNativeDrillQueue, registerNativeDrillListeners } from '../lib/mastery_drill_native';
+import { registerClusterRatingReadback } from '../lib/cluster_rating_readback';
 import { FinalDrillEntry, buildDrillEntry } from '../lib/mastery_drill_status';
-import { deferDuringLearnNew, registerQueueCoolingListeners } from '../lib/queue_cooling_skip';
+import { deferDuringLearnNew, noteCoolingRating, registerQueueCoolingListeners } from '../lib/queue_cooling_skip';
 import * as _ from 'remeda';
 import {
   allIncrementalRemKey,
@@ -79,7 +80,7 @@ import {
   readHistoryShard,
   writeHistoryShard,
 } from '../lib/history_shards';
-import { registerQueueSessionTracking, saveCurrentSession, hasActiveSession } from '../lib/queue_session';
+import { recordRatingWithoutEvent, registerQueueSessionTracking, saveCurrentSession, hasActiveSession } from '../lib/queue_session';
 import { openQueueDashboard } from '../lib/queue_dashboard';
 import { shouldUseLightMode } from '../lib/mobileUtils';
 import { primeQueuePrefetch, flushPendingServed } from '../lib/queue_prefetch';
@@ -868,84 +869,121 @@ export function registerQueueCompleteCardListener(plugin: ReactRNPlugin) {
 
       // data.cardId is always the card rated. Do NOT refine it with clusterVisibleCardId:
       // Card Cluster ratings never reach this event (findings/QUEUE_AND_PRACTICE.md; they
-      // are handled in the GlobalRemChanged listener below), and by the time this runs the
+      // are read back in lib/cluster_rating_readback), and by the time this runs the
       // widget may already have broadcast the NEXT card, which can be a sibling cloze of
       // the same Rem. That sent ratings, and drill entries, to a card never rated.
+      await applyCardRating(plugin, { cardId: data.cardId, remId, rem, score, context: 'entry' });
+    }
+  );
+}
 
-      // Flashcard History: record the completed card for the sidebar widget.
-      // This block runs unconditionally (regardless of Light Mode) so the history
-      // sidebar always receives entries with a score badge.
-      await recordFlashcardHistory(plugin, {
-        remId,
-        cardId: data.cardId,
-        rem,
-        score,
-        context: 'entry',
-      });
+/**
+ * What one rating changes on our side, however we learned of it: QueueCompleteCard, or the
+ * card's history for a Card Cluster (lib/cluster_rating_readback).
+ */
+async function applyCardRating(
+  plugin: ReactRNPlugin,
+  args: {
+    cardId: string;
+    remId?: RemId;
+    rem?: PluginRem | null;
+    score?: QueueInteractionScore;
+    /** When the rating was made, if it is being applied after the fact. */
+    ratedAt?: number;
+    /** False once the queue closed: the session's seen list was already saved and reset. */
+    queueOpen?: boolean;
+    /** False when another path keeps the drill list for this card. */
+    updateDrill?: boolean;
+    context: string;
+  }
+): Promise<void> {
+  const { cardId, remId, rem, score, ratedAt, queueOpen = true, updateDrill = true, context } = args;
 
-      // --- Light Mode gate: priority cache and shield updates only ---
-      if (!(await shouldUseLightMode(plugin))) {
-        if (remId) {
-          recentlyProcessedCards.add(remId);
-          setTimeout(() => recentlyProcessedCards.delete(remId), CARD_PROCESSING_DEBOUNCE_MS);
+  // Flashcard History: record the completed card for the sidebar widget.
+  // This block runs unconditionally (regardless of Light Mode) so the history
+  // sidebar always receives entries with a score badge.
+  await recordFlashcardHistory(plugin, { remId, cardId, rem, score, context });
 
-          // console.log('LISTENER: Calling LIGHT updateCardPriorityCache...');
-          await updateCardPriorityCache(plugin, remId, true);
+  // --- Light Mode gate: priority cache and shield updates only ---
+  if (!(await shouldUseLightMode(plugin))) {
+    if (remId) {
+      recentlyProcessedCards.add(remId);
+      setTimeout(() => recentlyProcessedCards.delete(remId), CARD_PROCESSING_DEBOUNCE_MS);
 
-          // Mark card as seen for this session (used by Shield)
-          const seenCards = (await plugin.storage.getSession<string[]>(seenCardInSessionKey)) || [];
-          if (!seenCards.includes(remId)) {
-            await plugin.storage.setSession(seenCardInSessionKey, [...seenCards, remId]);
-          }
+      // console.log('LISTENER: Calling LIGHT updateCardPriorityCache...');
+      await updateCardPriorityCache(plugin, remId, true);
 
-          // Keep session cache in sync so Shield updates immediately
-          const sessionCache = await plugin.storage.getSession<QueueSessionCache>(queueSessionCacheKey);
-          if (sessionCache) {
-            const updatedCache: QueueSessionCache = {
-              ...sessionCache,
-              dueCardsInKB: sessionCache.dueCardsInKB.filter((c) => c.remId !== remId),
-              dueCardsInScope: sessionCache.dueCardsInScope.filter((c) => c.remId !== remId),
-            };
-            await plugin.storage.setSession(queueSessionCacheKey, updatedCache);
-          }
+      if (queueOpen) {
+        // Mark card as seen for this session (used by Shield)
+        const seenCards = (await plugin.storage.getSession<string[]>(seenCardInSessionKey)) || [];
+        if (!seenCards.includes(remId)) {
+          await plugin.storage.setSession(seenCardInSessionKey, [...seenCards, remId]);
         }
-      }
 
-      // Mastery Drill: add AGAIN/HARD cards, remove on GOOD+.
-      // Runs unconditionally (not gated by Light Mode).
-      // Gated by the 'enable-mastery-drill' setting.
-      if (score !== undefined && remId) {
-        const masteryDrillEnabled = await getIESetting(plugin, enableMasteryDrillId);
-        if (masteryDrillEnabled) {
-          try {
-            const kbData = await plugin.kb.getCurrentKnowledgeBaseData();
-            const currentKbId = kbData?._id;
-            type FinalDrillItem = FinalDrillEntry;
-            let finalDrillIds =
-              ((await plugin.storage.getSynced('finalDrillIds')) as FinalDrillItem[]) || [];
-            const getCardId = (item: FinalDrillItem) =>
-              typeof item === 'string' ? item : item.cardId;
-
-            if (score === QueueInteractionScore.AGAIN || score === QueueInteractionScore.HARD) {
-              // Re-adding restarts the cooling of a card that was already in the drill.
-              finalDrillIds = [
-                ...finalDrillIds.filter((item) => getCardId(item) !== data.cardId),
-                await buildDrillEntry(plugin, data.cardId, currentKbId, score),
-              ];
-              await plugin.storage.setSynced('finalDrillIds', finalDrillIds);
-            } else if (score >= QueueInteractionScore.GOOD) {
-              const filtered = finalDrillIds.filter((item) => getCardId(item) !== data.cardId);
-              if (filtered.length !== finalDrillIds.length) {
-                await plugin.storage.setSynced('finalDrillIds', filtered);
-              }
-            }
-          } catch (error) {
-            console.error('Failed to update Mastery Drill list:', error);
-          }
+        // Keep session cache in sync so Shield updates immediately
+        const sessionCache = await plugin.storage.getSession<QueueSessionCache>(queueSessionCacheKey);
+        if (sessionCache) {
+          const updatedCache: QueueSessionCache = {
+            ...sessionCache,
+            dueCardsInKB: sessionCache.dueCardsInKB.filter((c) => c.remId !== remId),
+            dueCardsInScope: sessionCache.dueCardsInScope.filter((c) => c.remId !== remId),
+          };
+          await plugin.storage.setSession(queueSessionCacheKey, updatedCache);
         }
       }
     }
-  );
+  }
+
+  // Mastery Drill: add AGAIN/HARD cards, remove on GOOD+.
+  // Runs unconditionally (not gated by Light Mode).
+  // Gated by the 'enable-mastery-drill' setting.
+  if (updateDrill && score !== undefined && remId) {
+    const masteryDrillEnabled = await getIESetting(plugin, enableMasteryDrillId);
+    if (masteryDrillEnabled) {
+      try {
+        const kbData = await plugin.kb.getCurrentKnowledgeBaseData();
+        const currentKbId = kbData?._id;
+        type FinalDrillItem = FinalDrillEntry;
+        let finalDrillIds =
+          ((await plugin.storage.getSynced('finalDrillIds')) as FinalDrillItem[]) || [];
+        const getCardId = (item: FinalDrillItem) =>
+          typeof item === 'string' ? item : item.cardId;
+
+        if (score === QueueInteractionScore.AGAIN || score === QueueInteractionScore.HARD) {
+          // Re-adding restarts the cooling of a card that was already in the drill.
+          finalDrillIds = [
+            ...finalDrillIds.filter((item) => getCardId(item) !== cardId),
+            await buildDrillEntry(plugin, cardId, currentKbId, score, ratedAt),
+          ];
+          await plugin.storage.setSynced('finalDrillIds', finalDrillIds);
+        } else if (score >= QueueInteractionScore.GOOD) {
+          const filtered = finalDrillIds.filter((item) => getCardId(item) !== cardId);
+          if (filtered.length !== finalDrillIds.length) {
+            await plugin.storage.setSynced('finalDrillIds', filtered);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update Mastery Drill list:', error);
+      }
+    }
+  }
+}
+
+function registerClusterRatings(plugin: ReactRNPlugin) {
+  registerClusterRatingReadback(plugin, async ({ cardId, remId, rem, rating, drillHandledElsewhere, queueOpen }) => {
+    await applyCardRating(plugin, {
+      cardId,
+      remId,
+      rem,
+      score: rating.score,
+      ratedAt: rating.date,
+      queueOpen,
+      updateDrill: !drillHandledElsewhere,
+      context: 'cluster card',
+    });
+    await recordRatingWithoutEvent(plugin, cardId, rating.score, rating.responseTime ?? 0);
+    noteCoolingRating(plugin, cardId, rating.score);
+  });
 }
 
 /**
@@ -998,84 +1036,6 @@ export function registerGlobalRemChangedListener(plugin: ReactRNPlugin) {
 
       const rem = await plugin.rem.findOne(data.remId);
       if (!rem) return;
-
-      // --- Cluster card drill detection ---
-      // QueueCompleteCard does not fire for cluster card ratings. GlobalRemChanged fires instead,
-      // but with the cluster PARENT rem's ID — not the individual child card rem IDs. The bridge
-      // is clusterVisibleCardId: card_info_bar writes the sibling's cardId there before
-      // the user can rate it, and GlobalRemChanged fires before QueueLoadCard clears it for the
-      // next card. So at the time this runs, clusterVisibleCardId == the sibling just rated.
-      //
-      // Coordination with QueueCompleteCard: for non-cluster cards, QueueCompleteCard fires first
-      // and adds the rem's ID to recentlyProcessedCards. GlobalRemChanged then fires for that same
-      // remId, hits the recentlyProcessedCards guard, and skips. For cluster cards, QueueCompleteCard
-      // never fires, so the parent remId is never in recentlyProcessedCards — we proceed.
-      // Short-circuit: clusterVisibleCardId is only set during cluster card review.
-      // Reading it first lets every other GlobalRemChanged (the common case) skip the
-      // settings read and the recentlyProcessedCards bookkeeping below.
-      const clusterCardId = await plugin.storage.getSession<string>('clusterVisibleCardId');
-      if (clusterCardId) {
-        const masteryDrillEnabled = await getIESetting(plugin, enableMasteryDrillId);
-        if (masteryDrillEnabled && !recentlyProcessedCards.has(data.remId)) {
-          // Claim this remId synchronously before the first await so concurrent GlobalRemChanged
-          // fires for the same cluster rating don't both pass this guard and double-write.
-          // We use a finally block (not a fixed TTL) to release the claim: the async work takes
-          // < 1 second, which is well under the ~2s between sibling transitions, so the next
-          // sibling's GlobalRemChanged will always find the set clear.
-          recentlyProcessedCards.add(data.remId);
-          try {
-            const card = await plugin.card.findOne(clusterCardId);
-            const history = card?.repetitionHistory;
-            const now = Date.now();
-            const FRESH_RATING_WINDOW_MS = 10_000;
-            const lastEntry = history && history.length > 0 ? history[history.length - 1] : undefined;
-
-            if (
-              lastEntry?.date &&
-              now - lastEntry.date <= FRESH_RATING_WINDOW_MS &&
-              lastEntry.score !== QueueInteractionScore.TOO_EARLY
-            ) {
-              const score = lastEntry.score;
-              const kbData = await plugin.kb.getCurrentKnowledgeBaseData();
-              const currentKbId = kbData?._id;
-
-              type FinalDrillItem = FinalDrillEntry;
-              let finalDrillIds =
-                ((await plugin.storage.getSynced('finalDrillIds')) as FinalDrillItem[]) || [];
-              const getCardId = (item: FinalDrillItem) =>
-                typeof item === 'string' ? item : item.cardId;
-
-              if (score === QueueInteractionScore.AGAIN || score === QueueInteractionScore.HARD) {
-                // Re-adding restarts the cooling of a card that was already in the drill.
-                finalDrillIds = [
-                  ...finalDrillIds.filter((item) => getCardId(item) !== clusterCardId),
-                  await buildDrillEntry(plugin, clusterCardId, currentKbId, score),
-                ];
-                await plugin.storage.setSynced('finalDrillIds', finalDrillIds);
-              } else if (score >= QueueInteractionScore.GOOD) {
-                const filtered = finalDrillIds.filter((item) => getCardId(item) !== clusterCardId);
-                if (filtered.length !== finalDrillIds.length) {
-                  await plugin.storage.setSynced('finalDrillIds', filtered);
-                }
-              }
-
-              // Flashcard History: record cluster card rating (QueueCompleteCard doesn't fire for clusters)
-              await recordFlashcardHistory(plugin, {
-                remId: card?.remId,
-                cardId: clusterCardId,
-                kbId: currentKbId,
-                score,
-                context: 'cluster card',
-              });
-            }
-          } catch (error) {
-            console.error('Failed to update Mastery Drill for cluster card:', error);
-          } finally {
-            recentlyProcessedCards.delete(data.remId);
-          }
-        }
-      }
-      // --- End cluster card drill detection ---
 
       // IMPORTANT: Capture history NOW, before debounce
       //
@@ -1438,8 +1398,8 @@ export function registerGlobalOpenRemListener(plugin: ReactRNPlugin) {
  * end-to-end behaviour, in a document sub-queue:
  *   • rate the first sibling Good and later siblings Again/Hard → nothing is added to the drill;
  *   • rate the first sibling and others Again/Hard → only the first sibling is added.
- * So the drill effectively tracks the anchor of a cluster and nothing else. The
- * clusterVisibleCardId bridge above (GlobalRemChanged path) does not close this gap in practice.
+ * So this listener effectively tracks the anchor of a cluster and nothing else.
+ * lib/cluster_rating_readback covers siblings only where card_info_bar is mounted, not in the popup.
  *
  * Left unfixed deliberately: clusters are a rare shape in a drill-eligible set, and the failure
  * mode is an under-populated drill, never a wrong rating or lost history. The matching gap on the
@@ -1523,6 +1483,7 @@ export function registerEventListeners(
   registerQueueEnterListener(plugin, resetSessionItemCounter);
   registerURLChangeListener(plugin);
   registerQueueCompleteCardListener(plugin);
+  registerClusterRatings(plugin);
   registerGlobalRemChangedListener(plugin);
   registerGlobalOpenRemListener(plugin);
   registerQueueSessionTracking(plugin);

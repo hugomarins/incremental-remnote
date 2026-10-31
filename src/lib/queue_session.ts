@@ -666,33 +666,7 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
         // QueueCompleteCard repeatedly for a stuck card, and the duplicate is silently ignored.
         const startTime = cardStartTimes.get(cardId);
         if (startTime) {
-          const rawTimeSpent = Date.now() - startTime;
-          const timeLimitSec = await getIESetting(plugin, flashcardResponseTimeLimitId);
-          const timeSpent = Math.min(rawTimeSpent, timeLimitSec * 1000);
-
-          currentSession.totalTime += timeSpent;
-          currentSession.flashcardsTime += timeSpent;
-          currentSession.flashcardsCount++;
-          if (score === QueueInteractionScore.AGAIN) {
-            currentSession.againCount = (currentSession.againCount || 0) + 1;
-          }
-
-          if (score !== QueueInteractionScore.TOO_EARLY) {
-            if (currentSession.currentCardId === cardId) {
-              currentSession.currentCardTotalTime =
-                (currentSession.currentCardTotalTime || 0) + timeSpent;
-              currentSession.currentCardRepCount =
-                (currentSession.currentCardRepCount || 0) + 1;
-            }
-            if (currentSession.prevCardId === cardId) {
-              currentSession.prevCardTotalTime =
-                (currentSession.prevCardTotalTime || 0) + timeSpent;
-              currentSession.prevCardRepCount =
-                (currentSession.prevCardRepCount || 0) + 1;
-            }
-          }
-
-          cardStartTimes.delete(cardId);
+          await addRatingToSession(plugin, cardId, score, Date.now() - startTime);
         }
       } else if (incRemEngagementStart !== null && currentSession) {
         // No cardId — IncRem rep completion. Close any open engagement so
@@ -701,32 +675,8 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
         await endIncRemEngagement(plugin);
       }
 
-      // Update prev-card interval/coverage now that scheduler has updated
-      if (currentSession && cardId && score !== QueueInteractionScore.TOO_EARLY) {
-        if (
-          currentSession.currentCardId === cardId ||
-          currentSession.prevCardId === cardId
-        ) {
-          const card = await plugin.card.findOne(cardId);
-          if (card) {
-            const dates = card.repetitionHistory?.map((h) => h.date) || [];
-            const lastRepTime =
-              card.lastRepetitionTime || (dates.length > 0 ? Math.max(...dates) : undefined);
-            if (card.nextRepetitionTime && lastRepTime) {
-              currentSession.prevCardInterval = card.nextRepetitionTime - lastRepTime;
-              currentSession.prevCardNextRepTime = card.nextRepetitionTime;
-            }
-            if (card.repetitionHistory && card.repetitionHistory.length > 0) {
-              const weightsRaw = await getIESetting(plugin, fsrsWeightsId);
-              const weights = parseWeightsString(weightsRaw);
-              const fsrs = computeFSRSState(card.repetitionHistory, weights);
-              if (fsrs) {
-                currentSession.prevCardFsrsD = fsrs.d;
-                currentSession.prevCardFsrsS = fsrs.s;
-              }
-            }
-          }
-        }
+      if (cardId && score !== QueueInteractionScore.TOO_EARLY) {
+        await updatePrevCardSchedule(plugin, cardId);
       }
 
       if (currentSession) {
@@ -736,4 +686,85 @@ export function registerQueueSessionTracking(plugin: ReactRNPlugin) {
       console.error('ERROR in QueueSession QueueCompleteCard listener:', error);
     }
   });
+}
+
+async function addRatingToSession(
+  plugin: RNPlugin,
+  cardId: string,
+  score: QueueInteractionScore | undefined,
+  rawTimeSpent: number
+) {
+  const timeLimitSec = await getIESetting(plugin, flashcardResponseTimeLimitId);
+  // The session may have closed during the read.
+  if (!currentSession) return;
+  const timeSpent = Math.min(rawTimeSpent, timeLimitSec * 1000);
+
+  currentSession.totalTime += timeSpent;
+  currentSession.flashcardsTime += timeSpent;
+  currentSession.flashcardsCount++;
+  if (score === QueueInteractionScore.AGAIN) {
+    currentSession.againCount = (currentSession.againCount || 0) + 1;
+  }
+
+  if (score !== QueueInteractionScore.TOO_EARLY) {
+    if (currentSession.currentCardId === cardId) {
+      currentSession.currentCardTotalTime =
+        (currentSession.currentCardTotalTime || 0) + timeSpent;
+      currentSession.currentCardRepCount =
+        (currentSession.currentCardRepCount || 0) + 1;
+    }
+    if (currentSession.prevCardId === cardId) {
+      currentSession.prevCardTotalTime =
+        (currentSession.prevCardTotalTime || 0) + timeSpent;
+      currentSession.prevCardRepCount =
+        (currentSession.prevCardRepCount || 0) + 1;
+    }
+  }
+
+  cardStartTimes.delete(cardId);
+}
+
+/** Update prev-card interval/coverage now that scheduler has updated. */
+async function updatePrevCardSchedule(plugin: RNPlugin, cardId: string) {
+  if (!currentSession || (currentSession.currentCardId !== cardId && currentSession.prevCardId !== cardId)) {
+    return;
+  }
+  const card = await plugin.card.findOne(cardId);
+  if (!card || !currentSession) return;
+  const dates = card.repetitionHistory?.map((h) => h.date) || [];
+  const lastRepTime =
+    card.lastRepetitionTime || (dates.length > 0 ? Math.max(...dates) : undefined);
+  if (card.nextRepetitionTime && lastRepTime) {
+    currentSession.prevCardInterval = card.nextRepetitionTime - lastRepTime;
+    currentSession.prevCardNextRepTime = card.nextRepetitionTime;
+  }
+  if (card.repetitionHistory && card.repetitionHistory.length > 0) {
+    const weightsRaw = await getIESetting(plugin, fsrsWeightsId);
+    const weights = parseWeightsString(weightsRaw);
+    const fsrs = computeFSRSState(card.repetitionHistory, weights);
+    if (fsrs && currentSession) {
+      currentSession.prevCardFsrsD = fsrs.d;
+      currentSession.prevCardFsrsS = fsrs.s;
+    }
+  }
+}
+
+/**
+ * A rating no QueueCompleteCard reported (Card Clusters): the same bookkeeping, with the time
+ * taken from RemNote's own record since QueueLoadCard never times a sibling.
+ */
+export async function recordRatingWithoutEvent(
+  plugin: RNPlugin,
+  cardId: string,
+  score: QueueInteractionScore,
+  responseTime: number
+) {
+  try {
+    if (!currentSession) return;
+    await addRatingToSession(plugin, cardId, score, responseTime);
+    await updatePrevCardSchedule(plugin, cardId);
+    if (currentSession) await syncLiveSession(plugin);
+  } catch (error) {
+    console.error('ERROR recording a Card Cluster rating in the session:', error);
+  }
 }

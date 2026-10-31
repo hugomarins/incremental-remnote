@@ -271,8 +271,8 @@ export function CardInfoBar() {
 
   // Cluster-aware signaling: broadcast the actually-visible cardId/remId to session storage.
   // These signals are consumed by:
-  //   - src/register/events.ts (GlobalRemChanged listener) — to attribute cluster ratings,
-  //     which emit no QueueCompleteCard, from the visible sibling's own history.
+  //   - src/lib/cluster_rating_readback.ts — to read back cluster ratings, which emit no
+  //     QueueCompleteCard, from each sibling's own history.
   //   - src/lib/queue_session.ts — to advance the per-card panel across siblings.
   //   - src/lib/queue_visible_card.ts and src/lib/mastery_drill_native.ts — to act on the
   //     sibling on screen.

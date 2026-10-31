@@ -2,6 +2,18 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.179 - October 31st, 2026
+
+### 🐛 Fixed
+
+**Card Clusters**: Ratings inside a cluster, including its last card, now reach Flashcard History, the Mastery Drill, Practiced Queues statistics and the Card Shield.
+
+📖 [Cluster-aware recording](History-Queue-Dashboard-and-Mastery-Drill.md#flashcard-history)
+
+**Mastery Drill**: Fixed a rating going to another card of the same Rem when that card came up next, which could add a never-reviewed cloze to the drill. An entry already added this way stays until you press **Remove from Drill**.
+
+📖 [How the Mastery Drill works](History-Queue-Dashboard-and-Mastery-Drill.md#how-it-works)
+
 ## v1.0.178 - October 30th, 2026
 
 ### ✨ New
