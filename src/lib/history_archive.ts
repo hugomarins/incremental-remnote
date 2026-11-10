@@ -91,6 +91,112 @@ export async function fetchGhosts(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tree nodes for the Study Dashboard
+// ---------------------------------------------------------------------------
+
+/** Parent of deleted Rems that have no surviving ancestor. */
+export const DELETED_ROOT_ID = '__deleted_rems__';
+/** Prefix of the node that holds a live Rem's deleted cards. */
+export const REMOVED_CARDS_PREFIX = '__removed_cards__:';
+
+export interface GhostCardHistory {
+  id: string;
+  history: { date: number; score: number | undefined; responseTime: number }[];
+}
+export interface GhostIncRep {
+  date: number;
+  eventType: any;
+  reviewTimeSeconds: number;
+}
+
+/** One deleted Rem (or a deleted ancestor holding none itself) for the tree. */
+export interface GhostNode {
+  id: string;
+  /** A deleted parent, the nearest live ancestor, or DELETED_ROOT_ID. */
+  parentId: string;
+  text: string;
+  deletedAt: number | null;
+  cards: GhostCardHistory[];
+  incHistory: GhostIncRep[];
+  dismHistory: GhostIncRep[];
+}
+
+/**
+ * Turn the ghosts into tree nodes, keeping deleted subtrees together.
+ *
+ * Each Rem holding a kept ghost rep becomes a node, and so does every deleted
+ * Rem between it and its nearest live ancestor. A Rem whose ghosts were all
+ * dropped (a tombstone's former descendants, say) is not drawn unless it is on
+ * the way to one that holds some. A chain with no live ancestor ends at
+ * DELETED_ROOT_ID. A card deleted while its Rem lives on gets a node of its own
+ * under that Rem.
+ */
+export function buildGhostNodes(reps: GhostRep[], rems: Record<string, GhostRem>): GhostNode[] {
+  const nodes = new Map<string, GhostNode>();
+  const isLive = (id: string | null | undefined) => !!id && rems[id]?.state === 'live';
+
+  const ensure = (id: string): GhostNode | null => {
+    const existing = nodes.get(id);
+    if (existing) return existing;
+    const r = rems[id];
+    if (!r || r.state === 'live') return null;
+    const parent = r.parent && rems[r.parent] ? r.parent : null;
+    const node: GhostNode = {
+      id,
+      parentId: parent ?? DELETED_ROOT_ID,
+      text: r.text || 'Untitled',
+      deletedAt: r.deletedAt ?? null,
+      cards: [],
+      incHistory: [],
+      dismHistory: [],
+    };
+    nodes.set(id, node);
+    if (parent && !isLive(parent)) ensure(parent);
+    return node;
+  };
+
+  for (const rep of reps) {
+    let node: GhostNode | null = null;
+    if (rep.rem && isLive(rep.rem)) {
+      // The card went, the Rem stayed.
+      const id = REMOVED_CARDS_PREFIX + rep.rem;
+      node = nodes.get(id) ?? null;
+      if (!node) {
+        node = {
+          id,
+          parentId: rep.rem,
+          text: 'Removed cards',
+          deletedAt: rep.deletedAt ?? null,
+          cards: [],
+          incHistory: [],
+          dismHistory: [],
+        };
+        nodes.set(id, node);
+      }
+    } else if (rep.rem) {
+      node = ensure(rep.rem);
+    }
+    if (!node) continue;
+    if (rep.kind === 'card') {
+      let card = node.cards.find((c) => c.id === rep.item);
+      if (!card) {
+        card = { id: rep.item, history: [] };
+        node.cards.push(card);
+      }
+      card.history.push({ date: rep.date, score: rep.score ?? undefined, responseTime: rep.time ?? 0 });
+    } else {
+      const entry: GhostIncRep = {
+        date: rep.date,
+        eventType: rep.event ?? undefined,
+        reviewTimeSeconds: (rep.time ?? 0) / 1000,
+      };
+      (rep.kind === 'inc' ? node.incHistory : node.dismHistory).push(entry);
+    }
+  }
+  return Array.from(nodes.values());
+}
+
 /**
  * Ghosts that no live history holds. The helper already returns one copy per
  * timestamp (the most recently live one); this drops the ones the plugin

@@ -6,7 +6,15 @@ import './sdk_test_env';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { QueueInteractionScore as Q } from '@remnote/plugin-sdk';
-import { filterGhosts, GhostPayload, GhostRep } from './history_archive';
+import {
+  buildGhostNodes,
+  DELETED_ROOT_ID,
+  filterGhosts,
+  GhostPayload,
+  GhostRem,
+  GhostRep,
+  REMOVED_CARDS_PREFIX,
+} from './history_archive';
 import {
   aggregatePeriodStatsCombined,
   bucketCardReviews,
@@ -124,5 +132,54 @@ describe('mergeGhostBuckets', () => {
     const s = aggregatePeriodStatsCombined(mergeGhostBuckets(auth, store(ghost), KB, at(10)), [], listener, at(10), 0);
     assert.equal(s.incRemsCount, 2);
     assert.equal(s.incRemsTime, 120_000);
+  });
+});
+
+describe('buildGhostNodes', () => {
+  const rem = (id: string, parent: string | null, state: GhostRem['state'] = 'trash'): GhostRem => ({
+    id, text: id.toUpperCase(), state, deletedAt: at(20), parent,
+  });
+  const onRem = (date: number, remId: string, item = 'c-' + remId): GhostRep => ({
+    ...card(date, Q.GOOD, 1000, item), rem: remId,
+  });
+
+  it('keeps a deleted subtree under its nearest live ancestor', () => {
+    // live L > deleted A > deleted B (holds the reps)
+    const rems = { L: rem('L', 'X', 'live'), A: rem('A', 'L'), B: rem('B', 'A') };
+    const nodes = buildGhostNodes([onRem(at(1), 'B'), onRem(at(2), 'B')], rems);
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    assert.deepEqual(Object.keys(byId).sort(), ['A', 'B']);
+    assert.equal(byId.B.parentId, 'A');
+    assert.equal(byId.A.parentId, 'L');
+    assert.equal(byId.B.cards[0].history.length, 2);
+    assert.equal(byId.A.cards.length, 0);
+  });
+
+  it('puts chains with no live ancestor under the Deleted Rems root', () => {
+    const nodes = buildGhostNodes([onRem(at(1), 'B')], { A: rem('A', null), B: rem('B', 'A') });
+    assert.equal(nodes.find((n) => n.id === 'A')!.parentId, DELETED_ROOT_ID);
+  });
+
+  it('gives a live Rem\'s deleted cards a node of their own under it', () => {
+    const nodes = buildGhostNodes([onRem(at(1), 'L')], { L: rem('L', null, 'live') });
+    assert.equal(nodes.length, 1);
+    assert.equal(nodes[0].id, REMOVED_CARDS_PREFIX + 'L');
+    assert.equal(nodes[0].parentId, 'L');
+  });
+
+  it('files IncRem and Dismissed reps on the Rem, with times in seconds', () => {
+    const nodes = buildGhostNodes(
+      [{ ...inc(at(1), 90, 'rep'), rem: 'R', item: 'R' }, { ...inc(at(2), 30, null, 'dism'), rem: 'R', item: 'R' }],
+      { R: rem('R', null) }
+    );
+    const r = nodes.find((n) => n.id === 'R')!;
+    assert.deepEqual(r.incHistory, [{ date: at(1), eventType: 'rep', reviewTimeSeconds: 90 }]);
+    assert.deepEqual(r.dismHistory, [{ date: at(2), eventType: undefined, reviewTimeSeconds: 30 }]);
+  });
+
+  it('draws no node for a Rem whose ghosts were all filtered out', () => {
+    const rems = { L: rem('L', null, 'live'), A: rem('A', 'L'), B: rem('B', 'L') };
+    const reps = filterGhosts(payload([onRem(at(1), 'A'), onRem(at(2), 'B')]), new Set([at(1)]));
+    assert.deepEqual(buildGhostNodes(reps, rems).map((n) => n.id), ['B']);
   });
 });
