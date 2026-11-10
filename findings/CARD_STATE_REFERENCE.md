@@ -354,3 +354,36 @@ card does not un-practise it.
   greyed cloze and choose "Enable this card". Every surface that can report this state must say
   so rather than offering a button.
 - Note that re-enabling in bulk makes every affected card due immediately.
+
+## Deleted cards and their repetition history
+
+Established 2026-11-10 (desktop 1.28.6x) by deleting a Rem in a test KB and reading `remnote.db`
+before and after, plus the app bundle.
+
+- **Repetitions have no table of their own.** A card's whole history is the `h` array inside its
+  record in the `cards` table (`rId` → its Rem). No other table mentions the card id.
+- **Deleting the Rem moves the card, it doesn't orphan it.** The Rem goes to `deleted_quanta` and
+  each card to `deleted_cards`, as full records with `h` unchanged plus a `deletedAt` stamp. No
+  card stays in `cards` pointing at a missing Rem. Restoring from trash brings both back.
+- **The local trash empties itself after two weeks.** `runLazyOnBlurJobs` (runs when the app
+  loses focus) calls the `emptyTrashAfterTwoWeeks` step, which bulk-deletes every
+  `deleted_quanta`/`deleted_cards` row whose `deletedAt` is more than two weeks old. Confirmed
+  in data: the main KB's trash never reaches back further than ~14–17 days (Oct 26 backup:
+  oldest Oct 9; Nov 10: oldest Oct 27, the Oct 9–26 rows gone). The manual "Clear Trash"
+  (optionally "older than N days") does the same now. In a synced KB it calls the server's
+  `/trash/clear`; what the server keeps on its own is unknown and unreachable for a plugin.
+- **Consequence for statistics:** the plugin API sees only live cards, so a deleted card's reps
+  are invisible to it at once, and gone from the local DB two weeks later. Long-span counts
+  (reps, time spent per day/week) that must survive deletion have to be recorded by the
+  plugin itself as the reps happen.
+- **No plugin route into the trash.** The SDK has no trash or deleted-record call. In the host,
+  the deleted stores are read only by the Trash screen (`getDeletedDatabaseStore`) and the
+  purge jobs, and the bridge's lookups use the live store. Verified: an MCP
+  `read_docs_raw` of the deleted Rem's id returned nothing, just its parent. Reading
+  `remnote.db` read-only from outside the app is the only way in.
+- **A deleted IncRem goes the same way.** Its slots (`repHist`, priority, dates; inline `bpc`
+  or `ps`, slot child Rems with it) stay in its `deleted_quanta` row for the same two weeks. The
+  plugin's own IncRem cache drops the Rem on deletion. Dismissing keeps the history
+  (`dismissedHistory`); deleting doesn't.
+- A disabled direction is different: its record stays in `cards` with its history, just not
+  returned by `getCards()` (see above).
