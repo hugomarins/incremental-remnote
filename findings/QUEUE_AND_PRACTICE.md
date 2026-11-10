@@ -173,6 +173,27 @@ The main knowledge base has 845 `null` Rems, 152 of them with a back side. Rems 
 
 **A plugin cannot clear the `null`.** See PLUGIN_BRIDGE_AND_SDK.md: `rem.setType(DEFAULT_TYPE)` is rejected by the bridge. Reported in [support-reports/REMNOTE_SUPPORT_REPORT_beautiful_queue_null_rem_type.md](support-reports/REMNOTE_SUPPORT_REPORT_beautiful_queue_null_rem_type.md).
 
+## "View Full Table" is phone-only on individual-cell table cards
+
+Read from the 1.30.0-beta bundle (2026-11-10). The desktop app had no newer `build_overrides` build. Earlier builds and RemNote's own screenshots label the button "See Full Table".
+
+The Beautiful queue draws table cards through two renderers. Both use the same button, module 16197 export `D` (`data-test="Beautiful Queue View Full Table"`). The button returns `null` only while rendering to static markup (`O` from module 247).
+
+| Renderer | Used when | `data-test` prefix | Button |
+|---|---|---|---|
+| Table Preview | ordinary table cards | `Beautiful Queue Table Preview…` | always, in both the stacked and the two-column layout |
+| Individual Cell Card (module 91581, `L`) | an ancestor table has `ttic` (`TABLE_TEST_INDIVIDUAL_CELLS`) | `Beautiful Queue Individual Cell…` | **only if `Env.mobile.mode.isPhone`** |
+
+In the Individual Cell Card, `M = i.Env.mobile.mode.isPhone` and the stacked layout ends with `M ? <D onClick={() => k(true)}/> : null`. The two-column table layout has no button at all.
+
+On desktop the card still uses the stacked layout, the one that looks like the phone, when any of these holds:
+
+- the card has extra front or back columns,
+- the card is 520 px wide or narrower,
+- a cell would wrap past 3 lines in two columns.
+
+The full-table view is the component's own `useState` (`P`/`k`), and the button is the only thing that sets it. So **on desktop an individual-cell table card cannot show its full table**. A plugin cannot set that state either. Asked of RemNote in [support-reports/REMNOTE_SUPPORT_REPORT_view_full_table_desktop.md](support-reports/REMNOTE_SUPPORT_REPORT_view_full_table_desktop.md).
+
 ## Images in the queue are drawn by the drawing canvas
 
 Read from the 1.28.19 bundle and a real knowledge base (2026-09-30). The exact cause of the crop below was **not** proven; the data shapes are.
