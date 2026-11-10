@@ -62,6 +62,16 @@ Dashboard tree, for the same reason:
 
 The archive doesn't make the command unnecessary. The tombstone keeps the history in RemNote itself, synced, with no helper, and on any device. The archive is the safety net for deletions that didn't go through it.
 
+## 3b. Imported history that isn't the user's
+
+Importing a document that someone else studied brings their reps along. Older RemNote importers had no way to leave the history out. In the main KB, 2,289 cards of a classmate's export arrived on 2025-08-23, already flagged `b`, with 9,530 of his reps (2024-08 → 2025-08). The Rems were later moved to their own KB (`67a35…`) and deleted from the main one. Counted as ghosts, they would have added 168 h that the user never studied.
+
+Nothing in the record tells them apart. `owner` is rewritten to the importing user. The rep fields are the usual ones (`addedExternally: false`). The card's `m` is no arrival stamp either: RemNote rewrites it, and most live cards have reps older than their `m`.
+
+From the first archive scan on, imported reps **count**. RemNote's importer can now leave history out, so reps that arrive with an import are there because the user chose to keep them. The archive still tags them: an item first seen after the archive's first scan, arriving with reps more than 7 days older than its `first_seen` (7 days covers devices syncing late), gets `source = 'imported'`. They stay in the totals. The tag only lets the debug report list import batches by top Rem, and lets a CLI flag drop a batch if one ever needs it. A re-import of the user's own export adds nothing, because its reps already sit in the archive under the same timestamps.
+
+The exclusion applies only to the past, before the importer offered that choice, and so only to backfill (Phase 5). Backfill has no `first_seen`. It drops reps whose timestamps exist in another local KB, and uses a manual exclude list of subtrees for the rest.
+
 ## 4. Archive schema (helper side)
 
 As built: see `SCHEMA` in `scripts/history_archive.py`. Changes from the sketch below:
@@ -150,5 +160,5 @@ Background thread: a full scan of every known KB a minute after the helper start
   - check the totals against a manual count from the archive;
   - a no-double-count check: run Preserve history & remove on a test subtree. The dashboard's totals must be identical before and after, with the helper on and off.
 - [ ] **4. Dashboard tree**: ghost `RemData` nodes, the marker, the toggle and the Summary line.
-- [ ] **5. Backfill** from snapshots: local `backups/`, iCloud `Back Ups/RemNote` `.db.zip`, Google Drive 2024 `.db`; open with `?immutable=1`. Reps found only there are archived with `source = '<backup name>'`.
+- [ ] **5. Backfill** from snapshots: local `backups/`, iCloud `Back Ups/RemNote` `.db.zip`, Google Drive 2024 `.db`; open with `?immutable=1`. Reps found only there are archived with `source = '<backup name>'`. Skip imported history (§3b). Measured 2026-11-10 over 38 snapshots (2020-12 → 2026-11, main KB): 18,604 card reps are in no live or trashed record today. 12,395 of them have copies in other local KBs (12,341 are the classmate's, §3b; 54 are in `66f53…`). The user's own loss is **6,209 card reps, 62 h** (~2% of card time), and 0 IncRem reps. They are mostly 2021–2022 reps. 5,129 of them (50 h) disappeared between the Oct 2023 DB and the Sep 2024 backup, when the KB was rebuilt by import: the top-level Rems were re-created on 2024-09-13/14, and again on 2024-10-29 (another 427 reps, 5.5 h). The imports carried most history over, but they left behind mostly cards last reviewed in 2021 (68% of the lost cards, against 19% of the kept ones). A text twin today often exists, but its history starts fresh: none of these reps has a copy under another id.
 - [ ] **6. Docs** once the feature is approved: changelog entry, and a section in the Study Dashboard page on the helper and what "deleted Rems" counts mean.
