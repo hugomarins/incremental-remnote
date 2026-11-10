@@ -1,6 +1,6 @@
 # Local Media Bridge
 
-Lets tools outside RemNote — scripts, or an AI assistant writing through the RemNote MCP — put **local images** into your rems and have RemNote **store them itself**, as if you had pasted them. It also lets them [move rems, remove tags, read out images and make rems Incremental](#operations), and it runs the command [Upscale image with ChatGPT](#upscale). **Desktop app only; the helper is a small Python script (macOS, Linux or Windows).**
+Lets tools outside RemNote — scripts, or an AI assistant writing through the RemNote MCP — put **local images** into your rems and have RemNote **store them itself**, as if you had pasted them. It also lets them [move rems, remove tags, read out images, make rems Incremental, pin sources and set a card's type](#operations), and it runs the command [Upscale image with ChatGPT](#upscale). **Desktop app only; the helper is a small Python script (macOS, Linux or Windows).**
 
 ## Why it is needed { #why }
 
@@ -147,12 +147,18 @@ The same helper also carries a few operations that the RemNote MCP cannot do. Th
 | `untag <rem>[,<rem>…] <tag>` | Removes a tag, given by id or by name as shown in RemNote. Also removes built-in powerups such as **Extra Card Detail** or **Quote**, by name or as `powerup:<code>` (`powerup:x`). `--drop-properties` also deletes the tag's property values. The **Incremental** tag is refused: dismiss the rem instead, which keeps its history. |
 | `get-image <rem> [--out DIR]` | Copies the images of the rem (front and back) to files, by default in `~/.remnote-media-bridge/out/`, and prints their paths. Images stored in RemNote are read from RemNote's own folder on this computer; linked ones are downloaded. |
 | `incrementalize <rem>[,<rem>…] [--priority N]` | Makes the rems Incremental exactly like the plugin's own command: first date from the Initial Interval, the history entry, the cache and the inheritance cascade. Without `--priority` the priority is inherited or the default. On a rem that is already Incremental, `--priority` changes its priority (recorded in its history as *Local bridge* 🔌). |
+| `pin <rem>[,<rem>…] [--refs <id>[,<id>…]] [--unpin]` | Shows references as **pins** (📌), as RemNote does for a highlight pinned by hand, instead of spelling out the referenced text. Without `--refs`, every reference to a PDF or web highlight in the rems (front and back) is pinned; with it, only the references to those rems. `--unpin` turns pins back into plain references. |
+| `pin-quote <rem>[,<rem>…] --source <rem> [--view pdf\|html\|both] [--quote TEXT]` | Runs [Pin Source Quote](Source-Pins.md#pin-source-quote) on each rem against the PDF or saved web article `--source`: finds the rem's text there, reuses or creates the highlight, and pins it at the end of the rem's back (or front). The source does not need to be open. `--view` picks the views of a PDF with a Text Reader version (default: the page view). `--quote` looks for that passage instead of the rem's own text, for a card whose answer is not taken word for word from the source (one rem at a time). Like the command, it needs the [AI helper](AI-Transcription-of-PDF-Highlights.md#setup) running (only its PyMuPDF part). |
+| `card <rem>[,<rem>…] [--type concept\|descriptor\|default] [--direction forward\|backward\|both\|none]` | Makes the rems Concepts or Descriptors (or neither) and sets which way they are practiced, without touching their text, so pins and review history stay. For example a bidirectional Descriptor, which RemNote's markdown cannot write. |
 
 ```bash
 python3 media_bridge.py move AbC123 XyZ789 after:QrS456
 python3 media_bridge.py untag AbC123 "Extra Card Detail"
 python3 media_bridge.py get-image AbC123
 python3 media_bridge.py incrementalize AbC123,DeF456 --priority 20
+python3 media_bridge.py pin AbC123 --refs HiG789
+python3 media_bridge.py pin-quote AbC123,DeF456 --source PdF000
+python3 media_bridge.py card DeF456 --type descriptor --direction both
 ```
 
 Each command prints the plugin's answer as JSON and exits with `0` when everything worked, `1` when something failed (the message says what), and `2` when the plugin did not answer in time. RemNote shows a toast for each operation except `get-image`; the console logs them under `[MediaBridge]`.
@@ -160,4 +166,4 @@ Each command prints the plugin's answer as JSON and exits with `0` when everythi
 Unlike `localize`, these commands never run late: if the plugin does not answer before the command gives up, a job still waiting is cancelled, and a job the plugin took but never finished (for example because the plugin reloaded) is reported as lost rather than run again. Check the rems and run the command again.
 
 !!! note "Plugin and helper versions"
-    These operations need this plugin version and the matching `media_bridge.py`; **Upscale image with ChatGPT** needs helper version 3, and [Copy Rem ID](Utilities-Finding-and-Navigating.md#copy-rem-id) copies silently only with version 4 (`media_bridge.py status` shows the version). An older plugin still gets `localize` jobs; the others wait, and the command warns that the plugin does not know them yet. After updating the script, restart the helper (`media_bridge.py stop`, or `launchctl kickstart -k …` when it runs at login).
+    These operations need this plugin version and the matching `media_bridge.py`; **Upscale image with ChatGPT** needs helper version 3, [Copy Rem ID](Utilities-Finding-and-Navigating.md#copy-rem-id) copies silently only with version 4, and `pin`, `pin-quote` and `card` need version 5 (`media_bridge.py status` shows the version). An older plugin still gets `localize` jobs; the others wait, and the command warns that the plugin does not know them yet. After updating the script, restart the helper (`media_bridge.py stop`, or `launchctl kickstart -k …` when it runs at login).

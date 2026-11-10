@@ -2,13 +2,21 @@
  * Local Media Bridge — the rem operations besides localize.
  *
  * The RemNote MCP can write text, tags and documents, but cannot move a rem,
- * remove a tag, hand back an image, or make a rem Incremental the way this
+ * remove a tag, hand back an image, pin a source, set a card's type and direction,
+ * or make a rem Incremental the way this
  * plugin does (its slots, history, cache and inheritance cascade). Outside tools
  * queue these as jobs on the media-bridge helper (scripts/media_bridge/
  * media_bridge.py), and lib/media_bridge.ts hands them here. Each returns the
  * JSON the helper passes back to the caller, with `ok` false when any rem failed.
  */
-import { BuiltInPowerupCodes, PluginRem, ReactRNPlugin } from '@remnote/plugin-sdk';
+import {
+  BuiltInPowerupCodes,
+  PluginRem,
+  ReactRNPlugin,
+  RichTextElementRemInterface,
+  RichTextInterface,
+  SetRemType,
+} from '@remnote/plugin-sdk';
 import { dismissedPowerupCode, powerupCode } from './consts';
 import {
   getIncrementalRemFromRem,
@@ -17,6 +25,8 @@ import {
   updateIncrementalRemCache,
 } from './incremental_rem';
 import { imageUrlsOf } from './localize_media';
+import { isPin, pinOneQuote, SourceView, sourceViews } from './pdf_source_pins';
+import { quoteCandidates } from './pdf_source_pins/quote';
 
 export interface BridgeOpJob {
   id: string;
@@ -349,6 +359,250 @@ export async function runIncrementalize(plugin: ReactRNPlugin, job: BridgeOpJob)
   };
 }
 
+// --- pin ---------------------------------------------------------------------
+
+/** Highlights: what `pin` turns into pins when no reference ids are given. */
+const HIGHLIGHT_POWERUPS = [
+  BuiltInPowerupCodes.PDFHighlight,
+  BuiltInPowerupCodes.HTMLHighlight,
+  BuiltInPowerupCodes.WebHighlight,
+];
+/** How long `pin --refs` waits for a rem just written through the MCP to show them. */
+const PIN_SYNC_WAIT_MS = 15_000;
+
+const isRemRef = (el: unknown): el is RichTextElementRemInterface =>
+  typeof el === 'object' && el !== null && (el as any).i === 'q' && typeof (el as any)._id === 'string';
+
+const refIdsOf = (rem: PluginRem) =>
+  new Set([...(rem.text ?? []), ...(rem.backText ?? [])].filter(isRemRef).map((el) => el._id));
+
+/**
+ * Show references as pins (📌), as RemNote does for a highlight pinned by hand:
+ * `{i:'q', _id, pin: true, content: false}`. The RemNote MCP can only write a
+ * plain reference, which spells out the highlight's whole text. `refIds` limits it
+ * to those references; without it, every reference to a PDF/web highlight is
+ * pinned. `unpin` turns pins back into plain references.
+ */
+export async function runPin(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
+  const unpin = job.unpin === true;
+  const only = Array.isArray(job.refIds) && job.refIds.length ? new Set(job.refIds.map(String)) : undefined;
+  const { byId } = await findRems(plugin, job.remIds);
+
+  const highlightVerdicts = new Map<string, Promise<boolean>>();
+  const isHighlight = (id: string) => {
+    if (!highlightVerdicts.has(id)) {
+      highlightVerdicts.set(
+        id,
+        (async () => {
+          const target = await plugin.rem.findOne(id);
+          if (!target) return false;
+          for (const code of HIGHLIGHT_POWERUPS) if (await target.hasPowerup(code).catch(() => false)) return true;
+          return false;
+        })()
+      );
+    }
+    return highlightVerdicts.get(id)!;
+  };
+
+  const results = [];
+  for (const remId of job.remIds) {
+    let rem = byId.get(remId);
+    if (!rem) {
+      results.push({ remId, ok: false, error: 'rem not found' });
+      continue;
+    }
+    try {
+      // A rem just written through the MCP reaches the plugin by sync a moment
+      // later; rewriting a stale copy would undo that write. With named refs, wait
+      // until they are all there.
+      if (only) {
+        const deadline = Date.now() + PIN_SYNC_WAIT_MS;
+        while ([...only].some((id) => !refIdsOf(rem!).has(id)) && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          rem = (await plugin.rem.findOne(remId)) ?? rem;
+        }
+      }
+      const changed: { field: string; refId: string }[] = [];
+      const rewrite = async (field: 'text' | 'backText', richText: RichTextInterface | undefined) => {
+        if (!richText?.length) return undefined;
+        let touched = false;
+        const next: RichTextInterface = [];
+        for (const el of richText) {
+          const wanted =
+            isRemRef(el) &&
+            !!el.pin === unpin &&
+            !el.aliasId &&
+            (only ? only.has(el._id) : await isHighlight(el._id));
+          if (!wanted) {
+            next.push(el);
+            continue;
+          }
+          const ref = el as RichTextElementRemInterface;
+          if (unpin) {
+            const { content: _content, ...rest } = ref;
+            next.push({ ...rest, pin: false });
+          } else {
+            next.push({ ...ref, pin: true, content: false });
+          }
+          changed.push({ field, refId: ref._id });
+          touched = true;
+        }
+        return touched ? next : undefined;
+      };
+      const text = await rewrite('text', rem.text);
+      const backText = await rewrite('backText', rem.backText);
+      if (text) await rem.setText(text);
+      if (backText) await rem.setBackText(backText);
+
+      const notFound = only ? [...only].filter((id) => !refIdsOf(rem!).has(id)) : [];
+      results.push({
+        remId,
+        ok: notFound.length === 0,
+        title: await remTitle(plugin, rem),
+        [unpin ? 'unpinned' : 'pinned']: changed,
+        ...(notFound.length ? { error: `no reference to ${notFound.join(', ')} in this rem` } : {}),
+      });
+    } catch (err) {
+      results.push({ remId, ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  const count = results.reduce((n, r: any) => n + ((r.pinned ?? r.unpinned)?.length ?? 0), 0);
+  return {
+    ok: results.every((r) => r.ok),
+    summary: `${unpin ? 'unpinned' : 'pinned'} ${plural(count, 'reference')} in ${plural(job.remIds.length, 'rem')}`,
+    results,
+  };
+}
+
+// --- pin-quote ---------------------------------------------------------------
+
+/**
+ * Pin Source Quote run from outside: find each rem's text in the given PDF or
+ * saved article, reuse or create the highlight, and pin it at the end of the
+ * rem's back (or front) — the same code as the command, without needing the
+ * source open in a pane or asking which view. `quote` replaces the rem's own
+ * text as the passage to look for (a card whose answer is not verbatim).
+ */
+export async function runPinQuote(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
+  const sourceId = String(job.sourceId ?? '');
+  const source = sourceId ? await plugin.rem.findOne(sourceId) : undefined;
+  if (!source) throw new OpError(`Source not found: ${sourceId || '(none given)'}`);
+  const available = await sourceViews(source);
+  if (!available.length) throw new OpError(`${sourceId} is not a PDF or a saved web article.`);
+  const view = String(job.view ?? 'default');
+  const views: SourceView[] =
+    view === 'both' ? available : view === 'default' ? available.slice(0, 1) : ([view] as SourceView[]);
+  if (!views.every((v) => available.includes(v))) {
+    throw new OpError(`View “${view}” is not available for this source (it has: ${available.join(', ')}).`);
+  }
+  const quote = typeof job.quote === 'string' && job.quote.trim() ? job.quote.trim() : undefined;
+  if (quote && job.remIds.length > 1) throw new OpError('--quote goes with a single rem.');
+
+  const { byId } = await findRems(plugin, job.remIds);
+  const plain = (rt: RichTextInterface | undefined) =>
+    plugin.richText.toString(((rt ?? []) as RichTextInterface).filter((el) => !isPin(el)));
+
+  const results = [];
+  for (const remId of job.remIds) {
+    const rem = byId.get(remId);
+    if (!rem) {
+      results.push({ remId, ok: false, error: 'rem not found' });
+      continue;
+    }
+    const candidates = quote ? [quote] : quoteCandidates(await plain(rem.text), await plain(rem.backText));
+    if (!candidates.length) {
+      results.push({ remId, ok: false, error: 'the rem has no text to look for' });
+      continue;
+    }
+    const { result, error } = await pinOneQuote(plugin, { remId, sourceRemId: sourceId, candidates }, views);
+    if (error) {
+      // The helper or the source failed: every other rem would fail the same way.
+      results.push({ remId, ok: false, error: error.message });
+      break;
+    }
+    results.push(
+      result
+        ? {
+            remId,
+            ok: true,
+            title: await remTitle(plugin, rem),
+            pins: result.pins,
+            reused: result.reused.length,
+            created: result.created.length,
+            views: result.views.map((v) => ({ view: v.view, found: v.found, page: v.page })),
+          }
+        : { remId, ok: false, title: await remTitle(plugin, rem), error: 'passage not found in the source' }
+    );
+  }
+  const pinned = results.filter((r) => r.ok).length;
+  return {
+    ok: pinned === job.remIds.length,
+    summary: `📌 ${pinned} of ${plural(job.remIds.length, 'rem')} pinned to “${await remTitle(plugin, source)}”`,
+    results,
+  };
+}
+
+// --- card --------------------------------------------------------------------
+
+const REM_TYPES: Record<string, SetRemType> = {
+  default: SetRemType.DEFAULT_TYPE,
+  concept: SetRemType.CONCEPT,
+  descriptor: SetRemType.DESCRIPTOR,
+};
+const DIRECTIONS = ['forward', 'backward', 'both', 'none'] as const;
+type Direction = (typeof DIRECTIONS)[number];
+const TYPE_NAMES = ['default', 'concept', 'descriptor'];
+
+/**
+ * Set a rem's type (concept / descriptor / default) and practice direction
+ * without rewriting its text, so pins, references and review history stay. The
+ * RemNote MCP has no syntax for a bidirectional descriptor (`;<` makes a
+ * backward-only one), and editing a rem to change its delimiter turns its pins
+ * back into plain references.
+ */
+export async function runCard(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
+  const typeName = job.remType === undefined ? undefined : String(job.remType);
+  const direction = job.direction === undefined ? undefined : (String(job.direction) as Direction);
+  if (typeName === undefined && direction === undefined) throw new OpError('Give --type and/or --direction.');
+  if (typeName !== undefined && !(typeName in REM_TYPES)) throw new OpError(`Unknown type “${typeName}”.`);
+  if (direction !== undefined && !DIRECTIONS.includes(direction)) throw new OpError(`Unknown direction “${direction}”.`);
+  const { byId } = await findRems(plugin, job.remIds);
+
+  const results = [];
+  for (const remId of job.remIds) {
+    const rem = byId.get(remId);
+    if (!rem) {
+      results.push({ remId, ok: false, error: 'rem not found' });
+      continue;
+    }
+    try {
+      if (typeName !== undefined) await rem.setType(REM_TYPES[typeName]);
+      if (direction !== undefined) await rem.setPracticeDirection(direction);
+      const after = (await plugin.rem.findOne(remId)) ?? rem;
+      const nowType = TYPE_NAMES[after.type as number] ?? String(after.type);
+      const nowDirection = await after.getPracticeDirection();
+      const ok = (typeName === undefined || nowType === typeName) && (direction === undefined || nowDirection === direction);
+      results.push({
+        remId,
+        ok,
+        title: await remTitle(plugin, after),
+        type: nowType,
+        direction: nowDirection,
+        ...(ok ? {} : { error: 'RemNote did not keep the change' }),
+      });
+    } catch (err) {
+      results.push({ remId, ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  const done = results.filter((r) => r.ok).length;
+  const what = [typeName, direction].filter(Boolean).join(', ');
+  return {
+    ok: done === job.remIds.length,
+    summary: `${plural(done, 'rem')} set to ${what}` + (done < job.remIds.length ? `, ${job.remIds.length - done} failed` : ''),
+    results,
+  };
+}
+
 // --- dispatch ----------------------------------------------------------------
 
 const OPS: Record<string, (plugin: ReactRNPlugin, job: BridgeOpJob) => Promise<BridgeOpResult>> = {
@@ -356,6 +610,9 @@ const OPS: Record<string, (plugin: ReactRNPlugin, job: BridgeOpJob) => Promise<B
   untag: runUntag,
   'get-image': runGetImage,
   incrementalize: runIncrementalize,
+  pin: runPin,
+  'pin-quote': runPinQuote,
+  card: runCard,
 };
 
 /** Runs a non-localize job. Errors come back as `{ok: false, message}`, never thrown. */

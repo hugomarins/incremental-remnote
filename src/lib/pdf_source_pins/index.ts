@@ -404,7 +404,7 @@ export async function ensureSourcePins(
   });
 }
 
-const isPin = (el: unknown): el is RichTextElementRemInterface & { pin: true } =>
+export const isPin = (el: unknown): el is RichTextElementRemInterface & { pin: true } =>
   typeof el === 'object' && el !== null && (el as any).i === 'q' && !!(el as any).pin;
 
 /** Rich text with pins to `ids` appended, skipping ones already pinned. */
@@ -459,9 +459,10 @@ const notFoundDialog = (candidates: string[]): MessageDialog => ({
 /**
  * One Rem: try every candidate without writing anything, pin the best match and
  * append its pins. Silent — the caller reports, so a run over many Rems does not
- * raise a toast or a dialog per Rem.
+ * raise a toast or a dialog per Rem. Also run by the Local Media Bridge's
+ * `pin-quote` (lib/media_bridge_ops.ts).
  */
-async function pinOneQuote(
+export async function pinOneQuote(
   plugin: ReactRNPlugin,
   request: PinQuoteRequest,
   views: SourceView[]

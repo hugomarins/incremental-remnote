@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Local Media Bridge: get local images into RemNote's own storage from outside the app,
-and run a few rem operations the RemNote MCP lacks (move, untag, get-image, incrementalize).
+and run a few rem operations the RemNote MCP lacks (move, untag, get-image, incrementalize,
+pin, pin-quote, card).
 
 Why: since RemNote 1.29 the desktop window runs sandboxed (webSecurity on), so an
 image written into a rem as `![](file:///…)` — e.g. by the RemNote MCP — is never
@@ -23,6 +24,10 @@ plugin with its own code (src/lib/media_bridge_ops.ts):
   untag <rem>[,<rem>…] <tag id | tag name | powerup:<code>>
   get-image <rem> [--out DIR]       copies the rem's images to files, prints their paths
   incrementalize <rem>[,<rem>…] [--priority N]
+  pin <rem>[,<rem>…] [--refs <id>[,<id>…]] [--unpin]   references → 📌 pins (default: highlight refs)
+  pin-quote <rem>[,<rem>…] --source <pdf/article rem> [--view pdf|html|both] [--quote TEXT]
+                                    Pin Source Quote: find the rem's text in the source, pin its highlight
+  card <rem>[,<rem>…] [--type concept|descriptor|default] [--direction forward|backward|both|none]
 
 Each prints the plugin's JSON answer; exit 0 = done, 1 = failed (or partly), 2 = timeout.
 
@@ -66,9 +71,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 4  # 3: /upscale, 4: /clipboard
+VERSION = 5  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card
 # The jobs a plugin build understands, by the protocol version it polls with.
-OPS_BY_PLUGIN_VERSION = {1: {"localize"}, 2: {"localize", "move", "untag", "get-image", "incrementalize"}}
+OPS_BY_PLUGIN_VERSION = {
+    1: {"localize"},
+    2: {"localize", "move", "untag", "get-image", "incrementalize"},
+    3: {"localize", "move", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card"},
+}
 KNOWN_OPS = OPS_BY_PLUGIN_VERSION[max(OPS_BY_PLUGIN_VERSION)]
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("REMNOTE_MEDIA_BRIDGE_PORT", "3460"))
@@ -460,6 +469,32 @@ def untag(rems: str, tag: str, drop_properties: bool, timeout: float) -> None:
     finish(result, bool(result.get("ok")))
 
 
+def pin(rems: str, refs: str | None, unpin: bool, timeout: float) -> None:
+    args: dict = {"unpin": unpin}
+    if refs:
+        args["refIds"] = split_ids(refs)
+    result = run_job("pin", split_ids(rems), args, timeout)
+    finish(result, bool(result.get("ok")))
+
+
+def pin_quote(rems: str, source: str, view: str | None, quote: str | None, timeout: float) -> None:
+    args: dict = {"sourceId": source}
+    if view:
+        args["view"] = view
+    if quote:
+        args["quote"] = quote
+    result = run_job("pin-quote", split_ids(rems), args, timeout)
+    finish(result, bool(result.get("ok")))
+
+
+def card(rems: str, rem_type: str | None, direction: str | None, timeout: float) -> None:
+    if not rem_type and not direction:
+        sys.exit("give --type and/or --direction")
+    args = {k: v for k, v in (("remType", rem_type), ("direction", direction)) if v}
+    result = run_job("card", split_ids(rems), args, timeout)
+    finish(result, bool(result.get("ok")))
+
+
 def incrementalize(rems: str, priority: int | None, timeout: float) -> None:
     if priority is not None and not 0 <= priority <= 100:
         sys.exit("--priority must be from 0 to 100")
@@ -579,6 +614,23 @@ def main() -> None:
     p_in.add_argument("rems", help="rem id, or several comma-separated")
     p_in.add_argument("--priority", type=int, help="0-100; omitted = inherited/default, as the plugin's own command")
     p_in.add_argument("--timeout", type=float, default=180)
+    p_pin = sub.add_parser("pin", help="show references as 📌 pins (default: every reference to a highlight)")
+    p_pin.add_argument("rems", help="rem id, or several comma-separated")
+    p_pin.add_argument("--refs", help="only these referenced rem ids (comma-separated); waits for them to sync")
+    p_pin.add_argument("--unpin", action="store_true", help="turn pins back into plain references")
+    p_pin.add_argument("--timeout", type=float, default=150)
+    p_pq = sub.add_parser("pin-quote", help="Pin Source Quote: find each rem's text in a PDF/article and pin it")
+    p_pq.add_argument("rems", help="rem id, or several comma-separated")
+    p_pq.add_argument("--source", required=True, help="the PDF or saved web article rem")
+    p_pq.add_argument("--view", choices=["pdf", "html", "both"], help="for a PDF with a Text Reader version "
+                      "(default: the PDF page view)")
+    p_pq.add_argument("--quote", help="passage to look for instead of the rem's own text (one rem only)")
+    p_pq.add_argument("--timeout", type=float, default=300)
+    p_card = sub.add_parser("card", help="set rems' type (concept/descriptor) and practice direction, text untouched")
+    p_card.add_argument("rems", help="rem id, or several comma-separated")
+    p_card.add_argument("--type", dest="rem_type", choices=["concept", "descriptor", "default"])
+    p_card.add_argument("--direction", choices=["forward", "backward", "both", "none"])
+    p_card.add_argument("--timeout", type=float, default=150)
     a = ap.parse_args()
     if a.cmd == "serve":
         serve()
@@ -601,6 +653,12 @@ def main() -> None:
         get_image(a.rem, a.out, a.timeout)
     elif a.cmd == "incrementalize":
         incrementalize(a.rems, a.priority, a.timeout)
+    elif a.cmd == "pin":
+        pin(a.rems, a.refs, a.unpin, a.timeout)
+    elif a.cmd == "pin-quote":
+        pin_quote(a.rems, a.source, a.view, a.quote, a.timeout)
+    elif a.cmd == "card":
+        card(a.rems, a.rem_type, a.direction, a.timeout)
 
 
 if __name__ == "__main__":

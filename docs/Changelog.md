@@ -2,6 +2,20 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.214 - November 10th, 2026
+
+### ✨ New
+
+**Local Media Bridge**: Three more operations for tools writing through the RemNote MCP, which can only write plain references and cannot set a card's type or direction:
+
+- `pin` shows references to PDF and web highlights as pins (📌), instead of spelling out the whole highlighted text.
+- `pin-quote` runs [Pin Source Quote](Source-Pins.md#pin-source-quote) on rems against a PDF or web article you name: it reuses or creates the highlight and pins it, without the source being open.
+- `card` makes rems Concepts or Descriptors and sets which way they are practiced, without touching their text. For example, it can make a bidirectional Descriptor, which RemNote's markdown cannot write.
+
+Needs helper version 5: restart `media_bridge.py` after updating.
+
+📖 [Rem operations](Local-Media-Bridge.md#operations)
+
 ## v1.0.213 - November 10th, 2026
 
 ### ⚡ Improved

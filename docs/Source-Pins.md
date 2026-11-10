@@ -33,6 +33,10 @@ Other Rems in the subtree are left alone. The run works like a [multi-Rem select
 
 Running it again on the same subtree adds nothing twice, but every Quote Rem is looked up in the source again, so a second run takes as long as the first.
 
+## From outside RemNote { #from-outside }
+
+Scripts and AI assistants writing notes through the RemNote MCP can run Pin Source Quote too, through the [Local Media Bridge](Local-Media-Bridge.md#operations): `media_bridge.py pin-quote <rem> --source <PDF or article rem>`. The source is named, so it does not need to be open, and `--quote` gives the passage to look for when the Rem's text is not exactly the source's. `media_bridge.py pin` turns references to highlights that a tool already wrote into pins.
+
 ## Reusing highlights { #reusing-highlights }
 
 Highlights never overlap — so every passage keeps a single highlight, and clicking it in the PDF shows every Rem linked to it.
