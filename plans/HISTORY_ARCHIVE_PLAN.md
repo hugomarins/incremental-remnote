@@ -155,8 +155,14 @@ Background thread: a full scan of every known KB a minute after the helper start
   - 13 tests in `scripts/test_history_archive.py` (`python3 scripts/test_history_archive.py`), each on a fake `remnote.db`. They cover: a deleted card, a purged trash, a restore, a deleted subtree, a rep edited out before deletion, IncRems in both layouts, Dismiss, Preserve history & remove, a deleted tombstone, reference texts, and the report.
   - First real run (2026-11-10), main KB: 26 ghost reps (12 min), in 3 deleted subtrees. RemNote's trash only reaches back to Oct 31. 76 of the trashed card reps were correctly skipped, because they live on as `importedRep` on Preserve-history tombstones. This confirms §3a on real data.
 - [x] **2. Helper routes + background scans** in `ai_ocr_helper.py`, plus the LaunchAgent restart. Verify `/history/ghosts` on the main KB (read-only).
-- [ ] **3. Plugin client** `src/lib/history_archive.ts`:
-  - ghost buckets into `ghostDailyAggregates_<kbId>`, merged into Summary and Graphs;
+- [x] **3. Plugin client** `src/lib/history_archive.ts`:
+  - **Built 2026-11-10. The live checks below passed on the main KB the same day:** the header showed the archive's 26 counted reps, Ever stayed the same after Preserve history & remove, and Ever stayed the same with the helper unloaded.
+    - `fetchGhosts` asks the helper with `scan: true` and has a 30 s timeout. `filterGhosts` drops ghosts by the live timestamp set.
+    - `authoritative_aggregates.ts` collects the live set during both walks (Refresh Statistics, and the startup refresh from the card cache's read). `bucketGhostReps` uses the same predicates and cap as the live walk, and `refreshGhostAggregates` writes `ghostDailyAggregates_<kbId>` (`{v:2, kbs, n, at}`) only when the result changed.
+    - Practiced Queues merges the key through `mergeGhostBuckets`. Ghost days after `lastComputed` are left out, since listener sessions count those. Pre-cutoff IncRem days still take MAX(archive + live, listener). The header shows "· incl. N from deleted Rems".
+    - Tests are in `src/lib/history_archive.test.ts`.
+  - Scope change: the Study Dashboard builds its Summary and Graphs from per-Rem `RemData`, not from these buckets, so it gets ghosts with the ghost `RemData` nodes in Phase 4.
+  - ghost buckets into `ghostDailyAggregates_<kbId>`, merged into the Practiced Queues summary;
   - check the totals against a manual count from the archive;
   - a no-double-count check: run Preserve history & remove on a test subtree. The dashboard's totals must be identical before and after, with the helper on and off.
 - [ ] **4. Dashboard tree**: ghost `RemData` nodes, the marker, the toggle and the Summary line.
