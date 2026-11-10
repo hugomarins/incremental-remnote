@@ -9,7 +9,10 @@ no API key involved) and returns KaTeX/markdown-ish markup for the plugin to
 write back as rich text.
 
 It also locates quotes in a PDF (`/locate`), so the plugin can pin a passage's
-source highlight without the user selecting it.
+source highlight without the user selecting it. When no source is open, it can ask
+an optional source finder, a program of the user's that knows their books, which
+book a quote comes from and which RemNote PDFs to try (`/find-source`; see
+source-finder.json below).
 
 For YouTube videos it grabs the exact frame at a given time (`/video-frame`,
 with yt-dlp and ffmpeg: the plugin's player can't be captured from inside
@@ -33,10 +36,15 @@ Environment:
     IR_AI_MODEL     claude model alias (default sonnet)
     IR_AI_ORIGINS   comma-separated allowed Origin headers; unset = allow all
                     (and log each Origin so it can be pinned)
+    IR_SOURCE_FINDER  command of the source finder for /find-source, split like a
+                    shell line (overrides source-finder.json)
     IR_WHISPER_MODEL  path of the whisper.cpp model (default whisper/ggml-large-v3-turbo-q5_0.bin)
 
 Files live in ~/.incremental-remnote/ai-ocr/:
     prompt.md       the transcription instructions — edit freely, re-read per request
+    source-finder.json  optional: {"command": ["python3", "/path/to/finder.py"]}, the
+                    program /find-source runs (JSON on stdin and stdout; the contract
+                    is in docs/Source-Pins.md, "Writing a source finder")
     video-prompt.md the same for video frames
     transcript-prompt.md  how Claude tidies YouTube's automatic captions
     extract-title-prompt.md  how Claude names a Video Extract from its transcript
@@ -585,6 +593,55 @@ def handle_locate(req, entry):
     entry.update(pdfUrl=req['pdfUrl'], quotes=[{'quote': (q.get('quote') or '')[:120], 'page': q.get('page')} for q in quotes],
                  results=[{k: r.get(k) for k in ('found', 'page', 'score', 'matched')} for r in results])
     return {'pageCount': page_count, 'results': results}
+
+
+SOURCE_FINDER_CONFIG = HOME / 'source-finder.json'
+SOURCE_FINDER_TIMEOUT_S = 120
+
+
+def source_finder_command():
+    """The source finder's command (a list), from IR_SOURCE_FINDER or
+    source-finder.json, re-read per request; None when there is none."""
+    env = os.environ.get('IR_SOURCE_FINDER', '').strip()
+    if env:
+        import shlex
+        return [os.path.expanduser(c) for c in shlex.split(env)]
+    if SOURCE_FINDER_CONFIG.exists():
+        cfg = json.loads(SOURCE_FINDER_CONFIG.read_text(encoding='utf-8'))
+        cmd = cfg.get('command')
+        if isinstance(cmd, str):
+            import shlex
+            cmd = shlex.split(cmd)
+        if cmd:
+            return [os.path.expanduser(str(c)) for c in cmd]
+    return None
+
+
+def handle_find_source(req, entry):
+    """Which RemNote PDFs a quote can be pinned from, when no source is open. The
+    user's source finder gets `{items: [{remId, ancestors, texts}]}` on stdin and
+    answers `{items: [{remId, books: [{title, cite?, how, detail?, page?,
+    pdfRemIds}]}]}`, books in the order to try. Without one, `available: false`."""
+    items = req.get('items') or []
+    entry['items'] = len(items)
+    cmd = source_finder_command()
+    if not cmd:
+        return {'available': False, 'items': [],
+                'reason': f'No source finder configured ({SOURCE_FINDER_CONFIG} or IR_SOURCE_FINDER).'}
+    order = {'items': [{'remId': it.get('remId'), 'ancestors': it.get('ancestors') or [],
+                        'texts': it.get('texts') or []} for it in items]}
+    script = next((Path(c) for c in cmd if c.endswith('.py')), None)
+    proc = subprocess.run(cmd, input=json.dumps(order), capture_output=True, text=True,
+                          timeout=SOURCE_FINDER_TIMEOUT_S, cwd=script.parent if script else None)
+    if proc.returncode != 0:
+        raise RuntimeError(f'source finder failed: {(proc.stderr or proc.stdout).strip()[-400:]}')
+    out = json.loads(proc.stdout)
+    result = []
+    for it in out.get('items') or []:
+        books = [b for b in it.get('books') or [] if isinstance(b, dict) and b.get('pdfRemIds')]
+        result.append({'remId': it.get('remId'), 'books': books})
+    entry['books'] = [[b.get('id') or b.get('title') for b in it['books']] for it in result]
+    return {'available': True, 'items': result}
 
 
 def handle_source(req, entry):
@@ -1151,7 +1208,7 @@ def handle_video_file(req, entry):
 MEDIA_PREFIX = '/media/'
 MEDIA_CHUNK = 1 << 20
 
-ROUTES = {'/ocr': handle_ocr, '/locate': handle_locate, '/source': handle_source, '/match': handle_match,
+ROUTES = {'/ocr': handle_ocr, '/locate': handle_locate, '/find-source': handle_find_source, '/source': handle_source, '/match': handle_match,
           '/video-frame': handle_video_frame, '/video-transcribe': handle_video_transcribe,
           '/video-transcript': handle_video_transcript, '/transcript-tidy': handle_transcript_tidy,
           '/extract-title': handle_extract_title,

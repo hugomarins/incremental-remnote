@@ -26,7 +26,8 @@ plugin with its own code (src/lib/media_bridge_ops.ts):
   get-image <rem> [--out DIR]       copies the rem's images to files, prints their paths
   incrementalize <rem>[,<rem>…] [--priority N]
   pin <rem>[,<rem>…] [--refs <id>[,<id>…]] [--unpin]   references → 📌 pins (default: highlight refs)
-  pin-quote <rem>[,<rem>…] --source <pdf/article rem> [--view pdf|html|both] [--quote TEXT]
+  pin-quote <rem>[,<rem>…] [--source <pdf/article rem>] [--view pdf|html|both] [--quote TEXT]
+                                    without --source: your source finder names each rem's book and PDF
                                     Pin Source Quote: find the rem's text in the source, pin its highlight
   card <rem>[,<rem>…] [--type concept|descriptor|default] [--direction forward|backward|both|none]
 
@@ -485,7 +486,7 @@ def pin(rems: str, refs: str | None, unpin: bool, timeout: float) -> None:
 
 
 def pin_quote(rems: str, source: str, view: str | None, quote: str | None, timeout: float) -> None:
-    args: dict = {"sourceId": source}
+    args: dict = {"sourceId": source} if source else {}
     if view:
         args["view"] = view
     if quote:
@@ -632,7 +633,8 @@ def main() -> None:
     p_pin.add_argument("--timeout", type=float, default=150)
     p_pq = sub.add_parser("pin-quote", help="Pin Source Quote: find each rem's text in a PDF/article and pin it")
     p_pq.add_argument("rems", help="rem id, or several comma-separated")
-    p_pq.add_argument("--source", required=True, help="the PDF or saved web article rem")
+    p_pq.add_argument("--source", help="the PDF or saved web article rem; without it, your source finder "
+                      "(via the AI helper's /find-source) names each rem's book and the PDFs to try")
     p_pq.add_argument("--view", choices=["pdf", "html", "both"], help="for a PDF with a Text Reader version "
                       "(default: the PDF page view)")
     p_pq.add_argument("--quote", help="passage to look for instead of the rem's own text (one rem only)")

@@ -9,7 +9,17 @@ export interface MessageDialog {
   quote?: string;
   /** Smaller explanation under everything else. */
   detail?: string;
-  tone?: 'error' | 'info';
+  /** One box per entry under the message, e.g. one per quote of a bulk run. */
+  items?: MessageItem[];
+  tone?: 'error' | 'info' | 'success';
+}
+
+export interface MessageItem {
+  /** Shown in italics at the top of the box (a quote). */
+  title: string;
+  lines: string[];
+  /** ok = done (green edge), miss = not done (amber edge). */
+  tone?: 'ok' | 'miss';
 }
 
 /**

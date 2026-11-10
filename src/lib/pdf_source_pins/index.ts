@@ -87,6 +87,9 @@ export interface SourcePinResult {
 
 export class SourcePinError extends Error {}
 
+/** The helper is not running: every further request would fail the same way. */
+export class HelperUnreachableError extends SourcePinError {}
+
 /**
  * POST to the local helper. Every request names the current knowledge base: the
  * helper looks for local copies of source files only in that KB's folder.
@@ -102,7 +105,7 @@ async function helperPost<T>(plugin: ReactRNPlugin, path: string, body: object):
     });
   } catch (e) {
     console.error('[SourcePins] Helper unreachable:', e);
-    throw new SourcePinError(`AI helper is not running (${AI_OCR_HELPER_URL}). Start scripts/ai_ocr_helper.py.`);
+    throw new HelperUnreachableError(`AI helper is not running (${AI_OCR_HELPER_URL}). Start scripts/ai_ocr_helper.py.`);
   }
   const json = await res.json().catch(() => null);
   if (!json?.ok) throw new SourcePinError(`AI helper: ${json?.error ?? `HTTP ${res.status}`}`);
@@ -434,6 +437,8 @@ export interface PinQuoteRequest {
   sourceRemId: string;
   /** Texts to try, best match wins (see quoteCandidates). The first is shown to the user. */
   candidates: string[];
+  /** PDF view only: page to search first (see SourceQuote.page). */
+  page?: number;
 }
 
 export type PinOutcome = { ok: true } | { ok: false; dialog: MessageDialog };
@@ -475,7 +480,7 @@ export async function pinOneQuote(
       const trial = await ensureSourcePins(
         plugin,
         request.sourceRemId,
-        candidates.map((quote) => ({ quote })),
+        candidates.map((quote) => ({ quote, page: request.page })),
         views,
         { dryRun: true }
       );
@@ -483,7 +488,7 @@ export async function pinOneQuote(
       console.log('[SourcePins] Candidates', trial.map((t) => ({ quote: t.quote, found: t.found, matched: t.matched, span: t.wordCount, score: t.score })));
     }
     if (best !== -1) {
-      [result] = await ensureSourcePins(plugin, request.sourceRemId, [{ quote: candidates[best] }], views);
+      [result] = await ensureSourcePins(plugin, request.sourceRemId, [{ quote: candidates[best], page: request.page }], views);
     }
   } catch (e) {
     console.error('[SourcePins]', e);
@@ -679,7 +684,200 @@ async function pinSourcesOfRems(plugin: ReactRNPlugin, rems: PluginRem[]) {
     if (!outcome.ok) await showMessageDialog(plugin, outcome.dialog);
     return;
   }
-  await plugin.app.toast('Open the source PDF or web article in a pane first (in any RemNote window).');
+  // No source open: ask the user's source finder which book each quote is from.
+  await plugin.app.toast(
+    `\ud83d\udd0e No source open \u2014 looking up ${withText.length === 1 ? 'the quote' : `${withText.length} quotes`} with your source finder\u2026`
+  );
+  const run = await pinFromSourceFinder(plugin, withText);
+  if (run.unavailable !== undefined) {
+    await plugin.app.toast('Open the source PDF or web article in a pane first (in any RemNote window).');
+    return;
+  }
+  await showMessageDialog(plugin, finderPinDialog(run));
+}
+
+// --- no source open: the source finder ---------------------------------------
+
+/**
+ * A book the user's source finder names for a quote (the AI helper's
+ * `/find-source`; the contract is in docs/Source-Pins.md, "Writing a source
+ * finder"), with its RemNote PDFs in the order to try.
+ */
+export interface FoundBook {
+  /** The finder's own id for the book, if it has one. */
+  id?: string;
+  title: string;
+  /** How the book is cited, short ("BPG"); the title when absent. */
+  cite?: string;
+  /** How the finder knew, shown as is in the dialog ("named in the quote"). */
+  how: string;
+  detail?: string;
+  /** Page to search first, when the finder knows one. */
+  page?: number | null;
+  pdfRemIds: string[];
+}
+
+export interface FinderPinRow {
+  remId: string;
+  quote: string;
+  books: FoundBook[];
+  /** Set when pinned. */
+  pinned?: {
+    pdfRemId: string;
+    pdfName: string;
+    book: FoundBook;
+    page?: number;
+    reused: number;
+    created: number;
+    pins: string[];
+  };
+  /** PDFs tried without finding the passage (name, and why when it failed). */
+  tried: string[];
+}
+
+export interface FinderPinRun {
+  /** Set (with the reason) when the index is not there: the caller falls back to asking for an open source. */
+  unavailable?: string;
+  rows: FinderPinRow[];
+  /** A failure that stopped the run (the helper went away). */
+  stopped?: string;
+}
+
+async function ancestorIds(rem: PluginRem, max = 40): Promise<string[]> {
+  const ids: string[] = [];
+  let parent = await rem.getParentRem();
+  while (parent && ids.length < max) {
+    ids.push(parent._id);
+    parent = await parent.getParentRem();
+  }
+  return ids;
+}
+
+/**
+ * Pin each Rem's quote from a PDF that is not open: the helper asks the user's
+ * source finder (`/find-source`) which book the quote is from, given its text and
+ * the Rems above it, and which of that book's RemNote PDFs to try, in order. The first PDF where the passage is found
+ * is pinned (its page view). Also run by the Local Media Bridge's `pin-quote`
+ * without `--source`.
+ */
+export async function pinFromSourceFinder(
+  plugin: ReactRNPlugin,
+  requests: { remId: string; candidates: string[] }[],
+  onProgress?: (done: number, total: number) => void
+): Promise<FinderPinRun> {
+  const items = [];
+  for (const r of requests) {
+    const rem = await plugin.rem.findOne(r.remId);
+    const texts = rem
+      ? [await plugin.richText.toString((rem.text ?? []) as RichTextInterface), await plugin.richText.toString((rem.backText ?? []) as RichTextInterface)]
+      : r.candidates;
+    items.push({ remId: r.remId, ancestors: rem ? await ancestorIds(rem) : [], texts: texts.filter(Boolean) });
+  }
+  const found = await helperPost<{ available: boolean; reason?: string; items: { remId: string; books: FoundBook[] }[] }>(
+    plugin,
+    '/find-source',
+    { items }
+  ).catch((e: Error) => ({ available: false, reason: e.message, items: [] }));
+  if (!found.available) return { unavailable: found.reason ?? 'no index', rows: [] };
+
+  const booksOf = new Map(found.items.map((it) => [it.remId, it.books]));
+  const names = new Map<string, string>();
+  const nameOf = async (id: string, source?: PluginRem) => {
+    if (!names.has(id)) names.set(id, source ? (await safeRemTextToString(plugin, source.text)) || id : id);
+    return names.get(id)!;
+  };
+
+  const rows: FinderPinRow[] = [];
+  for (let k = 0; k < requests.length; k++) {
+    onProgress?.(k, requests.length);
+    const request = requests[k];
+    const books = booksOf.get(request.remId) ?? [];
+    const row: FinderPinRow = { remId: request.remId, quote: request.candidates[0] ?? '', books, tried: [] };
+    rows.push(row);
+    outer: for (const book of books) {
+      for (const pdfRemId of book.pdfRemIds) {
+        const source = await plugin.rem.findOne(pdfRemId);
+        const views = source ? await sourceViews(source) : [];
+        if (!source || !views.length) {
+          row.tried.push(`${pdfRemId} (not a PDF in this knowledge base)`);
+          continue;
+        }
+        const view: SourceView = views.includes('pdf') ? 'pdf' : views[0];
+        const { result, error } = await pinOneQuote(
+          plugin,
+          { ...request, sourceRemId: pdfRemId, page: book.page ?? undefined },
+          [view]
+        );
+        if (error instanceof HelperUnreachableError) return { rows, stopped: error.message };
+        if (error) {
+          row.tried.push(`${await nameOf(pdfRemId, source)} (${error.message})`);
+          continue;
+        }
+        if (!result) {
+          row.tried.push(await nameOf(pdfRemId, source));
+          continue;
+        }
+        row.pinned = {
+          pdfRemId,
+          pdfName: await nameOf(pdfRemId, source),
+          book,
+          page: result.page,
+          reused: result.reused.length,
+          created: result.created.length,
+          pins: result.pins,
+        };
+        break outer;
+      }
+    }
+  }
+  onProgress?.(requests.length, requests.length);
+  return { rows };
+}
+
+const bookName = (book: FoundBook) => book.cite || book.title;
+
+/** The confirmation shown after pinning from PDFs that were not open: per quote, which PDF and how its book was found. */
+export function finderPinDialog(run: FinderPinRun): MessageDialog {
+  const pinned = run.rows.filter((r) => r.pinned).length;
+  const total = run.rows.length;
+  const items = run.rows.map((row) => {
+    const p = row.pinned;
+    if (p) {
+      return {
+        title: excerpt(row.quote, 120),
+        tone: 'ok' as const,
+        lines: [
+          `PDF: ${p.pdfName}${p.page ? ` \u00b7 p. ${p.page}` : ''}`,
+          `Book: ${bookName(p.book)} \u2014 ${excerpt(p.book.how, 140)}`,
+          `Highlights: reused ${p.reused}, created ${p.created}`,
+        ],
+      };
+    }
+    return {
+      title: excerpt(row.quote, 120),
+      tone: 'miss' as const,
+      lines: row.books.length
+        ? [
+            `Not found in: ${row.tried.join('; ') || 'no PDF of ' + row.books.map(bookName).join(', ')}`,
+            `Books tried: ${row.books.map(bookName).join(', ')}`,
+          ]
+        : ['Your source finder found no book for this quote.'],
+    };
+  });
+  return {
+    tone: pinned ? 'success' : 'info',
+    title:
+      total === 1
+        ? pinned
+          ? 'Pinned from a PDF that was not open'
+          : 'Passage not found in the PDFs of its book'
+        : `Pinned ${pinned} of ${total} quotes from PDFs that were not open`,
+    message: 'No PDF or article was open, so each quote\u2019s book was found by your source finder.',
+    items,
+    detail:
+      (run.stopped ? `Stopped: ${run.stopped} ` : '') +
+      'Wrong PDF? Remove the pin, open the right PDF and run Pin Source Quote again.',
+  };
 }
 
 export interface OtherViewPinOutcome {

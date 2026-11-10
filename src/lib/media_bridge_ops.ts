@@ -25,7 +25,7 @@ import {
   updateIncrementalRemCache,
 } from './incremental_rem';
 import { imageUrlsOf } from './localize_media';
-import { isPin, pinOneQuote, SourceView, sourceViews } from './pdf_source_pins';
+import { isPin, pinFromSourceFinder, pinOneQuote, SourceView, sourceViews } from './pdf_source_pins';
 import { quoteCandidates } from './pdf_source_pins/quote';
 
 export interface BridgeOpJob {
@@ -526,9 +526,60 @@ export async function runPin(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<B
  * source open in a pane or asking which view. `quote` replaces the rem's own
  * text as the passage to look for (a card whose answer is not verbatim).
  */
+/**
+ * pin-quote without a source: each rem's book comes from the user's source finder
+ * (pinFromSourceFinder) and the first of its RemNote PDFs holding the passage is pinned.
+ */
+async function runPinQuoteFromIndex(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
+  const quote = typeof job.quote === 'string' && job.quote.trim() ? job.quote.trim() : undefined;
+  if (quote && job.remIds.length > 1) throw new OpError('--quote goes with a single rem.');
+  const { byId } = await findRems(plugin, job.remIds);
+  const plain = (rt: RichTextInterface | undefined) =>
+    plugin.richText.toString(((rt ?? []) as RichTextInterface).filter((el) => !isPin(el)));
+  const requests = [];
+  const results: Record<string, unknown>[] = [];
+  for (const remId of job.remIds) {
+    const rem = byId.get(remId);
+    const candidates = !rem ? [] : quote ? [quote] : quoteCandidates(await plain(rem.text), await plain(rem.backText));
+    if (!rem) results.push({ remId, ok: false, error: 'rem not found' });
+    else if (!candidates.length) results.push({ remId, ok: false, error: 'the rem has no text to look for' });
+    else requests.push({ remId, candidates });
+  }
+  const run = await pinFromSourceFinder(plugin, requests);
+  if (run.unavailable !== undefined) throw new OpError(`No --source given and no source finder is available: ${run.unavailable}`);
+  for (const row of run.rows) {
+    const p = row.pinned;
+    results.push(
+      p
+        ? {
+            remId: row.remId,
+            ok: true,
+            pdf: p.pdfRemId,
+            pdfName: p.pdfName,
+            page: p.page,
+            book: p.book.id ?? p.book.title,
+            how: p.book.how,
+            detail: p.book.detail,
+            pins: p.pins,
+            reused: p.reused,
+            created: p.created,
+          }
+        : { remId: row.remId, ok: false, books: row.books.map((b) => b.id ?? b.title), tried: row.tried, error: 'passage not found in the PDFs of its book' }
+    );
+  }
+  const pinned = results.filter((r) => r.ok).length;
+  return {
+    ok: pinned === job.remIds.length && !run.stopped,
+    summary: `📌 ${pinned} of ${plural(job.remIds.length, 'rem')} pinned from the PDFs the source finder names`,
+    ...(run.stopped ? { stopped: run.stopped } : {}),
+    results,
+  };
+}
+
 export async function runPinQuote(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
   const sourceId = String(job.sourceId ?? '');
-  const source = sourceId ? await plugin.rem.findOne(sourceId) : undefined;
+  if (!sourceId) return runPinQuoteFromIndex(plugin, job);
+  const source = await plugin.rem.findOne(sourceId);
   if (!source) throw new OpError(`Source not found: ${sourceId || '(none given)'}`);
   const available = await sourceViews(source);
   if (!available.length) throw new OpError(`${sourceId} is not a PDF or a saved web article.`);

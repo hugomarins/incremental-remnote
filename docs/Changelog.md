@@ -2,6 +2,16 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.216 - November 10th, 2026
+
+### ✨ New
+
+**Pin Source Quote with no source open**: when no PDF or article is open, the command can ask a **source finder**, a program of yours that knows your books (for example a search index of your library), which book the quote comes from and which of your PDF Rems to try. The quote is pinned from the first that holds the passage, and a confirmation dialog shows, for each quote, the PDF and page it was pinned from and how its book was found. The Local Media Bridge's `pin-quote` does the same when no `--source` is given.
+
+Set it up in `~/.incremental-remnote/ai-ocr/source-finder.json`; the AI helper (route `/find-source`) runs it, so restart the helper after updating.
+
+📖 [With no source open](Source-Pins.md#no-source-open)
+
 ## v1.0.215 - November 10th, 2026
 
 ### ✨ New
