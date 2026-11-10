@@ -385,5 +385,23 @@ before and after, plus the app bundle.
   or `ps`, slot child Rems with it) stay in its `deleted_quanta` row for the same two weeks. The
   plugin's own IncRem cache drops the Rem on deletion. Dismissing keeps the history
   (`dismissedHistory`); deleting doesn't.
+- **A card that is no longer generated is never trashed if it has history.** Measured 2026-11-10:
+  removing both spans of a cloze (card `s8JJop1pcbCYj0zYj`, 9 reps) left the card in `cards` with
+  `h` byte-identical. RemNote only cleared `a` (ACTIVE_NEXT_TIME) and `d`
+  (DOESNT_REQUIRE_INTERNET_ACTIVE_NEXT_TIME) and set **`b` = `NO_LONGER_NEEDED`** (field map in
+  the bundle: `CARD_TYPE:"c", NEXT_TIME:"n", ACTIVE_NEXT_TIME:"a", HISTORY:"h", NO_LONGER_NEEDED:"b",
+  NOT_YET_LEARNED:"ny"`…). The bundle's card regeneration does
+  `history.length > 0 || stillPossibleType ? set b=true : card.remove()`, so only a card that was
+  **never practiced** goes to `deleted_cards` and the two-week purge. Only the same cloze id
+  brings the old card back (the code clears `b` for a type the Rem generates again, which is
+  what an undo would do; not tested). **Re-clozing the same text by hand does not:** measured
+  2026-11-10, it got a new cloze id (`36035210260199513`) and a new card (`qkppjHCkWLoj5OCQx`,
+  0 reps, due now), while the old card kept its 9 reps under `b`. So the scheduler restarts the
+  cloze from scratch, and the Rem keeps two cloze records for the same text. Along the way,
+  clozing the second span on its own made a third card (`ZQcm8eJepXu5SF3iL`). Once that span
+  joined the first cloze, the card was no longer needed and had no history, so RemNote removed
+  it to `deleted_cards` 2.6 s after creating it. That's the other branch of the rule. These
+  cards are still in `card.getAll()` (see "per-card cloze states" above), so the dashboard
+  already counts their reps. They leave `cards` only when their Rem is deleted.
 - A disabled direction is different: its record stays in `cards` with its history, just not
   returned by `getCards()` (see above).

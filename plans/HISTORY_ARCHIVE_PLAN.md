@@ -121,7 +121,7 @@ Background thread: an incremental scan of every known KB every 6 hours and at he
 
 ## 7. Open questions to measure first (Phase 0)
 
-- Removing a cloze's markup or a card type: does the card go to `deleted_cards`, or stay in `cards`? `findings/CARD_STATE_REFERENCE.md` suggests it stays. If it stays, does `card.getAll()` still return it? If not, its reps are already missing from the dashboard today, and the archive should treat "in `cards` but never returned by the API" as a ghost too. That's what the timestamp test does anyway, as long as the plugin builds its sets from `getAll()`.
+- ~~Removing a cloze's markup or a card type~~ **Answered 2026-11-10:** a card with history stays in `cards`, flagged `b` (`NO_LONGER_NEEDED`), with its history intact and still returned by `card.getAll()`. Only a never-practiced card is removed, and that one has no reps to lose. So edited-away cards need nothing from the archive while their Rem lives. When the Rem is deleted they go to `deleted_cards` with it, like any other card. See `findings/CARD_STATE_REFERENCE.md`.
 - Disabled directions: same question for `card.getAll()`. Per `findings/`, `rem.getCards()` drops them.
 - New-layout IncRems: confirm a deleted IncRem's `ps` slot values survive in `deleted_quanta`. The 2026-11-10 sample was legacy `bpc`.
 - A trash cleared on another device: does the local `deleted_cards` row vanish on the next sync, and how fast? This sets how much the live archiving matters.
