@@ -12,6 +12,12 @@ Set it up in `~/.incremental-remnote/ai-ocr/source-finder.json`; the AI helper (
 
 📖 [With no source open](Source-Pins.md#no-source-open)
 
+### 🛠️ Improvements
+
+**Stall diagnostics**: a "main thread blocked" report now names the calls the plugin made while frozen, and any large value sent or received, with its storage key.
+
+📖 [What the plugin records](Troubleshooting.md#stall-diagnostics)
+
 ## v1.0.215 - November 10th, 2026
 
 ### ✨ New
