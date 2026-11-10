@@ -24,6 +24,11 @@ whisper.cpp, on this Mac. YouTube's automatic captions can be tidied up by
 Claude (`/transcript-tidy`): punctuation, sentences, key terms in bold. And
 Claude names a Video Extract from its transcript (`/extract-title`).
 
+It also archives review history (`/history/scan`, `/history/ghosts`,
+`/history/status`, see history_archive.py): every few hours it copies the reps of
+each knowledge base it has heard from out of remnote.db, read-only, so the
+Study Dashboard can keep counting the reps of Rems deleted since.
+
     python3 scripts/ai_ocr_helper.py          # listens on 127.0.0.1:3457
 
 Requires PyMuPDF (`pip install pymupdf`) and a logged-in `claude` CLI; video
@@ -76,6 +81,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pymupdf
+
+import history_archive
 
 PORT = int(os.environ.get('IR_AI_PORT', '3457'))
 MODEL = os.environ.get('IR_AI_MODEL', 'sonnet')
@@ -1205,6 +1212,34 @@ def handle_video_file(req, entry):
     return {'size': path.stat().st_size}
 
 
+def history_kb(req, entry):
+    kb_id = history_archive.check_kb_id(req.get('kbId'))
+    entry['kbId'] = kb_id
+    return kb_id
+
+
+def handle_history_scan(req, entry):
+    """Scan the KB's remnote.db into its archive now."""
+    summary = history_archive.scan(history_kb(req, entry))
+    entry.update(newReps=summary['newReps'], trashItems=summary['trashItems'])
+    return {'scan': summary}
+
+
+def handle_history_ghosts(req, entry):
+    """Reps only deleted Rems hold, and the Rems on their way up to a live ancestor.
+    `scan: true` scans first."""
+    kb_id = history_kb(req, entry)
+    if req.get('scan'):
+        history_archive.scan(kb_id)
+    payload = history_archive.ghosts(kb_id)
+    entry.update(reps=len(payload['reps']), rems=len(payload['rems']))
+    return payload
+
+
+def handle_history_status(req, entry):
+    return {'status': history_archive.status(history_kb(req, entry))}
+
+
 MEDIA_PREFIX = '/media/'
 MEDIA_CHUNK = 1 << 20
 
@@ -1214,7 +1249,9 @@ ROUTES = {'/ocr': handle_ocr, '/locate': handle_locate, '/find-source': handle_f
           '/extract-title': handle_extract_title,
           '/video-choose': handle_video_choose, '/video-libraries': handle_video_libraries,
           '/video-library-relink': handle_video_library_relink, '/video-scan': handle_video_scan,
-          '/video-file': handle_video_file}
+          '/video-file': handle_video_file,
+          '/history/scan': handle_history_scan, '/history/ghosts': handle_history_ghosts,
+          '/history/status': handle_history_status}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1239,7 +1276,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {'ok': True, 'claude': find_claude(), 'model': MODEL,
                                         'ytDlp': find_tool('yt-dlp'), 'ffmpeg': find_tool('ffmpeg'),
                                         'transcripts': True, 'whisper': whisper_ready(), 'localVideo': True,
-                                        'extractTitles': True})
+                                        'extractTitles': True, 'historyArchive': True})
         if self.path.startswith(MEDIA_PREFIX):
             return self.send_media()
         self.send_json(404, {'ok': False, 'error': 'POST /ocr or /locate'})
@@ -1309,6 +1346,9 @@ class Handler(BaseHTTPRequestHandler):
             # One thread per request: fetch() reads the knowledge base from here.
             REQUEST.kb_id = req.get('kbId')
             entry['kbId'] = REQUEST.kb_id
+            # Any request names the KB in use: from now on its history is archived too.
+            if history_archive.register_kb(REQUEST.kb_id):
+                print(f'[history] archiving {REQUEST.kb_id}', flush=True)
             payload = route(req, entry)
             ms = int((time.time() - started) * 1000)
             entry.update(ok=True, ms=ms)
@@ -1337,6 +1377,7 @@ def main():
             old.unlink(missing_ok=True)
     print(f'AI OCR helper on http://127.0.0.1:{PORT}  (claude: {find_claude()}, model: {MODEL})', flush=True)
     print(f'Prompt: {PROMPT_FILE}', flush=True)
+    history_archive.start_background_scans(log=lambda m: print(m, flush=True))
     ThreadingHTTPServer(('127.0.0.1', PORT), Handler).serve_forever()
 
 

@@ -2,7 +2,7 @@
 
 Working document for a desktop helper that keeps the review history of deleted cards and Incremental Rems, so the Study Dashboard keeps counting it. It also keeps where each deleted Rem lived in the tree. Pick it up at "Phases"; the sections above it hold the decisions and their reasons.
 
-Last updated: **2026-11-10** (plan only, nothing built).
+Last updated: **2026-11-10** (Phases 1–2 done: the helper archives the main KB and the test 7 KB).
 
 ---
 
@@ -35,11 +35,11 @@ Not a goal: restoring Rems, or touching RemNote's data in any way. The helper on
 |---|---|
 | **Read `remnote.db` from a localhost helper**, read-only (`?mode=ro`). | It's the only way into the trash. The plugin iframe can't read files, and the bridge never serves deleted records. |
 | **Part of the existing helper process** (`scripts/ai_ocr_helper.py` serves the routes), with the logic in its own module `scripts/history_archive.py`, also runnable as a CLI. | One LaunchAgent, one port and one Origin check, all of them already installed and trusted. The module stays testable on its own and doesn't need `claude`. |
-| **Archive live reps too, not only the trash.** | "Clear Trash" purges at once, and so does a Rem deleted and purged between two scans. Only a copy taken while the card was alive covers those cases. A scan of rows changed since the last one is cheap: the `y` column is indexed (`json_cards_y`, `json_deleted_cards_y`). |
+| **Archive live reps too, not only the trash.** | "Clear Trash" purges at once, and so does a Rem deleted and purged between two scans. Only a copy taken while the card was alive covers those cases. A full scan of the main KB takes ~4 s (48k items, 296k rep copies, 42k Rems), so every scan is a full one, in one read transaction. |
 | **Rep identity = the rep timestamp in ms, across all kinds** (card, inc, dism). Not the card or Rem id, and not (kind, timestamp). | Every path that moves history keeps the original `date` but may change the kind, so only the timestamp survives all of them. **Preserve history & remove** turns card reps into `importedRep` entries on the tombstone's Dismissed history, then deletes the cards (§3a). **Dismiss** moves `repHist` to `dismissedHistory`. **Transfer to parent** copies the history to the parent. **Restore from trash** brings the card back with the same reps. **Copies** (imports, "copy to KB") carry history to new ids via `srcRemId`; the test Rem had reps older than itself. **Stale slots**: legacy `bpc` values survive a removed powerup. Two real reps never share a millisecond, because the queue shows one item at a time. |
 | **The plugin counts a rep as "ghost" only if its timestamp is in none of the live histories it just read**: card `repetitionHistory`, IncRem `repHist`, Dismissed `dismissedHistory`, `importedRep` entries included. | Live data stays the source of truth. The helper never has to know what the plugin sees, a restored card stops being a ghost automatically, and a rep preserved on a tombstone is counted once, as the tombstone counts it. |
 | **When several archived copies share a timestamp, keep the one that was live most recently** (`last_seen_live`). | A rep keeps being counted the way it was last counted, so a total doesn't change kind when a later deletion happens. Example: a tombstone is itself deleted. Its `importedRep` copies (counted as Dismissed time while it lived) win over the original card records, which died first. |
-| **The ancestor chain is captured when the archive first sees the Rem deleted, and re-resolved when the dashboard displays it.** | At capture time the parent may already be gone (a whole subtree deleted), so the helper walks `parent` through `deleted_quanta` and `quanta` up to the first live Rem. It stores every link: id, plain text, and whether it was alive. Later, an "alive" ancestor may itself be deleted. The plugin then attaches the ghost to the nearest chain entry that `findOne` still returns, or to a top-level "Deleted Rems" node. |
+| **Every scan records each Rem that holds reps, and all its ancestors (`rems`: parent, plain text, live/trash/gone). Chains are walked through that table when asked for.** | Changed from "capture the chain at deletion" while building Phase 1. Recording live Rems on every scan means a Rem deleted *and* purged between two scans still has its last known place and text. Each answer walks `parent` up to the first Rem that is still live; whole deleted subtrees stay together. The plugin still re-checks the live anchor with `findOne`, and falls back to a top-level "Deleted Rems" node. |
 | **Ghost daily totals go to a small synced key** (`ghostDailyAggregates_<kbId>`, same compact row format as the authoritative shard), **written only when the helper answered.** | Mobile and web have no helper but should still count the reps. The key holds only the days of deleted items, so it stays far below the 900 KB per-key limit (UTF-16, see `findings/PLUGIN_BRIDGE_AND_SDK.md`). If the helper is unreachable, the last good value stays. |
 | **Ghost tree nodes are desktop-only**, fetched from the helper when the dashboard opens. | Per-Rem rep lists with texts and chains are too large for synced storage, and the tree is where the desktop is used anyway. Without the helper the tree shows no ghosts, and the totals still include them. |
 | **Archive one folder per KB**, `~/.incremental-remnote/history-archive/<kbId>.sqlite`. Scan only KBs the plugin has called in from. | The user requires the helper to read only the KB in use (as the AI OCR helper does), and every folder but one is a test KB. Not under iCloud: launchd can't write there. The existing Claude-config backup hooks can pick it up. |
@@ -63,6 +63,15 @@ Dashboard tree, for the same reason:
 The archive doesn't make the command unnecessary. The tombstone keeps the history in RemNote itself, synced, with no helper, and on any device. The archive is the safety net for deletions that didn't go through it.
 
 ## 4. Archive schema (helper side)
+
+As built: see `SCHEMA` in `scripts/history_archive.py`. Changes from the sketch below:
+- Liveness is per item (`items.state`, `last_seen_live`), not per rep copy.
+- A rep that disappears from a still-live item is marked `removed_live` (history edit), so it can never come back as a ghost.
+- `rems` replaces `chain_json`, and no raw rich text is kept.
+- The archive of the main KB is ~57 MB.
+
+The original sketch:
+
 
 ```
 reps   (kind TEXT,            -- 'card' | 'inc' | 'dism'
@@ -102,7 +111,7 @@ All are POST, carry `kbId`, and go through the existing Origin check:
 - `/history/ghosts` `{kbId}`: every archived rep whose item is no longer live in `remnote.db`. That's a card absent from `cards`, or an inc/dism Rem absent from `quanta` or without the slot. They come with their `rems` rows and chains. The plugin still applies the timestamp test of §3, so this is only a pre-filter that keeps the payload small.
 - `/history/status` `{kbId}`: last scans, archive size, how many items are in the trash right now, and the oldest `deletedAt` there.
 
-Background thread: an incremental scan of every known KB every 6 hours and at helper start, plus a full scan weekly. Two weeks is the deadline, so this leaves a wide margin.
+Background thread: a full scan of every known KB a minute after the helper starts, then every 6 hours. A KB is known once any helper request carries its `kbId`, or once the CLI `scan` ran on it (`~/.incremental-remnote/history-archive/kbs.json`). Two weeks is the deadline, so this leaves a wide margin.
 
 ## 6. Plugin side
 
@@ -126,15 +135,16 @@ Background thread: an incremental scan of every known KB every 6 hours and at he
 - New-layout IncRems: confirm a deleted IncRem's `ps` slot values survive in `deleted_quanta`. The 2026-11-10 sample was legacy `bpc`.
 - A trash cleared on another device: does the local `deleted_cards` row vanish on the next sync, and how fast? This sets how much the live archiving matters.
 - Preserve history & remove on a test subtree with cards, an IncRem and a Dismissed Rem: confirm that every trashed copy's `date` appears unchanged in the tombstone's `dismissedHistory`. Do the same for Transfer to parent.
-- Cost of a full scan on the main KB (1.8 GB, 71k cards, 268k reps) while RemNote is running. WAL readers don't block the writer, but measure the time and check RemNote stays smooth.
+- ~~Cost of a full scan~~ **Measured:** ~4 s on the main KB with RemNote running.
 
 ## Phases
 
-- [ ] **0. Measure** the open questions above in a test KB, and write the answers to `findings/`.
-- [ ] **1. Scanner + archive** (`scripts/history_archive.py`, CLI only):
-  - `--kb <id> --scan [--full]`, `--report`;
-  - tests on a copy of a test-KB `remnote.db` with a deleted subtree, a restored Rem, an imported copy, a Preserve-history tombstone, and a deleted tombstone.
-- [ ] **2. Helper routes + background scans** in `ai_ocr_helper.py`, plus the LaunchAgent restart. Verify `/history/ghosts` on the main KB (read-only).
+- [ ] **0. Measure** the open questions above in a test KB, and write the answers to `findings/`. Cloze removal and scan cost are done. Still open: disabled directions in `getAll()`, Preserve history live check (in Phase 3), and a trash cleared on another device.
+- [x] **1. Scanner + archive** (`scripts/history_archive.py`, CLI only):
+  - `--kb <id> scan | report | status | ghosts`;
+  - 13 tests in `scripts/test_history_archive.py` (`python3 scripts/test_history_archive.py`), each on a fake `remnote.db`. They cover: a deleted card, a purged trash, a restore, a deleted subtree, a rep edited out before deletion, IncRems in both layouts, Dismiss, Preserve history & remove, a deleted tombstone, reference texts, and the report.
+  - First real run (2026-11-10), main KB: 26 ghost reps (12 min), in 3 deleted subtrees. RemNote's trash only reaches back to Oct 31. 76 of the trashed card reps were correctly skipped, because they live on as `importedRep` on Preserve-history tombstones. This confirms §3a on real data.
+- [x] **2. Helper routes + background scans** in `ai_ocr_helper.py`, plus the LaunchAgent restart. Verify `/history/ghosts` on the main KB (read-only).
 - [ ] **3. Plugin client** `src/lib/history_archive.ts`:
   - ghost buckets into `ghostDailyAggregates_<kbId>`, merged into Summary and Graphs;
   - check the totals against a manual count from the archive;
