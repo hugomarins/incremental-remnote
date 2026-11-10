@@ -187,6 +187,49 @@ async function powerupRems(plugin: ReactRNPlugin) {
 
 const norm = (s: string) => s.trim().toLowerCase();
 
+/**
+ * Adds a tag, given by its rem id, to each rem (the MCP's tag_rems refuses some rems,
+ * such as PDF rems). Already tagged counts as done.
+ */
+export async function runTag(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
+  const tagId = String(job.tag ?? '').trim();
+  if (!tagId) throw new OpError('No tag id given.');
+  const tagRem = await plugin.rem.findOne(tagId);
+  if (!tagRem) throw new OpError(`No rem with id “${tagId}” to use as the tag.`);
+  if (tagRem._id === (await plugin.powerup.getPowerupByCode(powerupCode))?._id) {
+    throw new OpError('The Incremental tag is not added here: use incrementalize instead.');
+  }
+  const tagName = await plugin.richText.toString(tagRem.text ?? []);
+  const { byId } = await findRems(plugin, job.remIds);
+  const isTagged = async (rem: PluginRem) =>
+    ((await rem.getTagRems()) ?? []).some((tag) => tag._id === tagRem._id);
+
+  const results = [];
+  for (const remId of job.remIds) {
+    const rem = byId.get(remId);
+    if (!rem) {
+      results.push({ remId, tagged: false, error: 'rem not found' });
+      continue;
+    }
+    try {
+      const already = await isTagged(rem);
+      if (!already) await rem.addTag(tagRem._id);
+      const tagged = await isTagged(rem);
+      results.push({ remId, tagged, already, ...(tagged ? {} : { error: 'not tagged after adding' }) });
+    } catch (err) {
+      results.push({ remId, tagged: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  const done = results.filter((r) => r.tagged).length;
+  return {
+    ok: done === results.length,
+    summary: `tagged ${done}/${results.length} with “${tagName}”`,
+    tagId: tagRem._id,
+    tagName,
+    results,
+  };
+}
+
 export async function runUntag(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
   const spec = String(job.tag ?? '').trim();
   if (!spec) throw new OpError('No tag given.');
@@ -608,6 +651,7 @@ export async function runCard(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<
 const OPS: Record<string, (plugin: ReactRNPlugin, job: BridgeOpJob) => Promise<BridgeOpResult>> = {
   move: runMove,
   untag: runUntag,
+  tag: runTag,
   'get-image': runGetImage,
   incrementalize: runIncrementalize,
   pin: runPin,

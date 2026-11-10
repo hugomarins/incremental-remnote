@@ -32,7 +32,7 @@ import { getIESetting } from './settings';
 export const MEDIA_BRIDGE_URL = 'http://127.0.0.1:3460';
 const POLL_WAIT_S = 25;
 /** The bridge protocol this build speaks; see OPS_BY_PLUGIN_VERSION in media_bridge.py. */
-const PROTOCOL_VERSION = 3;
+const PROTOCOL_VERSION = 4;
 const RETRY_MS = 30_000;
 /**
  * A rem written through the MCP reaches this client by sync, a moment after the

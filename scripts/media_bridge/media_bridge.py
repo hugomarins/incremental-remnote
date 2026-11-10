@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Local Media Bridge: get local images into RemNote's own storage from outside the app,
-and run a few rem operations the RemNote MCP lacks (move, untag, get-image, incrementalize,
+and run a few rem operations the RemNote MCP lacks (move, tag, untag, get-image, incrementalize,
 pin, pin-quote, card).
 
 Why: since RemNote 1.29 the desktop window runs sandboxed (webSecurity on), so an
@@ -21,6 +21,7 @@ The same job channel carries the operations the RemNote MCP cannot do, each run 
 plugin with its own code (src/lib/media_bridge_ops.ts):
 
   move <rem>[,<rem>…] <parent> [first|last|N|before:<id>|after:<id>]
+  tag <rem>[,<rem>…] <tag rem id>   adds a tag (works on PDF rems, which the MCP's tag_rems refuses)
   untag <rem>[,<rem>…] <tag id | tag name | powerup:<code>>
   get-image <rem> [--out DIR]       copies the rem's images to files, prints their paths
   incrementalize <rem>[,<rem>…] [--priority N]
@@ -71,12 +72,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 5  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card
+VERSION = 6  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},
     2: {"localize", "move", "untag", "get-image", "incrementalize"},
     3: {"localize", "move", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card"},
+    4: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card"},
 }
 KNOWN_OPS = OPS_BY_PLUGIN_VERSION[max(OPS_BY_PLUGIN_VERSION)]
 HOST = "127.0.0.1"
@@ -464,6 +466,11 @@ def move(rems: str, parent: str, position: str | None, expect_parent: str | None
     finish(result, bool(result.get("ok")))
 
 
+def tag(rems: str, tag_id: str, timeout: float) -> None:
+    result = run_job("tag", split_ids(rems), {"tag": tag_id}, timeout)
+    finish(result, bool(result.get("ok")))
+
+
 def untag(rems: str, tag: str, drop_properties: bool, timeout: float) -> None:
     result = run_job("untag", split_ids(rems), {"tag": tag, "removeProperties": drop_properties}, timeout)
     finish(result, bool(result.get("ok")))
@@ -601,6 +608,10 @@ def main() -> None:
     p_mv.add_argument("--expect-parent", help="refuse unless each rem's current parent is this id")
     p_mv.add_argument("--dry-run", action="store_true", help="report what would move, change nothing")
     p_mv.add_argument("--timeout", type=float, default=150)
+    p_tg = sub.add_parser("tag", help="add a tag (by its rem id) to rems, PDF rems included")
+    p_tg.add_argument("rems", help="rem id, or several comma-separated")
+    p_tg.add_argument("tag", help="the tag rem's id")
+    p_tg.add_argument("--timeout", type=float, default=150)
     p_un = sub.add_parser("untag", help="remove a tag (or a built-in powerup such as Extra Card Detail) from rems")
     p_un.add_argument("rems", help="rem id, or several comma-separated")
     p_un.add_argument("tag", help="tag rem id, tag name (as shown), or powerup:<code> (e.g. powerup:x)")
@@ -647,6 +658,8 @@ def main() -> None:
         localize(a.remIds, a.timeout)
     elif a.cmd == "move":
         move(a.rems, a.parent, a.position, a.expect_parent, a.dry_run, a.timeout)
+    elif a.cmd == "tag":
+        tag(a.rems, a.tag, a.timeout)
     elif a.cmd == "untag":
         untag(a.rems, a.tag, a.drop_properties, a.timeout)
     elif a.cmd == "get-image":

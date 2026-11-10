@@ -2,6 +2,16 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.215 - November 10th, 2026
+
+### ✨ New
+
+**Local Media Bridge**: `tag` adds a tag to rems, PDF rems included, which the RemNote MCP cannot tag. For example, to mark which of a book's PDFs is the one in use with `#preferthispdf`.
+
+Needs helper version 6: restart `media_bridge.py` after updating.
+
+📖 [Rem operations](Local-Media-Bridge.md#operations)
+
 ## v1.0.214 - November 10th, 2026
 
 ### ✨ New
