@@ -1,23 +1,19 @@
+import { PluginCommandMenuLocation, ReactRNPlugin } from '@remnote/plugin-sdk';
 import {
-  PluginCommandMenuLocation,
-  ReactRNPlugin,
-  BuiltInPowerupCodes,
-} from '@remnote/plugin-sdk';
-import {
-  powerupCode,
   priorityShieldHistoryMenuItemId,
   currentSubQueueIdKey,
   noIncRemMenuItemId,
   noIncRemTimerKey,
-  pageRangeWidgetId,
   incRemDisabledDeviceKey,
-  cardEnablementAnchorKey,
 } from '../lib/consts';
-import { safeRemTextToString, getActivePdfForIncRem, getAllPDFsInRem, findIncrementalRemForPDF, getPdfInfoFromHighlight, addPageToHistory, setIncrementalReadingPosition } from '../lib/pdfUtils';
-import { initIncrementalRem } from './powerups';
-import { confirmNoDuplicateSource } from '../lib/duplicate_source';
-import { markRemsAsFreshlyCreated } from '../lib/incRemHelpers';
-import { createRemFromHighlight } from '../lib/highlightActions';
+import { safeRemTextToString } from '../lib/pdfUtils';
+import {
+  openDocumentHub,
+  openPdfControlPanel,
+  openPriorityQueue,
+  openSetPriority,
+  toggleIncrementalRem,
+} from '../lib/document_menu_actions';
 
 export async function registerMenus(plugin: ReactRNPlugin) {
   plugin.app.registerMenuItem({
@@ -44,130 +40,17 @@ export async function registerMenus(plugin: ReactRNPlugin) {
   });
 
   plugin.app.registerMenuItem({
-    id: 'priority_shield_document_menuitem',
-    name: 'Priority Shield History',
-    location: PluginCommandMenuLocation.DocumentMenu,
-    action: async (args: { remId: string }) => {
-      // For document menu, the remId IS the scope/subQueueId
-      await plugin.widget.openPopup('priority_shield_graph', {
-        subQueueId: args.remId,
-      });
-    },
-  });
-
-  plugin.app.registerMenuItem({
     id: 'tag_rem_menuitem',
     location: PluginCommandMenuLocation.DocumentMenu,
     name: 'Toggle Incremental Rem',
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/12809/12809374.png',
-    action: async (args: { remId: string }) => {
-      const rem = await plugin.rem.findOne(args.remId);
-      if (!rem) return;
-
-      const isIncremental = await rem.hasPowerup(powerupCode);
-
-      if (isIncremental) {
-        await rem.removePowerup(powerupCode);
-        // Removed setHighlightColor -> CSS handles cleanup when tag is removed
-        await plugin.app.toast('❌ Removed Incremental tag');
-      } else {
-        if (!(await confirmNoDuplicateSource(plugin, [rem])).length) return;
-        await initIncrementalRem(plugin, rem);
-        // Removed setHighlightColor -> CSS handles styling via "incremental" tag
-        await plugin.app.toast('✅ Tagged as Incremental Rem');
-        // Clear stale session storage to prevent race condition with widget context
-        await plugin.storage.setSession('priorityPopupTargetRemId', undefined);
-        await markRemsAsFreshlyCreated(plugin, [rem._id]);
-        await plugin.widget.openPopup('priority_interval', {
-          remId: rem._id,
-        });
-      }
-    },
+    action: async (args: { remId: string }) => toggleIncrementalRem(plugin, args.remId),
   });
-
   plugin.app.registerMenuItem({
     id: 'set_priority_document_menuitem',
     location: PluginCommandMenuLocation.DocumentMenu,
     name: 'Set Priority',
-    action: async (args: { remId: string }) => {
-      const rem = await plugin.rem.findOne(args.remId);
-      if (!rem) {
-        await plugin.app.toast('Could not find a Rem to set priority for.');
-        return;
-      }
-
-      await plugin.storage.setSession('priorityPopupTargetRemId', undefined);
-
-      await plugin.widget.openPopup('priority', {
-        remId: rem._id,
-      });
-    },
+    action: async (args: { remId: string }) => openSetPriority(plugin, args.remId),
   });
-
-  plugin.app.registerMenuItem({
-    id: 'batch_priority_menuitem',
-    location: PluginCommandMenuLocation.DocumentMenu,
-    name: 'Batch Priority Change',
-    action: async (args: { remId: string }) => {
-      const rem = await plugin.rem.findOne(args.remId);
-      if (!rem) {
-        return;
-      }
-
-      await plugin.storage.setSession('batchPriorityFocusedRem', args.remId);
-
-      await plugin.widget.openPopup('batch_priority', {
-        remId: args.remId,
-      });
-    },
-  });
-
-  plugin.app.registerMenuItem({
-    id: 'batch_card_priority_menuitem',
-    location: PluginCommandMenuLocation.DocumentMenu,
-    name: 'Batch Assign Card Priority for tagged/referencing Rems',
-    action: async (args: { remId: string }) => {
-      const rem = await plugin.rem.findOne(args.remId);
-      if (!rem) {
-        await plugin.app.toast('Could not find the rem');
-        return;
-      }
-
-      // Allow opening if this rem is used as a tag OR is referenced by other rems
-      const [taggedRems, referencingRems] = await Promise.all([
-        rem.taggedRem(),
-        rem.remsReferencingThis(),
-      ]);
-
-      const hasTagged = taggedRems && taggedRems.length > 0;
-      const hasReferencing = referencingRems && referencingRems.length > 0;
-
-      if (!hasTagged && !hasReferencing) {
-        await plugin.app.toast('No rems are tagged with or referencing this rem.');
-        return;
-      }
-
-      await plugin.storage.setSession('batchCardPriorityTagRem', rem._id);
-
-      await plugin.widget.openPopup('batch_card_priority');
-    },
-  });
-
-  plugin.app.registerMenuItem({
-    id: 'card_enablement_audit_menuitem',
-    location: PluginCommandMenuLocation.DocumentMenu,
-    name: 'Audit Card Enablement (tagged / referencing / descendants)',
-    action: async (args: { remId: string }) => {
-      const rem = await plugin.rem.findOne(args.remId);
-      if (!rem) {
-        await plugin.app.toast('Could not find the rem');
-        return;
-      }
-      await plugin.storage.setSession(cardEnablementAnchorKey, rem._id);
-      await plugin.widget.openPopup('card_enablement_audit');
-    },
-  });
-
   plugin.app.registerMenuItem({
     id: noIncRemMenuItemId,
     name: 'No Inc Rem for 15 min',
@@ -213,66 +96,23 @@ export async function registerMenus(plugin: ReactRNPlugin) {
     id: 'create_priority_review_menuitem',
     location: PluginCommandMenuLocation.DocumentMenu,
     name: 'Priority Queue',
-    action: async (args: { remId: string }) => {
-      const rem = await plugin.rem.findOne(args.remId);
-      if (!rem) return;
-
-      const remName = await safeRemTextToString(plugin, rem.text);
-
-      await plugin.storage.setSession('reviewDocContext', {
-        scopeRemId: rem._id,
-        scopeName: remName,
-      });
-
-      await plugin.widget.openPopup('priority_queue_popup');
-    },
+    action: async (args: { remId: string }) => openPriorityQueue(plugin, args.remId),
   });
-
   plugin.app.registerMenuItem({
     id: 'pdf_control_panel_menuitem',
     location: PluginCommandMenuLocation.DocumentMenu,
     name: 'PDF Control Panel',
-    action: async (args: { remId: string }) => {
-      console.log('[PDF Control Panel] Menu item clicked, resolving PDF rem...');
-      const rem = await plugin.rem.findOne(args.remId);
-      if (!rem) return;
-
-      const pdfRem = await getActivePdfForIncRem(plugin, rem);
-      if (!pdfRem) {
-        await plugin.app.toast('No PDF found in this rem or its sources');
-        return;
-      }
-
-      // If the menu was triggered from an IncRem document (rather than from
-      // the PDF document itself), pass the IncRem id directly. Without this,
-      // the widget falls back to findIncrementalRemForPDFFast, which walks
-      // the known-rems index and returns the *first* match — silently
-      // landing on the wrong IncRem when many share the same PDF (e.g. a
-      // book's chapters all sourcing the same textbook PDF). Pre-populating
-      // allPdfRemIds lets the PDF selector render immediately too.
-      const isIncRem = await rem.hasPowerup(powerupCode);
-      const incrementalRemId = isIncRem ? rem._id : null;
-      const allPdfRemIds = isIncRem
-        ? (await getAllPDFsInRem(plugin, rem)).map((p) => p.rem._id)
-        : undefined;
-
-      console.log('[PDF Control Panel] Opening popup with', {
-        pdfRemId: pdfRem._id,
-        incrementalRemId,
-        allPdfCount: allPdfRemIds?.length ?? 'unknown',
-      });
-      await plugin.storage.setSession('pageRangeContext', {
-        pdfRemId: pdfRem._id,
-        incrementalRemId,   // null only when triggered from a non-IncRem doc
-        totalPages: 0,
-        currentPage: 1,
-        allPdfRemIds,
-      });
-      await plugin.storage.setSession('pageRangePopupOpen', true);
-      await plugin.widget.openPopup(pageRangeWidgetId);
-    },
+    action: async (args: { remId: string }) => openPdfControlPanel(plugin, args.remId),
   });
 
+  // RemNote lists plugin menu items flat and can't nest them, so the rest of the
+  // Document menu's actions live in the Document Hub floating panel.
+  plugin.app.registerMenuItem({
+    id: 'document_hub_menuitem',
+    location: PluginCommandMenuLocation.DocumentMenu,
+    name: 'Incremental RemNote…',
+    action: async (args: { remId: string }) => openDocumentHub(plugin, args.remId),
+  });
   plugin.app.registerMenuItem({
     id: 'create_priority_review_queue_menuitem',
     location: PluginCommandMenuLocation.QueueMenu,

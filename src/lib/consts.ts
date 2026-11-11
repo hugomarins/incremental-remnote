@@ -863,3 +863,13 @@ export const recognitionFirstId = 'recognition-first';
 export const recognitionFirstMinDaysId = 'recognition-first-min-days';
 // Synced, per KB: Rem id → when Recognition First set it to back → front only.
 export const recognitionFirstHeldKeyPrefix = 'recognition-first-held';
+
+// Document Hub — floating panel holding the Document menu's actions, opened by
+// the "Incremental RemNote…" menu item (RemNote can't nest plugin menu items).
+// Session keys: the document it acts on, its live widget id, and where it was
+// last dragged to ({top, right}: the iframe can't read the host's width).
+export const documentHubWidgetId = 'document_hub';
+export const documentHubTargetKey = 'document-hub-target';
+export const documentHubActiveIdKey = 'document-hub-active-id';
+export const documentHubPositionKey = 'document-hub-position';
+export const documentHubDefaultPosition = { top: 56, right: 24 };

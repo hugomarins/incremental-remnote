@@ -1,5 +1,5 @@
 import { QueueItemType, ReactRNPlugin, WidgetLocation } from '@remnote/plugin-sdk';
-import { pageRangeWidgetId, parentSelectorWidgetId, parentPickWidgetId, powerupCode, priorityGraphPowerupCode, incremNotesSidebarWidgetId, enableMasteryDrillId, pluginHubWidgetId, onboardingTipsWidgetId, cardVideoPowerupCode, mcScissorsWidgetId, mcAssertionsWidgetId } from '../lib/consts';
+import { pageRangeWidgetId, parentSelectorWidgetId, parentPickWidgetId, powerupCode, priorityGraphPowerupCode, incremNotesSidebarWidgetId, enableMasteryDrillId, pluginHubWidgetId, onboardingTipsWidgetId, cardVideoPowerupCode, mcScissorsWidgetId, mcAssertionsWidgetId, documentHubWidgetId } from '../lib/consts';
 import { getIESetting } from '../lib/settings';
 import { screenFittedHeight } from '../lib/utils';
 
@@ -661,6 +661,12 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
   });
   plugin.app.registerWidget('image_size_feedback', WidgetLocation.FloatingWidget, {
     dimensions: { height: 'auto', width: 'auto' },
+  });
+
+  // Document Hub: the Document menu's actions in a panel that stays open,
+  // opened by the "Incremental RemNote…" menu item (lib/document_menu_actions.ts).
+  plugin.app.registerWidget(documentHubWidgetId, WidgetLocation.FloatingWidget, {
+    dimensions: { height: 'auto', width: 300 },
   });
 
   // Floating (non-blocking) variant of the Source popup — opens to the side so
