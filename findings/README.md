@@ -6,7 +6,7 @@ A finding earns a file here when getting it wrong costs real time: a silent fail
 
 | File | What it covers |
 |---|---|
-| [CARD_STATE_REFERENCE.md](CARD_STATE_REFERENCE.md) | Disabled, paused and not-generated cards: what each looks like through the API, and how to tell them apart; where repetition history lives and how long a deleted card keeps it (two-week trash) |
+| [CARD_STATE_REFERENCE.md](CARD_STATE_REFERENCE.md) | Disabled, paused and not-generated cards: what each looks like through the API, and how to tell them apart; where repetition history lives and how long a deleted card keeps it (two-week trash); resetting one card vs a whole bullet (the `/srs` dialog resets every card) |
 | [REMNOTE_POWERUP_CODES.md](REMNOTE_POWERUP_CODES.md) | RemNote's built-in powerup and slot codes compared with the SDK's (e.g. Card Cluster `cc`, missing from the SDK) |
 | [REM_REFERENCES_AND_MERGE.md](REM_REFERENCES_AND_MERGE.md) | References, pins, inline links, tags, portals: how they are stored, and how RemNote's merge repoints them; why importing into a KB that already has the plugin wipes the imported Rems' powerup slots; Link Rems, Sources and how the Clipper reuses documents |
 | [PDF_AND_HTML_HIGHLIGHTS.md](PDF_AND_HTML_HIGHLIGHTS.md) | PDF and web-article highlight Rems: `Data` shapes, text vs area highlights, creating highlights, the Highlights container, reader zoom steps, why clicking a Text Reader–converted PDF in Sources toasts "Missing URL" or replaces the document (Shift+click workaround) |

@@ -136,6 +136,12 @@ Three things to know about the figures:
 - **The intervals are a projection, not a promise.** They come from this plugin's FSRS model and your configured weights; RemNote's own scheduler decides the date it writes, and the two can differ for the same reasons the *Optimum Next repetition date* line above already lists — a non-FSRS scheduler, different weights, fuzz, load balancing.
 - **Again † is where FSRS *resumes*, not what you will see next.** If your scheduler has **Relearning Phase Steps** set (Settings → Schedulers → Relearning Phase, e.g. `1h`), RemNote walks those steps first. They are extra repetitions that confirm you have relearnt the card, and the scheduler does not count them — so a card whose Again projection reads `6w` is shown by RemNote's own **Forgot** button as `1 hour`. Both are right, a relearning step apart.
 
+##### Reset one card { #reset-srs }
+
+**⟲ Reset SRS** *(beside ➕ Repetition)*: restarts **this card only** as a new card. Click once to arm it, then click again to confirm (Esc or clicking elsewhere cancels). Past repetitions stay in the table; the schedule restarts from the reset.
+
+Use it when only one cloze of a bullet needs relearning. RemNote's own reset (`/srs` → **Reset SRS Data**, or **Reset Flashcards for Bullet**) always resets **every** card of the bullet, even if you tick a single cloze in the `/srs` dialog.
+
 **🎚 Card Priority History** *(footer)* — every priority this Rem has held, newest first, with the change (`60 → 45`), the gesture behind it and the source recorded alongside. Rem-level rather than per-card, because the `cardPriority` powerup tags the Rem and all its cards share the value. See [Priority history](Priorities-for-Flashcards.md#priority-history) for what is recorded and how bursts are collapsed.
 
 **♾ Incremental History** *(header button)* — appears when the Rem is also an Incremental Rem (or a dismissed one), and switches to [its history](#212-increm-repetition-history-aggregated-view). The reverse button lives there.

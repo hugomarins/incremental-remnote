@@ -405,3 +405,12 @@ before and after, plus the app bundle.
   already counts their reps. They leave `cards` only when their Rem is deleted.
 - A disabled direction is different: its record stays in `cards` with its history, just not
   returned by `getCards()` (see above).
+
+## Resetting a card: card level vs bullet level
+
+RemNote has two reset methods, and only one of them is per card (checked in 1.30.2-beta):
+
+- **`Card.resetRepetitionHistory()`** adds one entry `{score: 3 /* RESET */, responseTime: 0, revealTime: 0, isCram: false, metadata: {}}` to that card's history. It skips the write if the last entry is already a RESET. Past repetitions stay. The scheduler restarts from the entry after the last RESET, so the card is New again.
+- **`Rem.resetRepetitionHistory()`** calls the card method on **every** card of the Rem (`getCards({ignorePausing: true, includeDisabled: true})`). The `/srs` dialog's **Reset SRS Data**, the "Reset Flashcards for Bullet" command and its "…and All Descendants" variant all go through this one. So the dialog resets every cloze even when only one card is ticked: [support report](support-reports/REMNOTE_SUPPORT_REPORT_edit_srs_reset_ignores_card_selection.md).
+
+**From a plugin:** `card.updateCardRepetitionStatus(QueueInteractionScore.RESET)` gives the per-card behaviour. The bridge handler validates the score with `z.nativeEnum(QueueInteractionScore)`, looks up that one card, and calls `card.updateCardRepetitionStatus({q: rem}, 3, 0, 0, false, undefined, {}, false)`, which appends to that card's history only. Unlike the native method it has no guard against a second RESET in a row, so check the last entry first. The flashcard history widget's **⟲ Reset SRS** button does this.
