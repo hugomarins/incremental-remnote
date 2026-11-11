@@ -386,6 +386,14 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
     },
   });
 
+  // Copy Rem ID's picker: the focused Rem, its sources, the PDF open in the pane.
+  plugin.app.registerWidget('copy_rem_id_popup', WidgetLocation.Popup, {
+    dimensions: {
+      width: 480,
+      height: 'auto',
+    },
+  });
+
   // Scan → review → delete for entries left behind in Priority Review Documents.
   // Tall and scrollable because the review stage is also the diagnostic: it lists
   // every document with what it still carries, and you tick which ones to clean.

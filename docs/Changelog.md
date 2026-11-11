@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.218 - November 11th, 2026
+
+### ✨ Improved
+
+**Copy Rem ID**: copies the PDF or web page open in the pane, even when RemNote still reports an earlier Rem as focused; on a Rem with sources, a picker lets you choose which ID to copy.
+
+📖 [Picking among sources](Utilities-Finding-and-Navigating.md#copy-rem-id-picker)
+
 ## v1.0.217 - November 10th, 2026
 
 ### ✨ New

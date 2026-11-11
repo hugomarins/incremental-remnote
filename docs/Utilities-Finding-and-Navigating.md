@@ -429,7 +429,18 @@ At 900px each breadcrumb shows about 22 characters. The rule widens the whole po
 Copies a Rem's ID to the clipboard, so you can point an AI assistant (through the RemNote MCP) or a script at that exact Rem instead of describing it.
 
 - **Shortcut:** `Ctrl+Opt+I` (`Ctrl+Alt+I` on Windows), or **Copy Rem ID** / `id` in the Omnibar.
-- **Which Rem:** the selected Rems (one ID per line), otherwise the Rem with the cursor, otherwise, in the queue, the current card's Rem.
+- **Which Rem:** the selected Rems (one ID per line), otherwise the Rem with the cursor, otherwise, in the queue, the current card's Rem. With only a PDF or a web page open in the pane, it is that PDF's or page's Rem.
+
+### Picking among sources { #copy-rem-id-picker }
+
+When the command could mean more than one Rem, a picker opens instead of copying straight away. That happens when:
+
+- the Rem has **sources**: the picker lists the Rem and each of its sources;
+- a **PDF or web page fills the pane** while RemNote still reports another Rem as focused (the last one you typed in before opening the reader): the picker lists both.
+
+Each row shows the name, what it is (Focused Rem, Source, Open in the pane, Queue card), its type (PDF, Web page, File or Rem) with the page's URL or the Rem's parent, and the ID. The PDF or page on screen starts highlighted. Use `↑` / `↓` or `1`–`9` to choose, `Enter` or a click to copy, `Esc` to cancel.
+
+A Rem with no sources, and a PDF on its own, are still copied at once.
 
 RemNote does not let plugins write to the clipboard by themselves, so how the copy happens depends on the [Local Media Bridge](Local-Media-Bridge.md):
 
