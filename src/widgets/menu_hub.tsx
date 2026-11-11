@@ -12,65 +12,96 @@ import '../style.css';
 import '../App.css';
 import '../rn_theme_vars.css';
 import {
-  documentHubActiveIdKey,
-  documentHubAnchorPosition,
-  documentHubTargetKey,
+  currentSubQueueIdKey,
+  incRemDisabledDeviceKey,
+  menuHubActiveIdKey,
+  menuHubAnchorPosition,
+  menuHubTargetKey,
+  noIncRemTimerKey,
   powerupCode,
 } from '../lib/consts';
 import { FloatingPosition, useFloatingWidgetDrag } from '../lib/floating_widget_drag';
 import { resolveRemTextSegments } from '../lib/richTextRemRefs';
 import { showMessageDialog } from '../lib/message_dialog';
 import {
+  MenuHubTarget,
   openBatchCardPriority,
   openBatchPriority,
   openCardEnablementAudit,
+  openDocumentStudyDashboard,
   openPdfControlPanel,
   openPriorityQueue,
   openPriorityShieldHistory,
+  openQueuePriorityQueue,
+  openQueueStudyDashboard,
+  openQueueShieldHistory,
   openSetPriority,
+  openSortingCriteria,
+  pauseIncRemsFor15Min,
   toggleIncrementalRem,
-} from '../lib/document_menu_actions';
+  toggleIncRemsOnThisDevice,
+} from '../lib/menu_hub_actions';
 
 /**
- * The Document Hub: the Document menu's plugin actions in one floating panel.
+ * The Menu Hub: the plugin's Document menu and Queue menu actions in one
+ * floating panel.
  *
  * RemNote draws plugin menu items as a flat list and has no way to nest them,
- * so the Document menu keeps a few direct items plus "Incremental RemNote…",
- * which opens this. It stays open beside the editor (no close on an outside
- * click) and acts on the document of the focused pane, following it as the
- * user moves around; the menu item points it at the document it came from.
- * It opens just below the "…" button the menu came from (see openDocumentHub)
- * and can be dragged by its header; ✕ or Esc (with the panel focused) closes it.
+ * so each of those menus has a single "Incremental RemNote…" item, which opens
+ * this just below the menu's button (see openMenuHub). It stays open beside
+ * the editor or the queue (no close on an outside click) and follows the user:
+ * in the queue it lists the queue actions, elsewhere the document actions for
+ * the focused pane's document. Drag it by the header; ✕ or Esc (with the
+ * panel focused) closes it.
  */
 
-type Target = { remId: string; at: number; source?: 'menu' | 'pane' };
+type Plugin = ReturnType<typeof usePlugin>;
 
 type HubAction = {
   id: string;
   label: string;
   group: string;
-  run: (plugin: ReturnType<typeof usePlugin>, remId: string) => Promise<void>;
+  run: (plugin: Plugin, remId: string | undefined) => Promise<void>;
+  /** Acts on the target Rem, so it is off while there is none. */
+  needsRem?: boolean;
 };
 
-const ACTIONS: HubAction[] = [
-  { id: 'toggle', label: 'Toggle Incremental Rem', group: 'Incremental Rem', run: toggleIncrementalRem },
-  { id: 'priority', label: 'Set Priority', group: 'Incremental Rem', run: openSetPriority },
-  { id: 'batch', label: 'Batch Priority Change', group: 'Incremental Rem', run: openBatchPriority },
-  { id: 'queue', label: 'Priority Queue', group: 'Queue', run: openPriorityQueue },
-  { id: 'shield', label: 'Priority Shield History', group: 'Queue', run: openPriorityShieldHistory },
+const doc =
+  (fn: (plugin: Plugin, remId: string) => Promise<void>) =>
+  (plugin: Plugin, remId: string | undefined) =>
+    remId ? fn(plugin, remId) : Promise.resolve();
+
+const DOCUMENT_ACTIONS: HubAction[] = [
+  { id: 'toggle', label: 'Toggle Incremental Rem', group: 'Incremental Rem', run: doc(toggleIncrementalRem), needsRem: true },
+  { id: 'priority', label: 'Set Priority', group: 'Incremental Rem', run: doc(openSetPriority), needsRem: true },
+  { id: 'batch', label: 'Batch Priority Change', group: 'Incremental Rem', run: doc(openBatchPriority), needsRem: true },
+  { id: 'queue', label: 'Priority Queue', group: 'Queue', run: doc(openPriorityQueue), needsRem: true },
   {
     id: 'card-priority',
     label: 'Batch Card Priority (tagged / referencing)',
     group: 'Flashcards',
-    run: openBatchCardPriority,
+    run: doc(openBatchCardPriority),
+    needsRem: true,
   },
+  { id: 'audit', label: 'Audit Card Enablement', group: 'Flashcards', run: doc(openCardEnablementAudit), needsRem: true },
+  { id: 'pdf', label: 'PDF Control Panel', group: 'PDF', run: doc(openPdfControlPanel), needsRem: true },
+  { id: 'shield', label: 'Priority Shield History', group: 'Statistics', run: doc(openPriorityShieldHistory), needsRem: true },
   {
-    id: 'audit',
-    label: 'Audit Card Enablement',
-    group: 'Flashcards',
-    run: openCardEnablementAudit,
+    id: 'dashboard',
+    label: 'Study Dashboard',
+    group: 'Statistics',
+    run: doc(openDocumentStudyDashboard),
+    needsRem: true,
   },
-  { id: 'pdf', label: 'PDF Control Panel', group: 'PDF', run: openPdfControlPanel },
+];
+
+const QUEUE_ACTIONS: HubAction[] = [
+  { id: 'q-priority-queue', label: 'Priority Queue', group: 'This queue', run: openQueuePriorityQueue },
+  { id: 'q-sorting', label: 'Sorting Criteria', group: 'This queue', run: openSortingCriteria },
+  { id: 'q-shield', label: 'Priority Shield History', group: 'Statistics', run: openQueueShieldHistory },
+  { id: 'q-dashboard', label: 'Study Dashboard', group: 'Statistics', run: openQueueStudyDashboard },
+  { id: 'q-pause', label: 'No Inc Rems for 15 min', group: 'Incremental Rems', run: pauseIncRemsFor15Min },
+  { id: 'q-device', label: 'Toggle Inc Rems on this device', group: 'Incremental Rems', run: toggleIncRemsOnThisDevice },
 ];
 
 const ring: React.CSSProperties = {
@@ -78,7 +109,21 @@ const ring: React.CSSProperties = {
   outlineOffset: '-2px',
 };
 
-function DocumentHub() {
+/** Rem references show their text, as in breadcrumbs; pins (📌) are left out. */
+async function remName(plugin: Plugin, remId: string): Promise<string | null> {
+  const rem = await plugin.rem.findOne(remId);
+  if (!rem) return null;
+  const segments = await resolveRemTextSegments(plugin, rem.text);
+  const name = segments
+    .filter((s) => s.kind !== 'pin')
+    .map((s) => s.text)
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return name || 'Untitled';
+}
+
+function MenuHub() {
   const plugin = usePlugin();
   const containerRef = useRef<HTMLDivElement>(null);
   const positionRef = useRef<FloatingPosition | null>(null);
@@ -94,73 +139,84 @@ function DocumentHub() {
       const inst = Number(ctx?.widgetInstanceId);
       setInstanceId(Number.isFinite(inst) ? inst : null);
       setWidgetId(ctx?.floatingWidgetId ?? null);
-    })().catch((e) => console.error('[DocumentHub] init error', e));
+    })().catch((e) => console.error('[MenuHub] init error', e));
   }, [plugin]);
 
-  const target = useTrackerPlugin(
-    (rp) => rp.storage.getSession<Target>(documentHubTargetKey),
-    []
-  );
+  const target = useTrackerPlugin((rp) => rp.storage.getSession<MenuHubTarget>(menuHubTargetKey), []);
+  const mode = target?.mode ?? 'document';
   const remId = target?.remId;
+  const actions = mode === 'queue' ? QUEUE_ACTIONS : DOCUMENT_ACTIONS;
+
+  useEffect(() => setSelected(0), [mode]);
 
   const docName = useTrackerPlugin(
-    async (rp) => {
-      if (!remId) return null;
-      const rem = await rp.rem.findOne(remId);
-      if (!rem) return null;
-      // Rem references show their text, as in breadcrumbs; pins (📌 in the
-      // title) are left out, or their whole Rem would run into the name.
-      const segments = await resolveRemTextSegments(rp, rem.text);
-      const name = segments
-        .filter((s) => s.kind !== 'pin')
-        .map((s) => s.text)
-        .join('')
-        .replace(/\s+/g, ' ')
-        .trim();
-      return name || 'Untitled';
-    },
-    [remId]
+    async (rp) => (mode === 'document' && remId ? remName(rp, remId) : null),
+    [mode, remId]
   );
   const isIncremental = useTrackerPlugin(
     async (rp) => {
-      if (!remId) return false;
+      if (mode !== 'document' || !remId) return false;
       const rem = await rp.rem.findOne(remId);
       return !!rem && (await rem.hasPowerup(powerupCode));
     },
-    [remId]
+    [mode, remId]
   );
+  const queueScope = useTrackerPlugin(
+    async (rp) => {
+      if (mode !== 'queue') return null;
+      const scopeId = await rp.storage.getSession<string | null>(currentSubQueueIdKey);
+      return scopeId ? (await remName(rp, scopeId)) ?? 'Queue' : 'All flashcards';
+    },
+    [mode]
+  );
+  const disabledOnDevice = useTrackerPlugin(
+    (rp) => rp.storage.getLocal<boolean>(incRemDisabledDeviceKey),
+    []
+  );
+  const pausedUntil = useTrackerPlugin((rp) => rp.storage.getSynced<number>(noIncRemTimerKey), []);
 
-  // Follow the focused pane's document, as the Document menu would. A pane
-  // with no Rem (the queue, a plugin page) keeps the last document.
-  const followPane = useCallback(async () => {
+  // Follow the user: in the queue, the queue actions; elsewhere, the document
+  // actions for the focused pane's document, as its "…" menu would. A pane
+  // with no Rem (a plugin page) keeps the last target.
+  const follow = useCallback(async () => {
     try {
+      const current = await plugin.storage.getSession<MenuHubTarget>(menuHubTargetKey);
+      const url = await plugin.window.getURL().catch(() => '');
+      if (typeof url === 'string' && url.includes('/flashcards')) {
+        if (current?.mode === 'queue') return;
+        await plugin.storage.setSession(menuHubTargetKey, {
+          mode: 'queue',
+          remId: current?.remId,
+          at: Date.now(),
+          source: 'pane',
+        } satisfies MenuHubTarget);
+        return;
+      }
       const paneRemId = await plugin.window.getOpenPaneRemId(await plugin.window.getFocusedPaneId());
       if (!paneRemId) return;
-      const current = await plugin.storage.getSession<Target>(documentHubTargetKey);
-      if (current?.remId === paneRemId) return;
-      await plugin.storage.setSession(documentHubTargetKey, {
+      if (current?.mode === 'document' && current.remId === paneRemId) return;
+      await plugin.storage.setSession(menuHubTargetKey, {
+        mode: 'document',
         remId: paneRemId,
         at: Date.now(),
         source: 'pane',
-      } satisfies Target);
+      } satisfies MenuHubTarget);
     } catch (e) {
-      console.error('[DocumentHub] follow pane error', e);
+      console.error('[MenuHub] follow error', e);
     }
   }, [plugin]);
-  useAPIEventListener(AppEvents.URLChange, undefined, followPane);
-  useAPIEventListener(AppEvents.FocusedPaneChange, undefined, followPane);
-  useAPIEventListener(AppEvents.CurrentWindowTreeChange, undefined, followPane);
+  useAPIEventListener(AppEvents.URLChange, undefined, follow);
+  useAPIEventListener(AppEvents.FocusedPaneChange, undefined, follow);
+  useAPIEventListener(AppEvents.CurrentWindowTreeChange, undefined, follow);
 
-  // Take the keyboard when opened, and again when the menu item points the open
-  // hub at a document (the user just asked for it) — but not when it merely
-  // follows a pane, which would pull focus out of the editor. The retry loop
-  // wins against RemNote settling focus after the float mounts.
-  const focusTrigger = target && target.source !== 'pane' ? target.at : 0;
+  // Set when a menu item opened or re-pointed the hub; unchanged when the hub
+  // only follows the user, so that neither moves it nor takes the keyboard.
+  const menuTrigger = target && target.source !== 'pane' ? target.at : 0;
 
-  // Opened (or re-pointed) from the menu, the hub sits at the marker position,
-  // where host CSS anchors it under the "…" button. Read where that put it and
-  // move there for real: the CSS lets go once the inline style changes, and the
-  // drag needs plain coordinates. The wrapper's containing block is the
+  // Opened (or re-pointed) from a menu, the hub sits at the marker position,
+  // where host CSS anchors it under the menu's button. Read where that put it
+  // and move there for real: the CSS lets go once the inline style changes, and
+  // the drag needs plain coordinates. The wrapper's containing block is the
   // viewport, so the iframe's rect is its position (as in reference_finder).
   useEffect(() => {
     if (!widgetId || instanceId == null) return;
@@ -172,17 +228,22 @@ function DocumentHub() {
       const rect = await plugin.widget.getDimensions(instanceId);
       if (cancelled || !rect || rect.width === 0) return;
       const placed = { top: Math.round(rect.top), left: Math.round(rect.left) };
-      if (placed.top === documentHubAnchorPosition.top && placed.left === documentHubAnchorPosition.left) {
+      if (placed.top === menuHubAnchorPosition.top && placed.left === menuHubAnchorPosition.left) {
         positionRef.current = placed; // the anchor rule didn't apply; stay put
         return;
       }
       await plugin.window.setFloatingWidgetPosition(widgetId, placed);
       positionRef.current = placed;
-    })().catch((e) => console.error('[DocumentHub] placement error', e));
+    })().catch((e) => console.error('[MenuHub] placement error', e));
     return () => {
       cancelled = true;
     };
-  }, [plugin, widgetId, instanceId, focusTrigger]);
+  }, [plugin, widgetId, instanceId, menuTrigger]);
+
+  // Take the keyboard when a menu opens or re-points the hub (the user just
+  // asked for it), not when it follows a pane, which would pull focus out of
+  // the editor. The retry loop wins against RemNote settling focus after the
+  // float mounts.
   useEffect(() => {
     let cancelled = false;
     const tryFocus = (attemptsLeft: number) => {
@@ -201,23 +262,25 @@ function DocumentHub() {
     return () => {
       cancelled = true;
     };
-  }, [focusTrigger]);
+  }, [menuTrigger]);
 
   const close = useCallback(async () => {
-    await plugin.storage.setSession(documentHubActiveIdKey, undefined);
+    await plugin.storage.setSession(menuHubActiveIdKey, undefined);
     if (widgetId) await plugin.window.closeFloatingWidget(widgetId);
   }, [plugin, widgetId]);
 
+  const isEnabled = (action: HubAction) => !action.needsRem || !!remId;
+
   const run = useCallback(
     async (index: number) => {
-      const action = ACTIONS[index];
-      if (!action || !remId || busy) return;
+      const action = actions[index];
+      if (!action || !isEnabled(action) || busy) return;
       setSelected(index);
       setBusy(action.id);
       try {
         await action.run(plugin, remId);
       } catch (e) {
-        console.error(`[DocumentHub] ${action.id} failed`, e);
+        console.error(`[MenuHub] ${action.id} failed`, e);
         await showMessageDialog(plugin, {
           title: `${action.label} failed`,
           message: e instanceof Error ? e.message : String(e),
@@ -227,7 +290,7 @@ function DocumentHub() {
         setBusy(null);
       }
     },
-    [plugin, remId, busy]
+    [plugin, actions, remId, busy]
   );
 
   // Keys on the container, never on the buttons: a focused button would fire
@@ -242,7 +305,7 @@ function DocumentHub() {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       const step = e.key === 'ArrowDown' ? 1 : -1;
-      setSelected((i) => (i + step + ACTIONS.length) % ACTIONS.length);
+      setSelected((i) => (i + step + actions.length) % actions.length);
       return;
     }
     if (e.key === 'Enter') {
@@ -251,7 +314,7 @@ function DocumentHub() {
       return;
     }
     const digit = Number(e.key);
-    if (Number.isInteger(digit) && digit >= 1 && digit <= ACTIONS.length) {
+    if (Number.isInteger(digit) && digit >= 1 && digit <= actions.length) {
       e.preventDefault();
       run(digit - 1);
     }
@@ -259,12 +322,27 @@ function DocumentHub() {
 
   const onHeaderPointerDown = useFloatingWidgetDrag(plugin, widgetId, positionRef);
 
-  const labelFor = (action: HubAction) =>
-    action.id === 'toggle'
-      ? isIncremental
-        ? 'Remove Incremental Rem tag'
-        : 'Make Incremental Rem'
-      : action.label;
+  const labelFor = (action: HubAction) => {
+    switch (action.id) {
+      case 'toggle':
+        return isIncremental ? 'Remove Incremental Rem tag' : 'Make Incremental Rem';
+      case 'q-device':
+        return disabledOnDevice ? 'Enable Inc Rems on this device' : 'Disable Inc Rems on this device';
+      case 'q-pause': {
+        const left = pausedUntil ? Math.ceil((pausedUntil - Date.now()) / 60000) : 0;
+        return left > 0 ? `No Inc Rems for 15 min (${left} min left)` : action.label;
+      }
+      default:
+        return action.label;
+    }
+  };
+
+  const subtitle =
+    mode === 'queue'
+      ? `🗂 ${queueScope ?? '…'}`
+      : remId
+        ? `📄 ${docName ?? '…'}`
+        : 'Open a document to act on it';
 
   return (
     <div
@@ -301,7 +379,7 @@ function DocumentHub() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600 }}>Incremental RemNote</div>
           <div
-            title={docName ?? undefined}
+            title={subtitle}
             style={{
               fontSize: 11,
               color: 'var(--rn-clr-content-secondary)',
@@ -310,7 +388,7 @@ function DocumentHub() {
               textOverflow: 'ellipsis',
             }}
           >
-            {remId ? `📄 ${docName ?? '…'}` : 'Open a document to act on it'}
+            {subtitle}
           </div>
         </div>
         <button
@@ -332,8 +410,9 @@ function DocumentHub() {
       </div>
 
       <div style={{ padding: '4px 0' }}>
-        {ACTIONS.map((action, i) => {
-          const showGroup = i === 0 || ACTIONS[i - 1].group !== action.group;
+        {actions.map((action, i) => {
+          const showGroup = i === 0 || actions[i - 1].group !== action.group;
+          const enabled = isEnabled(action);
           return (
             <React.Fragment key={action.id}>
               {showGroup && (
@@ -354,7 +433,7 @@ function DocumentHub() {
                 onClick={() => run(i)}
                 onMouseEnter={() => setSelected(i)}
                 onMouseDown={(e) => e.preventDefault()}
-                disabled={!remId}
+                disabled={!enabled}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -364,10 +443,9 @@ function DocumentHub() {
                   padding: '6px 12px',
                   border: 'none',
                   borderRadius: 0,
-                  background:
-                    i === selected ? 'var(--rn-clr-background-tertiary)' : 'transparent',
-                  color: remId ? 'var(--rn-clr-content-primary)' : 'var(--rn-clr-content-tertiary)',
-                  cursor: remId ? 'pointer' : 'default',
+                  background: i === selected ? 'var(--rn-clr-background-tertiary)' : 'transparent',
+                  color: enabled ? 'var(--rn-clr-content-primary)' : 'var(--rn-clr-content-tertiary)',
+                  cursor: enabled ? 'pointer' : 'default',
                   fontSize: 13,
                   ...(i === selected ? ring : {}),
                 }}
@@ -398,10 +476,10 @@ function DocumentHub() {
           borderTop: '1px solid var(--rn-clr-border-primary)',
         }}
       >
-        ↑↓ choose · Enter or 1–{ACTIONS.length} run · Esc close
+        ↑↓ choose · Enter or 1–{actions.length} run · Esc close
       </div>
     </div>
   );
 }
 
-renderWidget(withHoverTips(DocumentHub));
+renderWidget(withHoverTips(MenuHub));

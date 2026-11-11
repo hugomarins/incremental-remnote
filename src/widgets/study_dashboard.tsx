@@ -2193,7 +2193,9 @@ function StudyDashboardPopup() {
 
     const ctx = useRunAsync(async () => {
         try {
-            return await plugin.widget.getWidgetContext<WidgetLocation.Popup>();
+            // Never undefined once resolved: undefined means "still loading",
+            // which the first load waits on.
+            return (await plugin.widget.getWidgetContext<WidgetLocation.Popup>()) ?? null;
         } catch {
             return null;
         }
@@ -2212,6 +2214,15 @@ function StudyDashboardPopup() {
     // Deleted Rems from the desktop helper's history archive. On by default.
     const [includeDeleted, setIncludeDeleted] = useState<boolean>(true);
     const [contextMode, setContextMode] = useState<ContextMode>('global');
+    // The Menu Hub opens the dashboard on a document or queue scope and asks for
+    // Document mode up front (`startInDocument`); the command keeps Global. The
+    // first load waits for this, or it would load the whole KB only to drop it.
+    const [modeInitialized, setModeInitialized] = useState(false);
+    useEffect(() => {
+        if (ctx === undefined || modeInitialized) return;
+        if (ctxRemId && (ctx as any)?.contextData?.startInDocument) setContextMode('document');
+        setModeInitialized(true);
+    }, [ctx, ctxRemId, modeInitialized]);
     const [tab, setTab] = useState<DashboardTab>('overview');
     const [granularity, setGranularity] = useState<TimelineGranularity>('day');
     // Stacked by default: the bar height then *is* the bucket's total time.
@@ -2547,9 +2558,9 @@ function StudyDashboardPopup() {
     }, [plugin, contextMode, ctxRemId, scope, startMs, endMs, cardCapMs, ignorePreReset, includeDeleted]);
 
     useEffect(() => {
-        if (cardCapMs == null) return;
+        if (cardCapMs == null || !modeInitialized) return;
         run();
-    }, [run, cardCapMs]);
+    }, [run, cardCapMs, modeInitialized]);
 
     const containerStyle: React.CSSProperties = {
         width: '900px',

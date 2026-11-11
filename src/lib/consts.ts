@@ -505,7 +505,6 @@ export const pendingQueueDashboardRefocusKey = 'pending-queue-dashboard-refocus-
 // the canary target for its wedged-channel watchdog.
 export const practicedQueuesVisibleKey = 'practiced_queues_visible';
 export const priorityShieldHistoryKey = 'priority-shield-history-key';
-export const priorityShieldHistoryMenuItemId = 'priority-shield-history-menu-item-id';
 export const documentPriorityShieldHistoryKey = 'document-priority-shield-history-key';
 export const currentSubQueueIdKey = 'current-sub-queue-id-key';
 export const cardPriorityShieldHistoryKey = 'card-priority-shield-history-key';
@@ -559,7 +558,6 @@ export const priorityColorScaleLocalKey = 'priority-color-scale-local';
 export const remnoteEnvironmentId = 'remnote-environment';
 
 export const noIncRemTimerKey = 'no-inc-rem-timer-end';
-export const noIncRemMenuItemId = 'no-inc-rem-15-min';
 export const noIncRemTimerWidgetId = 'no-inc-rem-timer-widget';
 export const incRemDisabledDeviceKey = 'inc-rem-disabled-device';
 // Local key: the sources open in each RemNote window (see lib/window_sources.ts).
@@ -864,12 +862,12 @@ export const recognitionFirstMinDaysId = 'recognition-first-min-days';
 // Synced, per KB: Rem id → when Recognition First set it to back → front only.
 export const recognitionFirstHeldKeyPrefix = 'recognition-first-held';
 
-// Document Hub — floating panel holding the Document menu's actions, opened by
-// the "Incremental RemNote…" menu item (RemNote can't nest plugin menu items).
-// Session keys: the document it acts on and its live widget id. It opens at a
-// marker position that host CSS swaps for a spot under the "…" button
-// (openDocumentHub in lib/document_menu_actions.ts).
-export const documentHubWidgetId = 'document_hub';
-export const documentHubTargetKey = 'document-hub-target';
-export const documentHubActiveIdKey = 'document-hub-active-id';
-export const documentHubAnchorPosition = { top: 1, left: 1 };
+// Menu Hub — floating panel holding the Document and Queue menus' actions,
+// opened by their "Incremental RemNote…" items (RemNote can't nest plugin
+// menu items). Session keys: what it shows (MenuHubTarget) and its live
+// widget id. It opens at a marker position that host CSS swaps for a spot
+// under the menu's button (openMenuHub in lib/menu_hub_actions.ts).
+export const menuHubWidgetId = 'menu_hub';
+export const menuHubTargetKey = 'menu-hub-target';
+export const menuHubActiveIdKey = 'menu-hub-active-id';
+export const menuHubAnchorPosition = { top: 1, left: 1 };
