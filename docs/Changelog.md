@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.220 - November 11th, 2026
+
+### 🐛 Fixed
+
+**Freezes during bulk edits**: editing many flashcard Rems at once, for example through the RemNote MCP, no longer freezes the plugin's widgets for a minute or more.
+
+📖 [Plugin widgets freeze or vanish for a while](Troubleshooting.md#stall-diagnostics)
+
 ## v1.0.219 - November 11th, 2026
 
 ### ✨ Improved
@@ -48,7 +56,7 @@ Set it up in `~/.incremental-remnote/ai-ocr/source-finder.json`; the AI helper (
 
 📖 [With no source open](Source-Pins.md#no-source-open)
 
-### 🛠️ Improvements
+### ⚡ Improved
 
 **Stall diagnostics**: a "main thread blocked" report now names the calls the plugin made while frozen, and any large value sent or received, with its storage key.
 
