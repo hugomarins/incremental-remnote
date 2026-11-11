@@ -18,7 +18,7 @@ import {
   powerupCode,
 } from '../lib/consts';
 import { FloatingPosition, useFloatingWidgetDrag } from '../lib/floating_widget_drag';
-import { safeRemTextToString } from '../lib/pdfUtils';
+import { resolveRemTextSegments } from '../lib/richTextRemRefs';
 import { showMessageDialog } from '../lib/message_dialog';
 import {
   openBatchCardPriority,
@@ -107,7 +107,17 @@ function DocumentHub() {
     async (rp) => {
       if (!remId) return null;
       const rem = await rp.rem.findOne(remId);
-      return rem ? (await safeRemTextToString(rp as any, rem.text)) || 'Untitled' : null;
+      if (!rem) return null;
+      // Rem references show their text, as in breadcrumbs; pins (📌 in the
+      // title) are left out, or their whole Rem would run into the name.
+      const segments = await resolveRemTextSegments(rp, rem.text);
+      const name = segments
+        .filter((s) => s.kind !== 'pin')
+        .map((s) => s.text)
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return name || 'Untitled';
     },
     [remId]
   );
