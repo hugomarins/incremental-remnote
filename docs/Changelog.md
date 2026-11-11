@@ -2,6 +2,16 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.217 - November 10th, 2026
+
+### ✨ New
+
+**Study Dashboard**: Reviews of Rems you deleted now still count in the Study Dashboard and the Practiced Queues summary. They show with 🗑 under the nearest surviving ancestor. RemNote drops them two weeks after deletion; the desktop helper now keeps them.
+
+To turn it on, download `history_archive.py` next to the helper and restart the helper. Older losses can be recovered from your backups with `history_backfill.py`.
+
+📖 [Deleted Rems](Study-Dashboard.md#deleted-rems)
+
 ## v1.0.216 - November 10th, 2026
 
 ### ✨ New

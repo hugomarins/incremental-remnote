@@ -82,7 +82,10 @@ from pathlib import Path
 
 import pymupdf
 
-import history_archive
+try:
+    import history_archive  # history_archive.py, downloaded next to this file
+except ImportError:  # an older install with this file only: everything but the history routes works
+    history_archive = None
 
 PORT = int(os.environ.get('IR_AI_PORT', '3457'))
 MODEL = os.environ.get('IR_AI_MODEL', 'sonnet')
@@ -1213,6 +1216,8 @@ def handle_video_file(req, entry):
 
 
 def history_kb(req, entry):
+    if history_archive is None:
+        raise RuntimeError('history_archive.py is missing: download it next to ai_ocr_helper.py')
     kb_id = history_archive.check_kb_id(req.get('kbId'))
     entry['kbId'] = kb_id
     return kb_id
@@ -1220,7 +1225,8 @@ def history_kb(req, entry):
 
 def handle_history_scan(req, entry):
     """Scan the KB's remnote.db into its archive now."""
-    summary = history_archive.scan(history_kb(req, entry))
+    kb_id = history_kb(req, entry)
+    summary = history_archive.scan(kb_id)
     entry.update(newReps=summary['newReps'], trashItems=summary['trashItems'])
     return {'scan': summary}
 
@@ -1237,7 +1243,8 @@ def handle_history_ghosts(req, entry):
 
 
 def handle_history_status(req, entry):
-    return {'status': history_archive.status(history_kb(req, entry))}
+    kb_id = history_kb(req, entry)
+    return {'status': history_archive.status(kb_id)}
 
 
 MEDIA_PREFIX = '/media/'
@@ -1347,7 +1354,7 @@ class Handler(BaseHTTPRequestHandler):
             REQUEST.kb_id = req.get('kbId')
             entry['kbId'] = REQUEST.kb_id
             # Any request names the KB in use: from now on its history is archived too.
-            if history_archive.register_kb(REQUEST.kb_id):
+            if history_archive and history_archive.register_kb(REQUEST.kb_id):
                 print(f'[history] archiving {REQUEST.kb_id}', flush=True)
             payload = route(req, entry)
             ms = int((time.time() - started) * 1000)
@@ -1377,7 +1384,10 @@ def main():
             old.unlink(missing_ok=True)
     print(f'AI OCR helper on http://127.0.0.1:{PORT}  (claude: {find_claude()}, model: {MODEL})', flush=True)
     print(f'Prompt: {PROMPT_FILE}', flush=True)
-    history_archive.start_background_scans(log=lambda m: print(m, flush=True))
+    if history_archive:
+        history_archive.start_background_scans(log=lambda m: print(m, flush=True))
+    else:
+        print('history_archive.py not found next to the helper: review-history archiving is off', flush=True)
     ThreadingHTTPServer(('127.0.0.1', PORT), Handler).serve_forever()
 
 

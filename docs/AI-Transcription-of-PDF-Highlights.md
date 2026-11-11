@@ -28,7 +28,7 @@ It runs on **your Claude subscription** — no API key, nothing to pay beyond yo
 
 **Requirements:** RemNote **desktop**, **Python 3**, and **Claude Code** logged in to your Claude account.
 
-The same helper also powers [Pin Source Quote](Source-Pins.md), which needs only Python and PyMuPDF — no Claude account.
+The same helper also powers [Pin Source Quote](Source-Pins.md) (which needs only Python and PyMuPDF — no Claude account), and it keeps the reviews of [deleted Rems](Study-Dashboard.md#deleted-rems) for your statistics.
 
 ## Setup { #setup }
 
@@ -45,7 +45,11 @@ The same helper also powers [Pin Source Quote](Source-Pins.md), which needs only
     mkdir -p ~/.incremental-remnote
     curl -o ~/.incremental-remnote/ai_ocr_helper.py \
       https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/ai_ocr_helper.py
+    curl -o ~/.incremental-remnote/history_archive.py \
+      https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/history_archive.py
     ```
+
+    The second file archives your review history for the [Study Dashboard](Study-Dashboard.md#deleted-rems). Without it, the helper works as before but archives nothing.
 
 4. **Start it:**
 
