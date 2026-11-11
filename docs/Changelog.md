@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.221 - November 11th, 2026
+
+### ✨ New
+
+**Flashcard Repetition History**: added **⟲ Reset SRS** beside ➕ Repetition, to reset a single card without touching the other clozes of the bullet.
+
+📖 [Reset one card](Plugin-Widgets-Reference.md#reset-srs)
+
 ## v1.0.220 - November 11th, 2026
 
 ### 🐛 Fixed
