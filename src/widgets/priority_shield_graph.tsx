@@ -31,6 +31,7 @@ import {
   buildIncRemRows,
   buildPriorityRows,
 } from '../lib/shield_graph_data';
+import { resolveRemTextAsTitle } from '../lib/richTextRemRefs';
 
 const DOCS_PATH = 'Prioritization-%26-Sorting/#priority-shield-history';
 
@@ -191,7 +192,8 @@ function PriorityShieldGraph() {
     if (!effectiveDocScopeId) return null;
     const rem = await plugin.rem.findOne(effectiveDocScopeId);
     if (!rem?.text) return 'Document';
-    return await plugin.richText.toString(rem.text) || 'Document';
+    const name = await resolveRemTextAsTitle(plugin, rem.text);
+    return name === 'Untitled' ? 'Document' : name;
   }, [effectiveDocScopeId]);
 
   /**

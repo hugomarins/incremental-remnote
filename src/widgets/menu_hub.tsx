@@ -21,7 +21,7 @@ import {
   powerupCode,
 } from '../lib/consts';
 import { FloatingPosition, useFloatingWidgetDrag } from '../lib/floating_widget_drag';
-import { resolveRemTextSegments } from '../lib/richTextRemRefs';
+import { resolveRemTextAsTitle } from '../lib/richTextRemRefs';
 import { showMessageDialog } from '../lib/message_dialog';
 import {
   MenuHubTarget,
@@ -48,11 +48,11 @@ import {
  *
  * RemNote draws plugin menu items as a flat list and has no way to nest them,
  * so each of those menus has a single "Incremental RemNote…" item, which opens
- * this just below the menu's button (see openMenuHub). It stays open beside
- * the editor or the queue (no close on an outside click) and follows the user:
- * in the queue it lists the queue actions, elsewhere the document actions for
- * the focused pane's document. Drag it by the header; ✕ or Esc (with the
- * panel focused) closes it.
+ * this just below the menu's button (see openMenuHub). It closes once an
+ * action has run, and with ✕ or Esc (with the panel focused). Until then it
+ * stays open beside the editor or the queue (no close on an outside click) and
+ * follows the user: in the queue it lists the queue actions, elsewhere the
+ * document actions for the focused pane's document. Drag it by the header.
  */
 
 type Plugin = ReturnType<typeof usePlugin>;
@@ -112,15 +112,7 @@ const ring: React.CSSProperties = {
 /** Rem references show their text, as in breadcrumbs; pins (📌) are left out. */
 async function remName(plugin: Plugin, remId: string): Promise<string | null> {
   const rem = await plugin.rem.findOne(remId);
-  if (!rem) return null;
-  const segments = await resolveRemTextSegments(plugin, rem.text);
-  const name = segments
-    .filter((s) => s.kind !== 'pin')
-    .map((s) => s.text)
-    .join('')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return name || 'Untitled';
+  return rem ? resolveRemTextAsTitle(plugin, rem.text) : null;
 }
 
 function MenuHub() {
@@ -289,8 +281,12 @@ function MenuHub() {
       } finally {
         setBusy(null);
       }
+      // Close only after the action has finished: it runs in this iframe, and
+      // closing the float tears the iframe down, which would cut off the rest
+      // of its awaits (Toggle Incremental Rem writes, then opens a popup).
+      await close();
     },
-    [plugin, actions, remId, busy]
+    [plugin, actions, remId, busy, close]
   );
 
   // Keys on the container, never on the buttons: a focused button would fire
