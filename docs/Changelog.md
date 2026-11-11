@@ -8,6 +8,10 @@ This page documents the major changes and improvements for each version of the I
 
 **Document and Queue menus**: the plugin's entries are now one **Incremental RemNote…** item that opens the Menu Hub just below the menu, with every action grouped and keyboard-driven, plus the Study Dashboard opened on the document or the queue's scope.
 
+Try it: click ⋯ (or ⋮ in the queue), then **Incremental RemNote…**. *(A mock: nothing runs.)*
+
+<iframe src="../demos/menu-hub.html" title="Menu Hub demo" loading="lazy" style="width:100%;height:620px;border:0;display:block"></iframe>
+
 📖 [Menu Hub](Plugin-Widgets-Reference.md#menu-hub)
 
 ### 🐛 Fixed

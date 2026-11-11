@@ -708,6 +708,10 @@ Lists websites with their Incremental and Dismissed counts, then the Rems of the
 
 RemNote can't group a plugin's entries under one submenu, so the plugin puts a single **Incremental RemNote…** entry in each menu. It opens this panel just below the menu's button, listing all the plugin's actions for that menu.
 
+Try it below: switch between the two menus, open one, and pick **Incremental RemNote…**; then use the mouse or the keys. *(A mock: a line under it says what each action would open.)*
+
+<iframe src="../demos/menu-hub.html" title="Menu Hub demo" loading="lazy" style="width:100%;height:620px;border:0;display:block"></iframe>
+
 **From a document's ⋯ menu**, the header names the document, and the actions act on it:
 
 | Group | Actions |

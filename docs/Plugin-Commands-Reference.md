@@ -155,6 +155,8 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
 
 In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) opened from the queue's ⋮ menu → **Incremental RemNote…**.
 
+<iframe src="../demos/menu-hub.html?view=queue" title="Queue menu and Menu Hub demo" loading="lazy" style="width:100%;height:440px;border:0;display:block"></iframe>
+
 - **No Inc Rems for 15 min**
   Temporarily disables the injection of Incremental Rems into your queue for 15 minutes, allowing you to focus purely on flashcards. A timer countdown widget appears in the queue to show the remaining time.
 
