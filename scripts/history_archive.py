@@ -94,6 +94,15 @@ CREATE TABLE IF NOT EXISTS rems (
     gone_at INTEGER
 );
 
+-- Where a Rem known only from an old snapshot sits today: its id is gone (deleted,
+-- or re-created by an import), so history_backfill.py ties one of its ancestors to a
+-- live Rem, by the same id if that one survived, else by the path's text.
+CREATE TABLE IF NOT EXISTS anchors (
+    rem_id TEXT PRIMARY KEY,      -- an ancestor from the snapshot
+    live_id TEXT NOT NULL,        -- the live Rem standing in for it
+    how TEXT NOT NULL             -- 'id' | 'text'
+);
+
 CREATE TABLE IF NOT EXISTS scans (
     at INTEGER NOT NULL,
     source TEXT NOT NULL,
@@ -450,12 +459,21 @@ def rem_chains(db, rem_ids):
                                     (rid,)).fetchone()
         return cache[rid]
 
+    anchors = dict(((a, (b, c)) for a, b, c in db.execute('SELECT rem_id, live_id, how FROM anchors')))
+
     chains = {}
     for rid in rem_ids:
         chain, cur, guard = [], rid, set()
         while cur and cur not in guard:
             guard.add(cur)
             r = row(cur)
+            # An ancestor known only from a backup stands for a live Rem today. Never
+            # the Rem holding the reps itself: it stays a deleted node.
+            if cur != rid and (not r or r[2] != 'live') and cur in anchors:
+                live_id, _how = anchors[cur]
+                lr = row(live_id)
+                chain.append({'id': live_id, 'text': lr[1] if lr else None, 'state': 'live', 'deletedAt': None})
+                break
             if not r:
                 chain.append({'id': cur, 'text': None, 'state': 'unknown'})
                 break
