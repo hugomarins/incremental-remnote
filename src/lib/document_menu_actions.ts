@@ -1,4 +1,4 @@
-import { ReactRNPlugin, RNPlugin } from '@remnote/plugin-sdk';
+import { PaneRemWindowTree, ReactRNPlugin, RNPlugin } from '@remnote/plugin-sdk';
 import {
   powerupCode,
   pageRangeWidgetId,
@@ -6,8 +6,7 @@ import {
   documentHubWidgetId,
   documentHubTargetKey,
   documentHubActiveIdKey,
-  documentHubPositionKey,
-  documentHubDefaultPosition,
+  documentHubAnchorPosition,
 } from './consts';
 import { safeRemTextToString, getActivePdfForIncRem, getAllPDFsInRem } from './pdfUtils';
 import { initIncrementalRem } from './incremental_rem';
@@ -132,21 +131,97 @@ export async function openPdfControlPanel(plugin: Plugin, remId: string) {
 }
 
 /**
- * Open the Document Hub on a document, or point the open one at it.
+ * Open the Document Hub on a document, or point the open one at it, placed
+ * just below the "…" button the menu was opened from.
  *
- * The hub stays open (no close on outside click) so it can sit beside the
- * editor; openFloatingWidget takes no context data, so the document goes
- * through session storage, which the hub tracks.
+ * A menu action gets only the document's id, never the click, and a plugin
+ * can't measure the host's DOM. So the hub opens at a marker position
+ * (documentHubAnchorPosition) that a host CSS rule recognises in the float
+ * wrapper's inline style and replaces with CSS anchor positioning: below the
+ * "…" (`.rn-doc-header__rem-options-btn`) of the pane showing the document,
+ * or near the top right of that pane when it has no such button. The hub
+ * then reads where it landed (getDimensions) and moves itself there with
+ * setFloatingWidgetPosition; the inline style no longer matches the marker,
+ * the rule lets go, and dragging works on plain coordinates again.
+ *
+ * Must run in the index iframe: registerCSS only works there. Menu actions do.
+ * The hub stays open (no close on outside click); the document goes through
+ * session storage, since openFloatingWidget takes no context data.
  */
 export async function openDocumentHub(plugin: Plugin, remId: string) {
-  await plugin.storage.setSession(documentHubTargetKey, { remId, at: Date.now() });
+  const paneId = await paneShowing(plugin, remId);
+  await plugin.app.registerCSS('document-hub-anchor', documentHubAnchorCss(paneId));
 
   const activeId = await plugin.storage.getSession<string>(documentHubActiveIdKey);
-  if (activeId && (await plugin.window.isFloatingWidgetOpen(activeId).catch(() => false))) return;
+  const open = !!activeId && (await plugin.window.isFloatingWidgetOpen(activeId).catch(() => false));
+  if (open) {
+    // Back to the marker, so the open hub jumps to this menu too.
+    await plugin.window.setFloatingWidgetPosition(activeId!, documentHubAnchorPosition);
+  }
+  // Written after the move: the hub re-measures when this changes.
+  await plugin.storage.setSession(documentHubTargetKey, { remId, at: Date.now(), source: 'menu' });
+  if (open) return;
 
-  const position =
-    (await plugin.storage.getSession<typeof documentHubDefaultPosition>(documentHubPositionKey)) ||
-    documentHubDefaultPosition;
-  const id = await plugin.window.openFloatingWidget(documentHubWidgetId, position, undefined, false);
+  const id = await plugin.window.openFloatingWidget(
+    documentHubWidgetId,
+    documentHubAnchorPosition,
+    undefined,
+    false
+  );
   await plugin.storage.setSession(documentHubActiveIdKey, id);
+}
+
+function paneLeaves(tree: PaneRemWindowTree | null | undefined): { remId: string; paneId: string }[] {
+  if (!tree) return [];
+  if ('paneId' in tree) return [tree];
+  return [...paneLeaves(tree.first as PaneRemWindowTree), ...paneLeaves(tree.second as PaneRemWindowTree)];
+}
+
+/** The pane showing the document: the focused one if it does, else the first. */
+async function paneShowing(plugin: Plugin, remId: string): Promise<string | undefined> {
+  const [focused, tree] = await Promise.all([
+    plugin.window.getFocusedPaneId().catch(() => undefined),
+    plugin.window.getCurrentWindowTree().catch(() => undefined),
+  ]);
+  const showing = paneLeaves(tree).filter((p) => p.remId === remId).map((p) => p.paneId);
+  if (focused && showing.includes(focused)) return focused;
+  return showing[0] ?? focused;
+}
+
+function documentHubAnchorCss(paneId: string | undefined): string {
+  const { top, left } = documentHubAnchorPosition;
+  // The float wrapper is `<div class="absolute z-50" style="top: 1px; left: 1px;">`.
+  const wrapper =
+    `div.absolute.z-50[style*="top: ${top}px"][style*="left: ${left}px"]` +
+    `:has(iframe[data-plugin-id="incremental-everything"][src*="widgetName=${documentHubWidgetId}"])`;
+  const pane = paneId ? `.pane-id-${CSS.escape(paneId)}` : null;
+  const button = pane ? `${pane} .rn-doc-header__rem-options-btn` : null;
+  const anchored = pane
+    ? `
+  ${pane} { anchor-name: --ie-document-hub-pane; }
+  ${button} { anchor-name: --ie-document-hub-button; }
+  body:has(${button}) ${wrapper} {
+    position: fixed !important;
+    top: calc(anchor(--ie-document-hub-button bottom, 48px) + 6px) !important;
+    right: anchor(--ie-document-hub-button right, 24px) !important;
+    left: auto !important;
+  }
+  body:not(:has(${button})) ${wrapper} {
+    position: fixed !important;
+    top: calc(anchor(--ie-document-hub-pane top, 0px) + 48px) !important;
+    right: calc(anchor(--ie-document-hub-pane right, 0px) + 16px) !important;
+    left: auto !important;
+  }`
+    : `
+  ${wrapper} { top: 56px !important; left: auto !important; right: 24px !important; }`;
+  // RemNote's own menus open in #controlled-popup-portal (z 30), under a float's
+  // z-50: lift it while the hub is open, or the "…" menu opens behind the hub.
+  return `${anchored}
+  @media (pointer: fine) {
+    body:has(iframe[data-plugin-id="incremental-everything"][src*="widgetName=${documentHubWidgetId}"]) #controlled-popup-portal {
+      position: relative;
+      z-index: 60;
+    }
+  }
+`;
 }

@@ -866,10 +866,10 @@ export const recognitionFirstHeldKeyPrefix = 'recognition-first-held';
 
 // Document Hub — floating panel holding the Document menu's actions, opened by
 // the "Incremental RemNote…" menu item (RemNote can't nest plugin menu items).
-// Session keys: the document it acts on, its live widget id, and where it was
-// last dragged to ({top, right}: the iframe can't read the host's width).
+// Session keys: the document it acts on and its live widget id. It opens at a
+// marker position that host CSS swaps for a spot under the "…" button
+// (openDocumentHub in lib/document_menu_actions.ts).
 export const documentHubWidgetId = 'document_hub';
 export const documentHubTargetKey = 'document-hub-target';
 export const documentHubActiveIdKey = 'document-hub-active-id';
-export const documentHubPositionKey = 'document-hub-position';
-export const documentHubDefaultPosition = { top: 56, right: 24 };
+export const documentHubAnchorPosition = { top: 1, left: 1 };

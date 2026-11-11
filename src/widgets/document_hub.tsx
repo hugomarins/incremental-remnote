@@ -13,8 +13,7 @@ import '../App.css';
 import '../rn_theme_vars.css';
 import {
   documentHubActiveIdKey,
-  documentHubDefaultPosition,
-  documentHubPositionKey,
+  documentHubAnchorPosition,
   documentHubTargetKey,
   powerupCode,
 } from '../lib/consts';
@@ -40,7 +39,8 @@ import {
  * which opens this. It stays open beside the editor (no close on an outside
  * click) and acts on the document of the focused pane, following it as the
  * user moves around; the menu item points it at the document it came from.
- * Drag it by the header; ✕ or Esc (with the panel focused) closes it.
+ * It opens just below the "…" button the menu came from (see openDocumentHub)
+ * and can be dragged by its header; ✕ or Esc (with the panel focused) closes it.
  */
 
 type Target = { remId: string; at: number; source?: 'menu' | 'pane' };
@@ -83,15 +83,16 @@ function DocumentHub() {
   const containerRef = useRef<HTMLDivElement>(null);
   const positionRef = useRef<FloatingPosition | null>(null);
   const [widgetId, setWidgetId] = useState<string | null>(null);
+  const [instanceId, setInstanceId] = useState<number | null>(null);
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const ctx = await plugin.widget.getWidgetContext<WidgetLocation.FloatingWidget>();
-      positionRef.current =
-        (await plugin.storage.getSession<FloatingPosition>(documentHubPositionKey)) ||
-        documentHubDefaultPosition;
+      // A number on the bridge, typed as a string by getWidgetContext.
+      const inst = Number(ctx?.widgetInstanceId);
+      setInstanceId(Number.isFinite(inst) ? inst : null);
       setWidgetId(ctx?.floatingWidgetId ?? null);
     })().catch((e) => console.error('[DocumentHub] init error', e));
   }, [plugin]);
@@ -145,6 +146,33 @@ function DocumentHub() {
   // follows a pane, which would pull focus out of the editor. The retry loop
   // wins against RemNote settling focus after the float mounts.
   const focusTrigger = target && target.source !== 'pane' ? target.at : 0;
+
+  // Opened (or re-pointed) from the menu, the hub sits at the marker position,
+  // where host CSS anchors it under the "…" button. Read where that put it and
+  // move there for real: the CSS lets go once the inline style changes, and the
+  // drag needs plain coordinates. The wrapper's containing block is the
+  // viewport, so the iframe's rect is its position (as in reference_finder).
+  useEffect(() => {
+    if (!widgetId || instanceId == null) return;
+    let cancelled = false;
+    (async () => {
+      // Let the host apply the marker position and lay the anchor out.
+      await new Promise((r) => setTimeout(r, 80));
+      if (cancelled) return;
+      const rect = await plugin.widget.getDimensions(instanceId);
+      if (cancelled || !rect || rect.width === 0) return;
+      const placed = { top: Math.round(rect.top), left: Math.round(rect.left) };
+      if (placed.top === documentHubAnchorPosition.top && placed.left === documentHubAnchorPosition.left) {
+        positionRef.current = placed; // the anchor rule didn't apply; stay put
+        return;
+      }
+      await plugin.window.setFloatingWidgetPosition(widgetId, placed);
+      positionRef.current = placed;
+    })().catch((e) => console.error('[DocumentHub] placement error', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [plugin, widgetId, instanceId, focusTrigger]);
   useEffect(() => {
     let cancelled = false;
     const tryFocus = (attemptsLeft: number) => {
@@ -219,13 +247,7 @@ function DocumentHub() {
     }
   };
 
-  const onDragEnd = useCallback(
-    (position: FloatingPosition) => {
-      plugin.storage.setSession(documentHubPositionKey, position).catch(() => {});
-    },
-    [plugin]
-  );
-  const onHeaderPointerDown = useFloatingWidgetDrag(plugin, widgetId, positionRef, onDragEnd);
+  const onHeaderPointerDown = useFloatingWidgetDrag(plugin, widgetId, positionRef);
 
   const labelFor = (action: HubAction) =>
     action.id === 'toggle'
