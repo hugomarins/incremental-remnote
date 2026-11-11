@@ -239,9 +239,8 @@ Inside a [Card Cluster](https://help.remnote.com/en/articles/10104223-card-clust
 If you previously used tags like `#HighPriority` or `#P1` to organise your cards, or if you want to bulk-assign priorities to all rems that reference a given rem, you can do so in bulk:
 
 1. Focus on the **anchor rem** (e.g., `#Important`, or any rem that other rems reference or are tagged with).
-2. Open the **Document Menu** (⋯) and click **"Batch Assign Card Priority for tagged/referencing Rems"** — or run the command **"Batch Assign Card Priority for tagged/referencing rems"** (`Opt+Shift+C`) from the Command Palette.
+2. Open the document's ⋯ menu → **Incremental RemNote…** and pick **"Batch Card Priority (tagged / referencing)"** in the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) — or run the command **"Batch Assign Card Priority for tagged/referencing rems"** (`Opt+Shift+C`) from the Command Palette.
 
-![menu item match assign priority tag](assets/uploaded/5d42bf59-755a-41a7-a3a3-8b71742ab442.png){ width="800" }
 
 ![batch assign priority tag command](assets/uploaded/1156bd8a-ca17-4166-bc1f-c7765f97fa2a.png){ width="400" }
 
@@ -286,7 +285,7 @@ While the tool above is specialized for migrations, the **[Prioritization-&-Sort
 - **Range Spreading:** Evenly distribute priorities across a range (e.g., set top cards from 0 to 10).
 - **Filtering:** Use the "Has Cards" filter to focus exclusively on flashcard management.
 
-**Access:** Search for "Batch Priority Change" in the Command Palette, or use the **Document Menu** (⋯) on any Rem.
+**Access:** Search for "Batch Priority Change" in the Command Palette, or use the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) (⋯ → **Incremental RemNote…**) on any document.
 
 **Widget features:**
 

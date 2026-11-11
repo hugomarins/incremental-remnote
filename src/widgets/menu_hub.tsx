@@ -73,26 +73,21 @@ const doc =
 
 const DOCUMENT_ACTIONS: HubAction[] = [
   { id: 'toggle', label: 'Toggle Incremental Rem', group: 'Incremental Rem', run: doc(toggleIncrementalRem), needsRem: true },
-  { id: 'priority', label: 'Set Priority', group: 'Incremental Rem', run: doc(openSetPriority), needsRem: true },
-  { id: 'batch', label: 'Batch Priority Change', group: 'Incremental Rem', run: doc(openBatchPriority), needsRem: true },
-  { id: 'queue', label: 'Priority Queue', group: 'Queue', run: doc(openPriorityQueue), needsRem: true },
+  // Priorities apply to Incremental Rems and flashcards alike.
+  { id: 'priority', label: 'Set Priority', group: 'Priority', run: doc(openSetPriority), needsRem: true },
+  { id: 'batch', label: 'Batch Priority Change', group: 'Priority', run: doc(openBatchPriority), needsRem: true },
   {
     id: 'card-priority',
     label: 'Batch Card Priority (tagged / referencing)',
-    group: 'Flashcards',
+    group: 'Priority',
     run: doc(openBatchCardPriority),
     needsRem: true,
   },
-  { id: 'audit', label: 'Audit Card Enablement', group: 'Flashcards', run: doc(openCardEnablementAudit), needsRem: true },
+  { id: 'queue', label: 'Priority Queue', group: 'Queue', run: doc(openPriorityQueue), needsRem: true },
   { id: 'pdf', label: 'PDF Control Panel', group: 'PDF', run: doc(openPdfControlPanel), needsRem: true },
   { id: 'shield', label: 'Priority Shield History', group: 'Statistics', run: doc(openPriorityShieldHistory), needsRem: true },
-  {
-    id: 'dashboard',
-    label: 'Study Dashboard',
-    group: 'Statistics',
-    run: doc(openDocumentStudyDashboard),
-    needsRem: true,
-  },
+  { id: 'dashboard', label: 'Study Dashboard', group: 'Statistics', run: doc(openDocumentStudyDashboard), needsRem: true },
+  { id: 'audit', label: 'Audit Card Enablement', group: 'Flashcards', run: doc(openCardEnablementAudit), needsRem: true },
 ];
 
 const QUEUE_ACTIONS: HubAction[] = [

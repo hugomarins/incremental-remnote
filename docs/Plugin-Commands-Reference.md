@@ -48,7 +48,7 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   Displays a comprehensive history popup. For Incremental Rems, opens the [IncRem Repetition History](Repetition-History-and-Statistics.md). For regular flashcards, opens the [Flashcard Repetition History](Reviewing-Items-in-the-Queue.md#flashcard-repetition-history).
 
 - **[Open Study Dashboard](Study-Dashboard.md)** — `quick: sdb`
-  Opens the [Study Dashboard](Study-Dashboard.md): a filterable summary of Incremental, Dismissed, and Flashcard activity (Global or Document scope, with multiple period presets and a custom date range), plus an expandable hierarchy of every rem with activity showing total time, reps, retention, and speed, and a [Graphs tab](Study-Dashboard.md#graphs-tab) plotting reviews, time, retention, speed and the answer-grade split per day, week, month or year. Auto-detects the focused rem in the editor or the current card in the queue to use as the Document-mode root; falls back to Global mode otherwise.
+  Opens the [Study Dashboard](Study-Dashboard.md): a filterable summary of Incremental, Dismissed, and Flashcard activity (Global or Document scope, with multiple period presets and a custom date range), plus an expandable hierarchy of every rem with activity showing total time, reps, retention, and speed, and a [Graphs tab](Study-Dashboard.md#graphs-tab) plotting reviews, time, retention, speed and the answer-grade split per day, week, month or year. Auto-detects the focused rem in the editor or the current card in the queue to use as the Document-mode root; falls back to Global mode otherwise. From the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) it opens in Document mode on the document or the queue's scope.
 
 - **[Execute Incremental Rem Repetition (Review in Editor)](Reviewing-Items-in-the-Editor.md#1-execute-repetition-command)** (`Ctrl+Shift+J`) — `quick: er`
   Open the Editor Review Timer to log a spaced-repetition event directly from your document, without needing to enter the queue.
@@ -80,7 +80,7 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   **Access:**
 
   - Via the **Command Palette**: search for "Batch Priority Change".
-  - From the **Document Menu** (`...` on a Rem) to act on it and its descendants.
+  - From the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) (⋯ → **Incremental RemNote…** on a document) to act on it and its descendants.
 
   **Priority Operations:**
 
@@ -90,8 +90,6 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   - **Adjust Proportionally**: Remaps priorities to a new range while maintaining relative spacing.
 
   **Advanced Features:** Interactive table with filtering by name/type/priority range, sorting by any column, "Preview Changes" mode, and CSV export.
-
-  ![Batch Priority Change — Document Menu](assets/uploaded/8589e1e8-1af1-410c-b705-5b56c9e6ee56.png){ width="250" }
 
   ![batch priority change widget](assets/batch-priority-change-widget-new.png){ width="900" }
 
@@ -106,14 +104,14 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
   - Intelligently handles IncRems — use their existing IncRem priority as their Card Priority.
   - Safely updates rems with existing `manual` or `incremental` priorities by requiring explicit "Overwrite" confirmation, with color-coded badges distinguishing **Manual CP** (amber) from **Incremental CP** (green).
 
-  **Access:** Focus a tag rem and run the command from the Command Palette, or use the Document Menu.
+  **Access:** Focus a tag rem and run the command from the Command Palette, or use the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) on it.
 
   ![Batch Card Priority Assignment by Tag](assets/uploaded/b4fed324-d03d-4fb6-871f-2c643ed63467.png){ width="450" }
 
 ## Special Operations
 
 - **[Priority Queue](Priority-Review-Document.md#the-priority-queue-popup)** (`Opt+Shift+L` / `Alt+Shift+L`) — `quick: prq`
-  Opens the Priority Queue popup for the focused document or the whole knowledge base: the persistent review document that is topped up to a fill target with your highest-priority due items and drained as you review them — refresh, drain, refill, practise, and the Cooling list. Also in the document menu, the queue menu, and on the **Priority Queue** button of the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel).
+  Opens the Priority Queue popup for the focused document or the whole knowledge base: the persistent review document that is topped up to a fill target with your highest-priority due items and drained as you review them — refresh, drain, refill, practise, and the Cooling list. Also in the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) of a document or of the queue, and on the **Priority Queue** button of the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel).
 
 - **[Learn - Practice Priority Queue (Full Knowledge Base)](Priority-Review-Document.md#practise-it)** (`Cmd+L` / `Ctrl+L`) — `quick: learn`
   The plugin's main action: opens the queue straight on the full-KB Priority Queue document, the same route as its Practice button and the **▶** button of the [Incremental RemNote panel](Getting-Started.md#the-incremental-plugin-panel).
@@ -153,14 +151,16 @@ Both `Alt+Z` and `Alt+Shift+Z` apply **automatic Card Priority graduation**: eac
 - **[Cancel Parent Pick](Create-Incremental-Rem-from-PDF-Highlights.md#pick-in-editor)** — `quick: cpp`
   Drops the Rem waiting for a parent and closes its card, like `Esc`.
 
-- **No Inc Rem for 15 min** (Queue Menu)
+### Queue Menu Actions { #queue-menu-actions }
+
+In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) opened from the queue's ⋮ menu → **Incremental RemNote…**.
+
+- **No Inc Rems for 15 min**
   Temporarily disables the injection of Incremental Rems into your queue for 15 minutes, allowing you to focus purely on flashcards. A timer countdown widget appears in the queue to show the remaining time.
 
-- **Toggle Inc Rems in this device** (Queue Menu)
+- **Disable / Enable Inc Rems on this device**
   Permanently toggle whether Incremental Rems should appear in the queue on the current device (saved to local storage). Useful for devices with smaller screens where the reading interface is cluttered. A yellow banner will appear for 10 seconds whenever you enter the queue to remind you if they are disabled.
 
-
-  ![Queue Menu in Mobile](assets/queue-menu-mobile.png){ width="400" }
 
   ![Queue in Mobile showing No Inc Rem in this Device indicator](assets/queue-mobile-devicenoincrem-indicator.png){ width="400" }
 

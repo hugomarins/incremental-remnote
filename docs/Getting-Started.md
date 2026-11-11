@@ -146,8 +146,8 @@ The first step is to convert a Rem, PDF, or website into an "Incremental Rem" so
 
 ### Method 3: Document Menu
 
-1. Click the **⋮** (three dots) menu at the top-right of any document
-2. Select **"Toggle Incremental Rem"**
+1. Click the **⋯** menu at the top-right of any document and choose **Incremental RemNote…**
+2. In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) that opens, select **"Make Incremental Rem"** (or press `1`)
 3. The priority popup will open automatically
 
 ### Duplicate web page warning

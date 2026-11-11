@@ -2,6 +2,20 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.219 - November 11th, 2026
+
+### ✨ Improved
+
+**Document and Queue menus**: the plugin's entries are now one **Incremental RemNote…** item that opens the Menu Hub just below the menu, with every action grouped and keyboard-driven, plus the Study Dashboard opened on the document or the queue's scope.
+
+📖 [Menu Hub](Plugin-Widgets-Reference.md#menu-hub)
+
+### 🐛 Fixed
+
+**Priority Shield History, Batch Card Priority**: titles no longer pull in the text and image links of Rems pinned in them, and re-running the study log import no longer duplicates a chapter you pinned something to.
+
+📖 [Priority Shield History](Prioritization-&-Sorting.md#priority-shield-history)
+
 ## v1.0.218 - November 11th, 2026
 
 ### ✨ Improved

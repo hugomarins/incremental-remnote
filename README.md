@@ -103,7 +103,7 @@ This README covers the basics. For the comprehensive guides, please visit the **
 - 0 is for your most important material and 100 is for the least important.
 - **Change Priority**: Click the button in the queue or press `Alt+P` to open the full priority popup.
 - **Quick Shortcuts**: Use `Ctrl+Opt+Up` / `Ctrl+Opt+Down` to adjust priority instantly without breaking flow.
-- **Sorting Criteria**: Use the queue menu to adjust the balance between **Structure** (strict priority) and **Exploration** (randomness), and control the ratio of Flashcards to Reading material.
+- **Sorting Criteria**: Use the queue's ⋮ menu → **Incremental RemNote…** to adjust the balance between **Structure** (strict priority) and **Exploration** (randomness), and control the ratio of Flashcards to Reading material.
 
 ### Scheduling
 

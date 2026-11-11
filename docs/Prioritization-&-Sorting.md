@@ -203,7 +203,7 @@ An IncRem with no cards is therefore never tagged `CardPriority` just because it
 ---
 
 ### Batch Priority Change (IncRems & Flashcards)
-**Access:** Document Menu (top right 3 dots) → "Batch Priority Change"
+**Access:** [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) (document ⋯ → **Incremental RemNote…**) → "Batch Priority Change"
 
 A powerful table view for unified priority management across an entire document tree.
 
@@ -225,7 +225,7 @@ A powerful table view for unified priority management across an entire document 
 ---
 
 ### Batch Card Priority (Flashcards)
-**Access:** Focus on a Tag Rem → Document Menu → "Batch Assign Card Priority for tagged Rems"
+**Access:** Open the Tag Rem → [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) (document ⋯ → **Incremental RemNote…**) → "Batch Card Priority (tagged / referencing)"
 
 Designed specifically for **Flashcards**. You can now assign `CardPriority` to hundreds of rems at once, based on a tag.
 
@@ -342,7 +342,7 @@ The second phase works in reverse deliberately. Pushing from each Rem outward ma
 
 ## Sorting Criteria
 
-Accessed via the *three-dot menu in the top-right of the queue*, the **"Sorting Criteria"** popup lets you control the mix and order of cards in your review session.
+Accessed via the queue's ⋮ menu → **Incremental RemNote…** ([Menu Hub](Plugin-Widgets-Reference.md#menu-hub)), the **"Sorting Criteria"** popup lets you control the mix and order of cards in your review session.
 
 > [!NOTE]
 > **Knowledge Base Scope:** Your Sorting Criteria configurations are scoped to your active Knowledge Base. If you use multiple Knowledge Bases, you can maintain completely different sorting priorities and ratios for each one without interference. The name of the currently active Knowledge Base is displayed at the top of the popup as a reminder.
@@ -767,7 +767,7 @@ W_A / W_B = e^(k × (p_B − p_A)/100)
 
 ###  Priority Shield History
 
-You can track your performance over time by accessing the **"Priority Shield History"** graph from the queue menu (the three-dot icon). This graph plots your daily shield values, helping you identify trends and adjust your workload or priorities accordingly.
+You can track your performance over time by accessing the **"Priority Shield History"** graph from the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub): the queue's ⋮ menu or a document's ⋯ menu → **Incremental RemNote…** → *Priority Shield History*. This graph plots your daily shield values, helping you identify trends and adjust your workload or priorities accordingly.
 
 Try it below with example data: hover a chart for its tooltip, drag across one to zoom, and switch between the two tabs.
 

@@ -26,7 +26,8 @@ Below the **Context / Period** box the popup has two tabs. The filters live *abo
 ## Opening it
 
 - **Command Palette:** *Open Study Dashboard* (quick code `sdb`)
-- The dashboard always opens in **Global** mode by default.
+- **[Menu Hub](Plugin-Widgets-Reference.md#menu-hub):** a document's ⋯ menu or the queue's ⋮ menu → **Incremental RemNote…** → *Study Dashboard*. It opens in **Document** mode on that document, or on the queue's document or folder (Global for a queue over all flashcards).
+- From the command, the dashboard always opens in **Global** mode by default.
 - If a rem is focused in the editor (or you're reviewing a card in the queue), the command passes it along as the Document-mode root — you can switch to **Document** inside the popup at any time. Without a rem context, the *Document* radio is greyed out and Global is the only option.
 
 ---

@@ -291,7 +291,7 @@ A zero-lag alternative that opens instantly by skipping expensive KB-wide calcul
 ![Light Priority Widget](assets/light-priority-widget.png){ width="400" }
 
 ### 3.3. Priority & Interval Popup
-**Triggered by:** Extract with Priority (`Opt+Shift+X`), Create Incremental Rem (PDF/web highlight menu), Toggle Incremental Rem (document menu)
+**Triggered by:** Extract with Priority (`Opt+Shift+X`), Create Incremental Rem (PDF/web highlight menu), Make Incremental Rem ([Menu Hub](#menu-hub))
 
 A combined popup that appears automatically when a new Incremental Rem is created, letting you set both its **priority** and its **first review interval** in a single step.
 
@@ -314,7 +314,7 @@ A combined popup that appears automatically when a new Incremental Rem is create
 
 ### 3.4. Sorting Criteria Menu
 
-**Access:** Three-dot menu in the top-right corner of the queue (or using the `Sorting Criteria` command)
+**Access:** [Menu Hub](#menu-hub) from the queue's ⋮ menu → **Incremental RemNote…** (or the `Sorting Criteria` command)
 
 Controls three aspects of your queue algorithm: **IncRem Randomness** (how strictly the queue follows priority order), **Flashcard Randomness** (used when the [Priority Queue](Priority-Review-Document.md) is refilled), and **Flashcard Ratio** (the balance between flashcards and IncRems per session).
 
@@ -403,7 +403,7 @@ The same graph sits at the top of every [Priority Queue](Priority-Review-Documen
 📖 **Full documentation:** [IncRem List & Main View — Priority Distribution Graphs](IncRem-List-and-Main-View.md#priority-distribution-graphs)
 
 ### 4.4. Priority Shield Graph
-**Access:** Three-dot menu in the queue → "Priority Shield History", or the `Open Priority Shield Graph` command
+**Access:** [Menu Hub](#menu-hub) (the queue's ⋮ menu or a document's ⋯ menu → **Incremental RemNote…**) → "Priority Shield History", or the `Open Priority Shield Graph` command
 
 Plots your daily [Priority Shield](Prioritization-&-Sorting.md#priority-shield) values over time, helping you identify trends in your capacity to process high-priority material.
 
@@ -652,7 +652,7 @@ Two stages, like the Empty Extra Card Detail popup and for the same reason: the 
 ---
 
 ### 6.13. Card Enablement Audit Popup
-**Trigger:** `Audit Card Enablement (tagged / referencing / descendants)` command, or the **Document Menu** (⋯) of any Rem
+**Trigger:** `Audit Card Enablement (tagged / referencing / descendants)` command, or the [Menu Hub](#menu-hub) of any document
 
 Finds the Rems in an anchor's orbit that generate no flashcards, and fixes the two states a flag can fix.
 
@@ -667,7 +667,7 @@ Finds the Rems in an anchor's orbit that generate no flashcards, and fixes the t
 📖 **Full documentation:** [Card Enablement Audit](Utilities-Cleaning-Up.md#card-enablement-audit)
 
 ### 6.14. Priority Queue Popup
-**Trigger:** `Priority Queue` command (quick code `prq`, `Opt+Shift+L` / `Alt+Shift+L`), the **Document Menu** (⋯) of any document, the queue's ⋮ menu, or the **Priority Queue** button of the panel
+**Trigger:** `Priority Queue` command (quick code `prq`, `Opt+Shift+L` / `Alt+Shift+L`), the [Menu Hub](#menu-hub) of a document or of the queue, or the **Priority Queue** button of the panel
 
 The front door to the persistent review document, one per scope.
 
@@ -702,6 +702,37 @@ Offers to open the existing Rem, make the Rem Incremental anyway, or cancel. Wit
 Lists websites with their Incremental and Dismissed counts, then the Rems of the chosen website, with a filter box at both levels.
 
 📖 **Full documentation:** [Incremental Rems by Website](Utilities-Finding-and-Navigating.md#incremental-rems-by-website)
+
+### 6.18. Menu Hub { #menu-hub }
+**Trigger:** **Incremental RemNote…** in a document's ⋯ menu (top right of the document), or in the queue's ⋮ menu.
+
+RemNote can't group a plugin's entries under one submenu, so the plugin puts a single **Incremental RemNote…** entry in each menu. It opens this panel just below the menu's button, listing all the plugin's actions for that menu.
+
+**From a document's ⋯ menu**, the header names the document, and the actions act on it:
+
+| Group | Actions |
+|---|---|
+| Incremental Rem | Make Incremental Rem / Remove Incremental Rem tag |
+| Priority | Set Priority, [Batch Priority Change](Prioritization-&-Sorting.md#batch-priority-change-increms-flashcards), [Batch Card Priority (tagged / referencing)](Prioritization-&-Sorting.md#batch-card-priority-flashcards) |
+| Queue | [Priority Queue](#614-priority-queue-popup) |
+| PDF | [PDF Control Panel](PDF-Incremental-Reading-Workflow.md#3-pdf-control-panel) |
+| Statistics | [Priority Shield History](#44-priority-shield-graph), [Study Dashboard](Study-Dashboard.md#opening-it) (opens in Document mode on this document) |
+| Flashcards | [Audit Card Enablement](#613-card-enablement-audit-popup) |
+
+**From the queue's ⋮ menu**, the header names the queue's scope, and the actions act on that queue:
+
+| Group | Actions |
+|---|---|
+| This queue | [Priority Queue](#614-priority-queue-popup), [Sorting Criteria](Prioritization-&-Sorting.md#sorting-criteria) |
+| Statistics | [Priority Shield History](#44-priority-shield-graph), [Study Dashboard](Study-Dashboard.md#opening-it) (opens in Document mode on the queue's document or folder) |
+| Incremental Rems | [No Inc Rems for 15 min](Plugin-Commands-Reference.md#queue-menu-actions), [Disable / Enable Inc Rems on this device](Plugin-Commands-Reference.md#queue-menu-actions) |
+
+**Using it:**
+
+- `↑`/`↓` move, `Enter` runs the selected action, a number key runs that action directly, `Esc` closes. A click works too.
+- The panel closes once the action has run.
+- While open, it follows you: it switches to the queue actions when you enter the queue, and to the document actions for the focused pane's document when you leave it.
+- Drag it by its header to move it.
 
 ## 7. Mastery Drill
 

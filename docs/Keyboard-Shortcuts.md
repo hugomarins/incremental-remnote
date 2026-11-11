@@ -52,7 +52,7 @@ This table lists all the custom keyboard shortcuts that are unique to the Increm
 | Shortcut | Command Name | Function | Context |
 | :--- | :--- | :--- | :--- |
 | `Alt` + `Shift` + `L` | [Priority Queue](Priority-Review-Document.md#the-priority-queue-popup) | Opens the Priority Queue popup: refresh, drain, refill and practise the persistent priority review document, and the Cooling list. | Editor Only |
-| (n/a) | Batch Priority Change (IncRems & Flashcards) | Opens popup to change priorities of Incremental Rems and Flashcards in bulk (Increase, Decrease, Spread evenly, Adjust proportionally). Access via Command Palette or Document Menu. | Editor Only |
+| (n/a) | Batch Priority Change (IncRems & Flashcards) | Opens popup to change priorities of Incremental Rems and Flashcards in bulk (Increase, Decrease, Spread evenly, Adjust proportionally). Access via Command Palette or the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub). | Editor Only |
 | `Alt` + `Shift` + `C` | Batch Assign Card Priority | Opens popup to assign card priorities in bulk for all flashcards tagged with the focused Rem. | Editor Only |
 
 ### View & Navigation
@@ -221,7 +221,7 @@ These commands ship **without** a shortcut, so nothing collides with your own bi
 
 | Command | Quick code |
 | :--- | :--- |
-| Batch Priority Change (IncRems & Flashcards) | — (Command Palette / Document Menu) |
+| Batch Priority Change (IncRems & Flashcards) | — (Command Palette / Menu Hub) |
 | [Transfer Incremental Data to Parent Rem](Create-Incremental-Rem-from-PDF-Highlights.md#transfer-to-parent) | `ttp` |
 | [Break Inline List Into Children](Utilities-Text-and-Lists.md#break-inline-list-into-children-brl) | `brl` |
 | [Restore List Rem](Utilities-Text-and-Lists.md#restore-list-rem-rlr) | `rlr` |
