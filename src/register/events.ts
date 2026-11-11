@@ -1373,8 +1373,10 @@ export function registerGlobalRemChangedListener(plugin: ReactRNPlugin) {
           return;
         }
 
-        const allInfos = (await plugin.storage.getSession<CardPriorityInfo[]>(allCardPriorityInfoKey)) || [];
-        const cachedEntry = allInfos.find((info) => info.remId === data.remId);
+        // A shared copy, not a read per event: each full read costs ~0.3 s of
+        // main-thread time, and a bulk edit fires this for hundreds of Rems.
+        const { readCardPriorityByRem } = await import('../lib/card_priority/shared_read');
+        const cachedEntry = (await readCardPriorityByRem(plugin)).get(data.remId);
 
         if (
           !cachedEntry ||

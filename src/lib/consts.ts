@@ -578,6 +578,10 @@ export const followQueueBarPositionKey = 'follow-queue-bar-position';
 export const followQueueBarDefaultPosition = { bottom: 66, right: 64 };
 
 export const cardPriorityCacheRefreshKey = 'cardPriorityCacheRefreshKey';
+// Changes on every write of allCardPriorityInfoKey (writeCardPriorityCache), so a
+// frame can keep a copy of the cache and re-read it only when this moves
+// (lib/card_priority/shared_read.ts).
+export const cardPriorityCacheVersionKey = 'card-priority-cache-version';
 // Rem IDs whose cards exist but whose parent rem could not be found during the
 // last cache build (orphan-card candidates). Written by Phase 2 of
 // loadCardPriorityCache, read by the 'Update all inherited Card Priorities'
