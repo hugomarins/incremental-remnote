@@ -1,6 +1,6 @@
 /**
  * Client for the helper's review-history archive (scripts/history_archive.py,
- * served by scripts/ai_ocr_helper.py). See plans/HISTORY_ARCHIVE_PLAN.md.
+ * served by scripts/ai_ocr_helper.py). See plans/implemented/HISTORY_ARCHIVE_PLAN.md.
  *
  * Reviews of deleted Rems drop out of everything the plugin can read: RemNote
  * moves the cards to a trash that no SDK call reaches, and purges it after two

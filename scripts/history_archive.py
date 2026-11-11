@@ -18,7 +18,7 @@ kinds: Preserve history & remove, Dismiss and Transfer to parent all copy reps
 with their original `date`, sometimes changing the kind (a card rep becomes an
 `importedRep` on a tombstone's Dismissed history). A "ghost" rep is one whose
 only copies are on items that are no longer live; among those, the copy whose
-item was live most recently wins. See plans/HISTORY_ARCHIVE_PLAN.md.
+item was live most recently wins. See plans/implemented/HISTORY_ARCHIVE_PLAN.md.
 
     python3 scripts/history_archive.py --kb <kbId> scan     # copy into the archive
     python3 scripts/history_archive.py --kb <kbId> report   # what deleted Rems hold

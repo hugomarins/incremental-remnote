@@ -2,7 +2,7 @@
 
 Working document for a desktop helper that keeps the review history of deleted cards and Incremental Rems, so the Study Dashboard keeps counting it. It also keeps where each deleted Rem lived in the tree. Pick it up at "Phases"; the sections above it hold the decisions and their reasons.
 
-Last updated: **2026-11-10** (Phases 1–2 done: the helper archives the main KB and the test 7 KB).
+Last updated: **2026-11-11**. **Implemented**: all six phases shipped in v1.0.217 (user docs: Study Dashboard → Deleted Rems).
 
 ---
 

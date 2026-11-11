@@ -8,7 +8,7 @@ The helper's archive (history_archive.py) only knows reps it has seen since it
 started scanning. Reviews of Rems deleted before that are still in old backups.
 This reads each snapshot, newest first, and archives every rep whose timestamp
 the archive doesn't have yet, with `source` = the snapshot's file name. The
-Study Dashboard then counts them as deleted Rems (plans/HISTORY_ARCHIVE_PLAN.md).
+Study Dashboard then counts them as deleted Rems (plans/implemented/HISTORY_ARCHIVE_PLAN.md).
 
 A snapshot is a RemNote .db, a folder holding remnote.db (+ -wal), a .zip with a
 .db inside (RemNote's own backups), or a JSON export (.zip/.rem holding rem.json
