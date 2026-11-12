@@ -4,9 +4,8 @@
  *
  * Row 1 manages the drill (counts, card list, clearing, Remove from Drill). Row 2 is
  * the popup's only: Go to Rem, Edit Later and the editors stand in for what the
- * regular queue gives natively, so its bar has row 1 alone. Edit Later on the
- * previous card is in both — the regular queue has no native way to it — in row 2
- * in the popup and row 1 in the queue bar. The header only renders
+ * regular queue gives natively, so its bar has row 1 alone. Edit Later (current
+ * and previous card) is in both: in row 2 in the popup, in row 1 in the queue bar. The header only renders
  * and collects the Edit Later note and the priority edit: what each action does,
  * and where its panel opens, is up to the widget — the popup swaps its whole
  * window, the queue bar opens a popup.
@@ -36,6 +35,11 @@ export interface MasteryDrillHeaderProps {
    * with this note, keeping its rating. Omitted: no button.
    */
   onEditLaterPrevious?: (message: string) => Promise<void>;
+  /**
+   * The queue bar's Edit Later for the card on screen, in row 1. The popup passes its
+   * own in cardActions (row 2) instead.
+   */
+  onEditLaterCurrent?: (message: string) => Promise<void>;
   /** Row 2, popup only. */
   cardActions?: {
     /** The current card's priority, editable in place. */
@@ -85,7 +89,7 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
   };
   const confirmEditLater = async () => {
     if (editLaterTarget === 'previous') await props.onEditLaterPrevious?.(editLaterMessage);
-    else await cardActions?.onEditLater(editLaterMessage);
+    else await (props.onEditLaterCurrent ?? cardActions?.onEditLater)?.(editLaterMessage);
     setEditLaterTarget(null);
     setEditLaterMessage('');
     returnFocusToQueue();
@@ -167,6 +171,15 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
         >
           Remove from Drill
         </button>
+        {compact && props.onEditLaterCurrent && (
+          <button
+            onClick={() => openEditLater('current')}
+            className="text-xs px-2 py-1 rounded bg-orange-500 text-white hover:bg-orange-600 font-medium whitespace-nowrap"
+            title="Mark the card on screen for Edit Later and remove it from the drill"
+          >
+            Edit Later
+          </button>
+        )}
         {compact && editLaterPreviousButton}
         {oldCount > 0 && (
           <div

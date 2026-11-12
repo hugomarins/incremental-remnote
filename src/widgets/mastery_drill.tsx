@@ -363,6 +363,7 @@ function FinalDrill() {
     <MasteryDrillCardList
       items={kbItems}
       cooling={cooling}
+      oldThresholdDays={oldItemThreshold}
       onRemove={removeCardsFromDrill}
       onGoToRem={goToRem}
       onClose={closeCardList}
