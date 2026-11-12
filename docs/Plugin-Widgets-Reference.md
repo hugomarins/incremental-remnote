@@ -242,6 +242,7 @@ A chronological log of the Rems you have navigated to in the Editor. Helps you q
 - Searchable by text content with multi-word query support.
 - Each entry can be expanded and edited inline in the sidebar.
 - Click an entry to open the Rem; **Shift+click** opens it in a new pane beside your current document.
+- An Incremental Rem, or a Rem with its own card priority, shows a **priority badge**. Click it to edit the priority with an inline slider.
 
 📖 **Full documentation:** [Visited Rem History](History-Queue-Dashboard-and-Mastery-Drill.md#visited-rem-history)
 

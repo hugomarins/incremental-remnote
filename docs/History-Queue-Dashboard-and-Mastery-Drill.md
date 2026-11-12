@@ -58,6 +58,8 @@ In IE's *Practiced Queues History* sidebar tab, click the **Import** button and 
 
 **Search:** Includes a search bar to instantly filter your history. Supports multi-word queries (e.g., "Biology Exam") and deep text search across all recorded items.
 
+**Priority Badge & inline editing:** An entry whose Rem is an Incremental Rem, or carries its own card priority, shows a priority badge, the same as in the [Flashcard History](#flashcard-history). Click it to edit the priority with the inline slider. A Rem that is both shows two badges, IncRem first; hover a badge to see which one it is. Plain notes and documents, including Rems whose card priority is only inherited, show no badge.
+
 **Retention:** The list keeps the **500 most recent** visits for the knowledge base you are in. See [How the history lists are stored](#how-the-history-lists-are-stored).
 
 ![Visited Rem History](assets/uploaded/5d52f2_rem-history-editing.gif){ width="500" }
