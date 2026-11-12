@@ -5,6 +5,7 @@ import {
   useTrackerPlugin,
   PluginRem,
   RNPlugin,
+  RemType,
 } from '@remnote/plugin-sdk';
 import { withHoverTips } from '../components/HoverTipLayer';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -23,6 +24,7 @@ import { updateIncrementalRemCache, writeIncRemCaches } from '../lib/incremental
 import { calculateRelativePercentile } from '../lib/utils';
 import { remToActionItemType } from '../lib/incremental_rem';
 import { safeRemTextToString } from '../lib/pdfUtils';
+import { resolveRemTextForBreadcrumb } from '../lib/richTextRemRefs';
 import { gatherPortalIncludedRems, PortalIncludedRem } from '../lib/scope_helpers';
 import dayjs from 'dayjs';
 import { priorityColor, usePriorityColorScale } from '../components/priorityColor';
@@ -58,6 +60,28 @@ interface PrioritizedItemData {
   viaPortal: boolean;
   /** Name of the rem's real parent — where a portal row actually lives. */
   homeName: string | null;
+  /** Up to 5 ancestors above the rem, "A › B › C" — as in Batch Card Priority Assignment. */
+  breadcrumb: string;
+  /**
+   * Full text of the parent for a descriptor/slot rem (a table cell such as
+   * "[True/False]"), whose own text says nothing about what the card asks.
+   */
+  descriptorParent: string | null;
+}
+
+/** Ancestors shown in a row's breadcrumb, as in Batch Card Priority Assignment. */
+const MAX_BREADCRUMB_DEPTH = 5;
+/** Per-level cap in the breadcrumb, so one long ancestor does not hide the rest. */
+const BREADCRUMB_LABEL_MAX = 40;
+
+/** Everything needed to recognise the card on hover: parent (for slots), front → back, location. */
+function rowTooltip(r: PrioritizedItemData): string {
+  const lines: string[] = [];
+  if (r.descriptorParent) lines.push(`Parent: ${r.descriptorParent}`);
+  lines.push(r.name);
+  if (r.breadcrumb) lines.push(`In: ${r.breadcrumb}`);
+  if (r.viaPortal) lines.push('Shown here through a portal or table view');
+  return lines.join('\n');
 }
 
 /** Card priority sources that are derived, not owned: they follow an ancestor or the default setting. */
@@ -265,16 +289,31 @@ function BatchPriority() {
           const anchor = (item.anchorId !== null ? remIndexMap.get(item.anchorId) : undefined) ?? allRemsToCheck.length;
           candidates.push({ rem: item.rem, portal: item, index: anchor + (seq + 1) / (portalItems.length + 1) });
         });
-        const parentNameCache = new Map<string, Promise<string | null>>();
-        const parentName = (parentId: string | null | undefined) => {
-          if (!parentId) return Promise.resolve(null);
-          if (!parentNameCache.has(parentId)) {
-            parentNameCache.set(parentId, (async () => {
-              const parent = await plugin.rem.findOne(parentId);
-              return parent?.text ? await safeRemTextToString(plugin, parent.text) : null;
+        // Ancestors are shared by many rows (every cell of a row, every row of a
+        // table), so each is fetched and resolved once per load.
+        const ancestorCache = new Map<string, Promise<{ label: string; parent: string | null } | null>>();
+        const ancestor = (id: string) => {
+          if (!ancestorCache.has(id)) {
+            ancestorCache.set(id, (async () => {
+              const r = await plugin.rem.findOne(id);
+              if (!r) return null;
+              return { label: await resolveRemTextForBreadcrumb(plugin, r.text), parent: r.parent ?? null };
             })());
           }
-          return parentNameCache.get(parentId)!;
+          return ancestorCache.get(id)!;
+        };
+        const parentName = async (parentId: string | null | undefined) =>
+          parentId ? (await ancestor(parentId))?.label ?? null : null;
+        const breadcrumbOf = async (rem: PluginRem) => {
+          const parts: string[] = [];
+          let id = rem.parent ?? null;
+          for (let i = 0; i < MAX_BREADCRUMB_DEPTH && id; i++) {
+            const a = await ancestor(id);
+            if (!a) break;
+            parts.unshift(a.label.length > BREADCRUMB_LABEL_MAX ? a.label.substring(0, BREADCRUMB_LABEL_MAX) + '…' : a.label);
+            id = a.parent;
+          }
+          return parts.join(' › ');
         };
 
         // Check each rem for prioritized items - process ALL rems in the hierarchy
@@ -348,7 +387,13 @@ function BatchPriority() {
                 }
               }
 
-              const remText = rem.text ? await safeRemTextToString(plugin, rem.text) : 'Untitled';
+              // Front → back, as in Batch Card Priority Assignment: a cell's front
+              // ("[True/False]") is only the column; the answer is in its back.
+              const front = await resolveRemTextForBreadcrumb(plugin, rem.text);
+              const backLabel = rem.backText?.length ? await resolveRemTextForBreadcrumb(plugin, rem.backText) : '';
+              const back = backLabel === 'Untitled' ? '' : backLabel;
+              const remText = back ? `${front} → ${back}` : front;
+              const isDescriptor = rem.type === RemType.DESCRIPTOR;
 
               // Calculate depth and path for hierarchy display. A portal rem hangs
               // off the focused rem at depth 1, with its own subtree nested below.
@@ -404,6 +449,8 @@ function BatchPriority() {
                 originalIndex: index,
                 viaPortal,
                 homeName: viaPortal ? await parentName(rem.parent) : null,
+                breadcrumb: await breadcrumbOf(rem),
+                descriptorParent: isDescriptor ? await parentName(rem.parent) : null,
               });
             }
           } catch (remError) {
@@ -450,8 +497,11 @@ function BatchPriority() {
 
     // Apply search filter
     if (searchTerm) {
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(rem =>
-        rem.name.toLowerCase().includes(searchTerm.toLowerCase())
+        rem.name.toLowerCase().includes(term) ||
+        (rem.descriptorParent ?? '').toLowerCase().includes(term) ||
+        rem.breadcrumb.toLowerCase().includes(term)
       );
     }
 
@@ -1548,7 +1598,7 @@ function BatchPriority() {
                       onChange={() => toggleCheck(remData.remId)}
                     />
                   </div>
-                  <div style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 }}>
                     {sortField === 'hierarchy' && hasChildNodes && (
                       <button
                         onClick={() => toggleExpanded(remData.remId)}
@@ -1565,14 +1615,21 @@ function BatchPriority() {
                         ⧉
                       </span>
                     )}
-                    <span style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      maxWidth: '300px',
-                      display: 'inline-block'
-                    }} title={remData.name}>
-                      {remData.name.length > 50 ? remData.name.substring(0, 50) + '...' : remData.name}
+                    <span
+                      style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}
+                      title={rowTooltip(remData)}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {remData.descriptorParent && (
+                          <span style={{ color: '#6b7280' }}>{remData.descriptorParent} › </span>
+                        )}
+                        {remData.name}
+                      </span>
+                      {remData.breadcrumb && (
+                        <span style={{ fontSize: '10px', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {remData.breadcrumb}
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div style={{ padding: '8px', fontWeight: 600, display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1731,7 +1788,7 @@ function BatchPriority() {
               </div>
               {pendingConversions.map(r => (
                 <div key={r.remId} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 110px 50px', padding: '6px 8px', fontSize: '12px', borderTop: '1px solid #f3f4f6' }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.name}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rowTooltip(r)}>
                     {r.viaPortal && <span style={{ color: '#6b7280' }}>⧉ </span>}{r.name}
                   </div>
                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#6b7280' }} title={r.homeName ?? ''}>
