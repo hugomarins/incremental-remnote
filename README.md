@@ -33,7 +33,7 @@ A full suite of history and practice tools now built into the right sidebar:
 - **Visited Rem History**: jump back to any document you navigated to recently.
 - **Flashcard History**: find and open any flashcard you've reviewed, searchable by front and back text.
 - **Practiced Queues Dashboard**: real-time session metrics (speed, retention, card age) and a full history of every practice session, with Export/Import backup.
-- **Mastery Drill**: a focused re-practice queue for cards you rated *Forgot* or *Hard* — inspired by SuperMemo's Final Drill. Open with the `Mastery Drill` command or via the Left Sidebar notification.
+- **[Mastery Drill](https://hugomarins.github.io/incremental-remnote/Mastery-Drill/)**: a focused re-practice queue for cards you rated *Forgot* or *Hard* — inspired by SuperMemo's Final Drill. Open with the `Mastery Drill` command or via the Left Sidebar notification.
 
 👉 [Full documentation](https://hugomarins.github.io/incremental-remnote/History-Queue-Dashboard-and-Mastery-Drill/)
 

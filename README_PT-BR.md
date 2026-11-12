@@ -29,7 +29,7 @@ Um conjunto completo de ferramentas de histórico e prática, agora integrado à
 - **Histórico de Rems Visitados**: volte de imediato a qualquer documento que você acessou recentemente.
 - **Histórico de Flashcards**: encontre e abra qualquer flashcard que você revisou, com busca pelo texto da frente e do verso.
 - **Painel de Filas Praticadas**: métricas da sessão em tempo real (velocidade, retenção, idade dos cards) e um histórico completo de cada sessão de prática, com backup via Exportar/Importar.
-- **Mastery Drill**: uma fila de repráctica focada nos cards que você avaliou como *Forgot* ou *Hard* — inspirada no Final Drill do SuperMemo. Abra pelo comando `Mastery Drill` ou pela notificação na Barra Lateral Esquerda.
+- **[Mastery Drill](https://hugomarins.github.io/incremental-remnote/Mastery-Drill/)**: uma fila de repráctica focada nos cards que você avaliou como *Forgot* ou *Hard* — inspirada no Final Drill do SuperMemo. Abra pelo comando `Mastery Drill` ou pela notificação na Barra Lateral Esquerda.
 
 👉 [Documentação completa](https://hugomarins.github.io/incremental-remnote/History-Queue-Dashboard-and-Mastery-Drill/)
 

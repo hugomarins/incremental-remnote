@@ -189,7 +189,7 @@ In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) opened from the queue's 
 ## Utilities
 
 - **Mastery Drill** — `quick: dri`
-  Opens the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill) — a focused re-practice queue for cards rated *Forgot* or *Hard*. Cards are added automatically as you review; they leave the drill once rated *Good* or *Easy*. It opens in the popup or in RemNote's own queue, per [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs).
+  Opens the [Mastery Drill](Mastery-Drill.md) — a focused re-practice queue for cards rated *Forgot* or *Hard*. Cards are added automatically as you review; they leave the drill once rated *Good* or *Easy*. It opens in the popup or in RemNote's own queue, per [Where the Drill Runs](Mastery-Drill.md#where-the-drill-runs).
 
 - **Mastery Drill (popup)** / **Mastery Drill (regular queue)**
   Open the drill in that place, whatever *Where the Drill Runs* says.

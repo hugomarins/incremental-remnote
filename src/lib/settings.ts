@@ -429,7 +429,7 @@ export const IE_SETTING_GROUPS: Record<SettingGroupId, SettingGroupSpec> = {
   masteryDrill: {
     label: 'Mastery Drill',
     blurb: 'Deliberate practice of poorly-rated cards.',
-    helpPath: 'History-Queue-Dashboard-and-Mastery-Drill/#mastery-drill',
+    helpPath: 'Mastery-Drill/',
   },
   queueDashboard: {
     label: 'Queue Dashboard',

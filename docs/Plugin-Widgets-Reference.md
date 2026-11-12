@@ -56,7 +56,7 @@ Unlike the *Card Info Bar*, which in the Compact queue lives at the bottom of fl
 
 In RemNote's **Beautiful** queue variant (Queue Menu → *Queue Variant*) the badge sits in the **top-right corner of the card**, in the blank space above the breadcrumbs, rather than in the top bar — the card layout itself is unchanged. The *No Inc Rem* countdown moves there with it. Switching back to *Compact* returns both to the toolbar.
 
-The corner area is only as wide as what it shows: the badge, or the badge and the countdown while a *No Inc Rem* timer runs. Clicks beside it reach the card, and the [regular-queue Mastery Drill's bar](History-Queue-Dashboard-and-Mastery-Drill.md#regular-queue-drill) keeps its buttons clear of it.
+The corner area is only as wide as what it shows: the badge, or the badge and the countdown while a *No Inc Rem* timer runs. Clicks beside it reach the card, and the [regular-queue Mastery Drill's bar](Mastery-Drill.md#regular-queue-drill) keeps its buttons clear of it.
 
 
 ### 1.3. Answer Buttons Info Bar
@@ -758,10 +758,10 @@ A focused sub-queue of flashcards rated *Forgot* or *Hard*, designed for deliber
 - Includes a built-in editor UI: **Edit Later** (defers editing via the Edit Later powerup), **Go to Rem**, and **Edit Previous** buttons.
 - **Old Items Warning**: cards lingering past the configured threshold (default 7 days) are flagged; clear them with a single click.
 - **Clear Queue**: empty the entire drill at any time.
-- **List Cards**: lists every card in the drill with a status saying whether RemNote can still show it, and removes the ones it cannot. See [Card List](History-Queue-Dashboard-and-Mastery-Drill.md#card-list).
-- **In the regular queue**, the drill bar under the queue's top bar carries the same queue tools (counts, List Cards, Clear Queue, Clear Low Priority, Clear Old, Remove from Drill), without the per-card editing buttons. See [The regular-queue drill](History-Queue-Dashboard-and-Mastery-Drill.md#regular-queue-drill).
+- **List Cards**: lists every card in the drill with a status saying whether RemNote can still show it, and removes the ones it cannot. See [Card List](Mastery-Drill.md#card-list).
+- **In the regular queue**, the drill bar under the queue's top bar carries the same queue tools (counts, List Cards, Clear Queue, Clear Low Priority, Clear Old, Remove from Drill), without the per-card editing buttons. See [The regular-queue drill](Mastery-Drill.md#regular-queue-drill).
 
-📖 **Full documentation:** [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill)
+📖 **Full documentation:** [Mastery Drill](Mastery-Drill.md)
 
 ![Mastery Drill](assets/uploaded/f69a4d_final-drill.png){ width="900" }
 
@@ -773,12 +773,12 @@ A focused sub-queue of flashcards rated *Forgot* or *Hard*, designed for deliber
 A periodic notification widget that appears in the Left Sidebar End when ≥ 10 cards are pending in the Mastery Drill queue.
 
 - Shows the count of pending cards with a rotating motivational phrase.
-- **Start Drill** button opens the Mastery Drill, in the popup or the regular queue per [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs).
+- **Start Drill** button opens the Mastery Drill, in the popup or the regular queue per [Where the Drill Runs](Mastery-Drill.md#where-the-drill-runs).
 - Dismiss button hides the notification; it reappears automatically every 2 hours.
 - Can be disabled entirely via the `Disable Mastery Drill Notification` setting.
 - Not rendered while the [Incremental RemNote Panel](Getting-Started.md#collapsed-panel) is collapsed — the panel's 🎯 icon carries the drill and its count instead.
 
-📖 **Full documentation:** [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill)
+📖 **Full documentation:** [Mastery Drill](Mastery-Drill.md)
 
 ![Mastery Drill Notification](assets/drill-notification.png){ width="350" }
 
@@ -789,7 +789,7 @@ A periodic notification widget that appears in the Left Sidebar End when ≥ 10 
 
 Shown only while the Mastery Drill runs in the regular queue. **Remove from Drill** takes the card on screen out of the drill; **Card List** opens the card list below. When RemNote hides drill cards ("Time to Take a Break"), the drill presses **Keep Practicing** itself; if that fails, the bar says to press it (or **Esc**).
 
-📖 **Full documentation:** [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs)
+📖 **Full documentation:** [Where the Drill Runs](Mastery-Drill.md#where-the-drill-runs)
 
 ![The Mastery Drill running in the regular queue: the queue titled "Mastery Drill" with 12 cards left, the drill bar above the card with Remove from Drill, Card List and the note that RemNote hid some drill cards, the card info bar with priority and FSRS figures under the cloze, and the Queue Dashboard on the right recording a Mastery Drill session with the card's forgetting curve](assets/native-drill.png){ width="900" }
 
@@ -798,5 +798,5 @@ Shown only while the Mastery Drill runs in the regular queue. **Remove from Dril
 ### 7.4. Mastery Drill Card List
 *(Popup)*
 
-The [Card List](History-Queue-Dashboard-and-Mastery-Drill.md#card-list) of the popup drill, in a popup of its own, for the regular-queue drill.
+The [Card List](Mastery-Drill.md#card-list) of the popup drill, in a popup of its own, for the regular-queue drill.
 

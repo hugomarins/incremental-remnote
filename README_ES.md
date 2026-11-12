@@ -29,7 +29,7 @@ Un conjunto completo de herramientas de historial y práctica, ahora integrado e
 - **Historial de Rems Visitados**: vuelve de un salto a cualquier documento que hayas consultado recientemente.
 - **Historial de Tarjetas**: encuentra y abre cualquier tarjeta que hayas repasado, con búsqueda por el texto del anverso y del reverso.
 - **Panel de Colas Practicadas**: métricas de la sesión en tiempo real (velocidad, retención, antigüedad de las tarjetas) y un historial completo de cada sesión de práctica, con copia de seguridad mediante Exportar/Importar.
-- **Mastery Drill**: una cola de repráctica enfocada en las tarjetas que calificaste como *Forgot* u *Hard* — inspirada en el Final Drill de SuperMemo. Ábrela con el comando `Mastery Drill` o desde la notificación de la Barra Lateral Izquierda.
+- **[Mastery Drill](https://hugomarins.github.io/incremental-remnote/Mastery-Drill/)**: una cola de repráctica enfocada en las tarjetas que calificaste como *Forgot* u *Hard* — inspirada en el Final Drill de SuperMemo. Ábrela con el comando `Mastery Drill` o desde la notificación de la Barra Lateral Izquierda.
 
 👉 [Documentación completa](https://hugomarins.github.io/incremental-remnote/History-Queue-Dashboard-and-Mastery-Drill/)
 

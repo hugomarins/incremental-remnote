@@ -6,19 +6,11 @@ This page documents the major changes and improvements for each version of the I
 
 ### ✨ New
 
-**Mastery Drill**: added **Edit Later → Previous**, to tag the card you just rated without losing its rating, and brought **Edit Later** for the card on screen to the regular-queue drill.
-
-**Mastery Drill**: added the **Priority Cap** setting, which keeps cards below a chosen priority out of the drill (default 100: every card goes).
-
-### ✨ Improved
-
-**Mastery Drill**: cards rated *Again* now wait for their scheduler's relearning step when it is longer than the Minimum Delay, so a card on a 1-day step no longer returns after 3 hours.
-
-**Mastery Drill**: redesigned the drill bar into captioned groups (Card, Edit Later, Clear) that fit beside the Beautiful queue's priority badge, with a new drill icon, also used in the collapsed panel and the sidebar notification. The Card List gained an **Old** filter and badge.
+**Mastery Drill**: added **Edit Later → Previous** (tags the card you just rated, keeping its rating) and brought Edit Later to the regular-queue drill; added a **Priority Cap** setting that keeps low-priority cards out of the drill; cards rated *Again* now wait for their scheduler's relearning step when it is longer than the Minimum Delay; and the drill bar was redesigned into captioned groups with a new icon, with an **Old** filter in the Card List. The drill now has [its own page](Mastery-Drill.md) in the manual.
 
 <iframe src="../demos/mastery-drill-bar.html" title="Mastery Drill bar demo" loading="lazy" style="width:100%;height:190px;border:0;display:block"></iframe>
 
-📖 [Mastery Drill: Queue Management](History-Queue-Dashboard-and-Mastery-Drill.md#queue-management) · [Minimum Delay](History-Queue-Dashboard-and-Mastery-Drill.md#minimum-delay) · [Priority Cap](History-Queue-Dashboard-and-Mastery-Drill.md#drill-priority-cap)
+📖 [Mastery Drill](Mastery-Drill.md)
 
 ## v1.0.224 - November 12th, 2026
 
@@ -304,7 +296,7 @@ These need the Companion's new version, which is waiting for Google's approval i
 
 **Mastery Drill**: The regular-queue drill now opens the Queue Dashboard when **Auto-focus Queue Dashboard** is on; the popup drill still never does.
 
-📖 [Auto-focus Queue Dashboard](Plugin-Settings-Reference.md#queue-display) · [The regular-queue drill](History-Queue-Dashboard-and-Mastery-Drill.md#regular-queue-drill)
+📖 [Auto-focus Queue Dashboard](Plugin-Settings-Reference.md#queue-display) · [The regular-queue drill](Mastery-Drill.md#regular-queue-drill)
 
 ### 🐛 Fixed
 
@@ -358,7 +350,7 @@ These need the Companion's new version, which is waiting for Google's approval i
 
 **Mastery Drill Card List**: Added **Due now**, **Cooling** and **Unplayable** filters (keys `1`–`3`), so a due card that never came up in the drill is easy to spot; due cards now sort above cooling ones.
 
-📖 [Filtering the Card List](History-Queue-Dashboard-and-Mastery-Drill.md#card-list-filters)
+📖 [Filtering the Card List](Mastery-Drill.md#card-list-filters)
 
 ## v1.0.191 - November 3rd, 2026
 
@@ -500,7 +492,7 @@ These need the Companion's new version, which is waiting for Google's approval i
 
 **Mastery Drill**: Fixed a rating going to another card of the same Rem when that card came up next, which could add a never-reviewed cloze to the drill. An entry already added this way stays until you press **Remove from Drill**.
 
-📖 [How the Mastery Drill works](History-Queue-Dashboard-and-Mastery-Drill.md#how-it-works)
+📖 [How the Mastery Drill works](Mastery-Drill.md#how-it-works)
 
 ## v1.0.178 - October 30th, 2026
 
@@ -574,7 +566,7 @@ These need the Companion's new version, which is waiting for Google's approval i
 
 **Mastery Drill**: A card rated *Hard* now waits a share of its new interval before returning to the drill (default 5%, between the Minimum Delay and a 7-day maximum), so a card sent a year out is checked from long-term memory days later instead of three hours later.
 
-📖 [Why Hard cards wait longer](History-Queue-Dashboard-and-Mastery-Drill.md#hard-card-delay)
+📖 [Why Hard cards wait longer](Mastery-Drill.md#hard-card-delay)
 
 ### ⚡ Improved
 
@@ -584,11 +576,11 @@ These need the Companion's new version, which is waiting for Google's approval i
 
 **Mastery Drill**: The drill bar in the regular queue now has the popup's queue tools — the Remaining and cooling counts, List Cards, Clear Queue, Clear Low Priority and Clear Old — next to Remove from Drill.
 
-📖 [The regular-queue drill](History-Queue-Dashboard-and-Mastery-Drill.md#regular-queue-drill)
+📖 [The regular-queue drill](Mastery-Drill.md#regular-queue-drill)
 
 **Mastery Drill**: The Old Items warning now counts a card's age from when it became ready to drill, so a card that was still cooling is never flagged as old.
 
-📖 [Queue Management](History-Queue-Dashboard-and-Mastery-Drill.md#queue-management)
+📖 [Queue Management](Mastery-Drill.md#queue-management)
 
 **Beautiful Queue**: The priority badge's area in the card's top-right corner now fits the badge, widening only while the No Inc Rem countdown shows, so clicks across the rest of the card's top edge reach the card.
 
@@ -897,7 +889,7 @@ These need the Companion's new version, which is waiting for Google's approval i
 
 **Mastery Drill**: Fixed Card Cluster cards staying in the regular-queue drill after being rated *Good* or *Easy*; cluster cards already stuck in the list are removed the next time the drill starts.
 
-📖 [The regular-queue drill](History-Queue-Dashboard-and-Mastery-Drill.md#regular-queue-drill)
+📖 [The regular-queue drill](Mastery-Drill.md#regular-queue-drill)
 
 ## v1.0.146 - October 3rd, 2026
 
@@ -1039,7 +1031,7 @@ These need the Companion's new version, which is waiting for Google's approval i
 
 **Mastery Drill**: When RemNote hides drill cards because the drill skipped another card of the same Rem, the drill now presses **Keep Practicing** itself and carries on with them, instead of ending at "Time to Take a Break".
 
-📖 [The regular-queue drill](History-Queue-Dashboard-and-Mastery-Drill.md#the-regular-queue-drill)
+📖 [The regular-queue drill](Mastery-Drill.md#regular-queue-drill)
 
 ### 🐛 Fixed
 
@@ -1163,7 +1155,7 @@ RemNote practises whole Rems, so the drill skips the other cards of a drill Rem 
 
 ![The Mastery Drill running in the regular queue: the queue titled "Mastery Drill" with 12 cards left, the drill bar above the card with Remove from Drill, Card List and the note that RemNote hid some drill cards, the card info bar with priority and FSRS figures under the cloze, and the Queue Dashboard on the right recording a Mastery Drill session with the card's forgetting curve](assets/native-drill.png){ width="900" }
 
-📖 [Where the Drill Runs](History-Queue-Dashboard-and-Mastery-Drill.md#where-the-drill-runs)
+📖 [Where the Drill Runs](Mastery-Drill.md#where-the-drill-runs)
 
 ## v1.0.116 - September 22nd, 2026
 
@@ -1225,7 +1217,7 @@ Card Clusters are recognised again since RemNote turned them into a built-in pow
 
 **List Cards** in the Mastery Drill toolbar shows every card in the drill and whether RemNote can still show it, so a card that was deleted or switched off — counted as *Remaining* but never served — can be found and removed.
 
-📖 [Card List](History-Queue-Dashboard-and-Mastery-Drill.md#card-list)
+📖 [Card List](Mastery-Drill.md#card-list)
 
 ### ⚡ Improved - `#cloze-extract` and `#ignore` styling reaches descendants
 
@@ -1431,7 +1423,7 @@ Leaving the queue now drains what you reviewed from the Priority Queue document 
 
 Rating a card *Again* or *Hard* again — in the drill or in a regular queue — now restarts its minimum delay, instead of leaving it ready to come straight back.
 
-📖 [Minimum Delay](History-Queue-Dashboard-and-Mastery-Drill.md#minimum-delay)
+📖 [Minimum Delay](Mastery-Drill.md#minimum-delay)
 
 ## v1.0.92 - September 13th, 2026
 
@@ -1598,7 +1590,7 @@ It was `cprd`.
 
 *Remove from Drill* took the card out of the drill list, and the card still reappeared later in the same session — as did cards taken out by *Edit Later* or by rating them *Good* — because RemNote's embedded queue keeps the card list it was handed when the drill opened: each time it runs out of cards it clears its own bookkeeping and reloads that original list, undoing every removal since. The drill now notices a card that has left the list, skips it the moment it is presented again, and rebuilds the embedded queue from the current list when a whole reloaded batch is stale. Cards inside [Card Clusters](https://help.remnote.com/en/articles/10104223-card-clusters) are a documented exception, now written up on the drill's page: RemNote reports only the cluster anchor to plugins, so sibling ratings mostly never reach the drill and the per-card toolbar actions act on the anchor.
 
-📖 [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill) · [Card Cluster limitation](History-Queue-Dashboard-and-Mastery-Drill.md#how-it-works)
+📖 [Mastery Drill](Mastery-Drill.md) · [Card Cluster limitation](Mastery-Drill.md#how-it-works)
 
 ## v1.0.77 - September 4th, 2026
 
@@ -2525,7 +2517,7 @@ Four additions to the debug widget, all under **Raw Slot Diagnostics**:
 
 Everything you practised was still being scheduled and counted correctly, but the **Flashcard History** sidebar had quietly stopped adding new cards. Nothing on screen said so — the list simply stayed as it was.
 
-The list is stored as a single item in the plugin's synced storage, which RemNote caps at **900 KB**. It held every knowledge base's cards in one array, up to 1000 of them, each with a text preview of up to 1000 characters. That array had reached the ceiling, so every attempt to add a card to it was refused — including the ones written from the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill) popup and from card clusters, which record through the same list.
+The list is stored as a single item in the plugin's synced storage, which RemNote caps at **900 KB**. It held every knowledge base's cards in one array, up to 1000 of them, each with a text preview of up to 1000 characters. That array had reached the ceiling, so every attempt to add a card to it was refused — including the ones written from the [Mastery Drill](Mastery-Drill.md) popup and from card clusters, which record through the same list.
 
 A detail worth recording, because it also affects how full other keys really are: the ceiling is counted in **UTF-16 bytes**, which is *twice* the size the plugin's own diagnostics reported. A list measuring 512 KB was in fact 1009 KB against the limit.
 
@@ -2664,7 +2656,7 @@ While the drill is active the plugin watches every flashcard rating and maintain
 
 The old switch was a double negative that shipped on. If you had turned *Skip Mastery Drill* on, the drill stays off — the value is inverted and carried over for you. **If you use the Mastery Drill and never touched that setting, switch the new one on after upgrading.**
 
-📖 [History, Queue Dashboard & Mastery Drill → Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md#mastery-drill)
+📖 [Mastery Drill](Mastery-Drill.md)
 
 ### ⚡ Improved: far fewer full card-database reads, as RemNote asked
 
