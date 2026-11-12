@@ -2,10 +2,12 @@
  * The Mastery Drill header, shared by the popup drill (widgets/mastery_drill.tsx)
  * and the regular-queue drill's bar (widgets/mastery_drill_queue_bar.tsx).
  *
- * Row 1 manages the drill (counts, card list, clearing, Remove from Drill). Row 2 is
- * the popup's only: Go to Rem, Edit Later and the editors stand in for what the
- * regular queue gives natively, so its bar has row 1 alone. Edit Later (current
- * and previous card) is in both: in row 2 in the popup, in row 1 in the queue bar. The header only renders
+ * Row 1 manages the drill (counts, card list, Remove, and the Clear group). Row 2
+ * is the popup's only: Go to Rem and the editors stand in for what the regular
+ * queue gives natively, so its bar has row 1 alone. The Edit Later group (current
+ * and previous card) is in both: in row 2 in the popup, in row 1 in the queue bar.
+ * Related actions share one segmented group ("Clear: All · Low Priority · Old") so
+ * the queue bar fits in one line beside the Beautiful queue's priority badge. The header only renders
  * and collects the Edit Later note and the priority edit: what each action does,
  * and where its panel opens, is up to the widget — the popup swaps its whole
  * window, the queue bar opens a popup.
@@ -100,20 +102,39 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
     returnFocusToQueue();
   };
 
-  const editLaterPreviousButton = props.onEditLaterPrevious && (
-    <button
-      onClick={() => openEditLater('previous')}
-      className={`${compact ? 'text-xs px-2 py-1' : actionSize} rounded border border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-900/20 font-medium whitespace-nowrap`}
-      title="Mark the card you just rated for Edit Later, keeping its rating, and remove it from the drill"
-    >
-      Previous → Edit Later
-    </button>
+  // "Edit Later: Current · Previous". Current is the popup's cardActions.onEditLater or
+  // the queue bar's onEditLaterCurrent; Previous keeps the rating of the card just rated.
+  const hasEditLaterCurrent = !!(props.onEditLaterCurrent ?? cardActions?.onEditLater);
+  const editLaterGroup = (hasEditLaterCurrent || props.onEditLaterPrevious) && (
+    <SegmentedGroup label="Edit Later" large={!compact}>
+      {hasEditLaterCurrent && (
+        <SegmentButton
+          onClick={() => openEditLater('current')}
+          tone="accent"
+          large={!compact}
+          title="Mark the card on screen for Edit Later and remove it from the drill"
+        >
+          Current
+        </SegmentButton>
+      )}
+      {props.onEditLaterPrevious && (
+        <SegmentButton
+          onClick={() => openEditLater('previous')}
+          tone="accent"
+          large={!compact}
+          title="Mark the card you just rated for Edit Later, keeping its rating, and remove it from the drill"
+        >
+          Previous
+        </SegmentButton>
+      )}
+    </SegmentedGroup>
   );
 
   return (
     <div className={compact ? 'flex flex-col' : 'border-b rn-clr-border-primary flex flex-col'}>
+      <style>{DRILL_HEADER_CSS}</style>
       {/* Row 1: the drill as a whole */}
-      <div className={`flex items-center gap-2 flex-wrap ${compact ? 'px-3 py-1' : 'px-2 pt-2 pb-1'}`}>
+      <div className={`flex items-center flex-wrap ${compact ? 'gap-1.5 px-2 py-1' : 'gap-2 px-2 pt-2 pb-1'}`}>
         <span
           className={`whitespace-nowrap flex-shrink-0 ${compact ? 'font-semibold text-sm' : 'font-bold text-lg'}`}
           style={{ color: 'var(--rn-clr-content-primary)' }}
@@ -122,19 +143,14 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
         </span>
         <span
           onClick={props.onOpenCardList}
-          className="text-xs px-2 py-1 rounded bg-red-100 text-red-800 whitespace-nowrap cursor-pointer"
+          className="ie-drill-chip ie-drill-chip--count"
           title={`List every card in the drill${compact ? '' : ' (L)'}`}
         >
-          {readyCount} Remaining
+          {readyCount} remaining
         </span>
         {coolingCount > 0 && (
           <span
-            className="text-xs px-2 py-1 rounded whitespace-nowrap"
-            style={{
-              backgroundColor: 'var(--rn-clr-background-secondary)',
-              color: 'var(--rn-clr-content-secondary)',
-              border: '1px solid var(--rn-clr-border-primary)',
-            }}
+            className="ie-drill-chip"
             title={`${coolingCount} card${plural(coolingCount, ' is', 's are')} still cooling and will appear later${
               firstReadyAt !== undefined ? ` (the first in ${formatDrillWait(firstReadyAt - Date.now())})` : ''
             }`}
@@ -142,61 +158,35 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
             {coolingCount} cooling
           </span>
         )}
+        <span className="ie-drill-sep" />
         <button
           onClick={props.onOpenCardList}
-          className="text-xs px-2 py-1 rounded whitespace-nowrap"
-          style={neutral}
+          className="ie-drill-btn"
           title={`List every card in the drill and check whether RemNote can show it${compact ? '' : ' (L)'}`}
         >
-          List Cards
+          List
         </button>
-        <button
-          onClick={props.onClearAll}
-          className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 whitespace-nowrap"
-          title="Clear all items from the Mastery Drill queue"
-        >
-          Clear Queue
+        <button onClick={props.onRemoveCurrent} className="ie-drill-btn ie-drill-btn--danger" title="Remove the card on screen from the Mastery Drill">
+          Remove
         </button>
-        <button
-          onClick={props.onClearLowPriority}
-          className="text-xs px-2 py-1 rounded border border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/20 whitespace-nowrap"
-          title="Remove low priority cards from the Mastery Drill queue"
-        >
-          Clear Low Priority
-        </button>
-        <button
-          onClick={props.onRemoveCurrent}
-          className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 font-medium whitespace-nowrap"
-          title="Remove the card on screen from the Mastery Drill"
-        >
-          Remove from Drill
-        </button>
-        {compact && props.onEditLaterCurrent && (
-          <button
-            onClick={() => openEditLater('current')}
-            className="text-xs px-2 py-1 rounded bg-orange-500 text-white hover:bg-orange-600 font-medium whitespace-nowrap"
-            title="Mark the card on screen for Edit Later and remove it from the drill"
-          >
-            Edit Later
-          </button>
-        )}
-        {compact && editLaterPreviousButton}
-        {oldCount > 0 && (
-          <div
-            className="flex items-center gap-1.5 px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800"
-            title={`${oldCount} card${plural(oldCount, ' has', 's have')} been ready to drill for more than ${oldThreshold} days. The Mastery Drill is intended for cards you recently rated Hard or Again — after this much time, the spaced repetition algorithm will handle them at their scheduled date instead. You can remove them here if you prefer to trust the scheduler rather than drilling them now.`}
-          >
-            <span className="text-xs text-yellow-800 dark:text-yellow-200 whitespace-nowrap">
-              {oldCount} &gt; {oldThreshold} days.
-            </span>
-            <button
+        {compact && editLaterGroup}
+        <SegmentedGroup label="Clear">
+          <SegmentButton onClick={props.onClearAll} tone="danger" title="Clear all items from the Mastery Drill queue">
+            All
+          </SegmentButton>
+          <SegmentButton onClick={props.onClearLowPriority} tone="danger" title="Remove low priority cards from the Mastery Drill queue">
+            Low priority
+          </SegmentButton>
+          {oldCount > 0 && (
+            <SegmentButton
               onClick={props.onClearOld}
-              className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 border border-yellow-300 hover:bg-yellow-200 dark:bg-yellow-800 dark:text-yellow-100 dark:border-yellow-600 whitespace-nowrap"
+              tone="old"
+              title={`${oldCount} card${plural(oldCount, ' has', 's have')} been ready to drill for more than ${oldThreshold} days. The Mastery Drill is intended for cards you recently rated Hard or Again — after this much time, the spaced repetition algorithm will handle them at their scheduled date instead. Click to remove them, if you prefer to trust the scheduler rather than drilling them now.`}
             >
-              Clear Old
-            </button>
-          </div>
-        )}
+              Old · {oldCount} &gt; {oldThreshold}d
+            </SegmentButton>
+          )}
+        </SegmentedGroup>
       </div>
 
       {/* Row 2: the card on screen (popup only) */}
@@ -222,14 +212,7 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
         >
           Go to Rem
         </button>
-        <button
-          onClick={() => openEditLater('current')}
-          className={`${actionSize} rounded bg-orange-500 text-white hover:bg-orange-600 font-medium transition-colors shadow-md whitespace-nowrap`}
-          title="Mark for Edit Later and remove from drill"
-        >
-          Edit Later
-        </button>
-        {editLaterPreviousButton}
+        {editLaterGroup}
         <button
           onClick={cardActions.onEditPrevious}
           className={`${actionSize} rounded font-medium transition-colors shadow-sm whitespace-nowrap`}
@@ -349,5 +332,90 @@ export function EditLaterNote({
         Cancel
       </button>
     </div>
+  );
+}
+
+/*
+ * Plain CSS, not Tailwind: the plugin's Tailwind uses the OS colour scheme for `dark:`,
+ * which disagrees with RemNote's own theme whenever the two differ (a light RemNote on a
+ * dark Mac got the dark fills). RemNote's theme reaches the iframe as --rn-clr-* and
+ * as `body.dark`, so the accents key on that.
+ */
+const DRILL_HEADER_CSS = `
+.ie-drill-chip {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 500; white-space: nowrap; cursor: default;
+  color: var(--rn-clr-content-secondary); background: var(--rn-clr-background-secondary);
+}
+.ie-drill-chip--count { cursor: pointer; color: #be123c; background: rgba(225, 29, 72, 0.08); }
+body.dark .ie-drill-chip--count { color: #fda4af; background: rgba(251, 113, 133, 0.14); }
+.ie-drill-sep { width: 1px; height: 14px; margin: 0 2px; background: var(--rn-clr-border-primary); flex-shrink: 0; }
+.ie-drill-btn {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 6px;
+  font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  color: var(--rn-clr-content-secondary); background: transparent; border: 0;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.ie-drill-btn:hover { color: var(--rn-clr-content-primary); background: var(--rn-clr-background-secondary); }
+.ie-drill-btn--large { height: 30px; padding: 0 11px; font-size: 13px; }
+.ie-drill-btn--danger { color: #dc2626; }
+.ie-drill-btn--danger:hover { color: #b91c1c; background: rgba(220, 38, 38, 0.07); }
+body.dark .ie-drill-btn--danger { color: #f87171; }
+body.dark .ie-drill-btn--danger:hover { color: #fca5a5; background: rgba(248, 113, 113, 0.12); }
+.ie-drill-btn--accent { color: #c2410c; }
+.ie-drill-btn--accent:hover { color: #9a3412; background: rgba(234, 88, 12, 0.08); }
+body.dark .ie-drill-btn--accent { color: #fb923c; }
+body.dark .ie-drill-btn--accent:hover { color: #fdba74; background: rgba(251, 146, 60, 0.12); }
+.ie-drill-btn--old { color: #a16207; background: rgba(234, 179, 8, 0.12); }
+.ie-drill-btn--old:hover { color: #854d0e; background: rgba(234, 179, 8, 0.22); }
+body.dark .ie-drill-btn--old { color: #facc15; background: rgba(250, 204, 21, 0.12); }
+body.dark .ie-drill-btn--old:hover { color: #fde047; background: rgba(250, 204, 21, 0.2); }
+.ie-drill-group {
+  display: inline-flex; align-items: center; gap: 1px; padding: 2px; flex-shrink: 0;
+  border: 1px solid var(--rn-clr-border-primary); border-radius: 8px; white-space: nowrap;
+}
+.ie-drill-group__label {
+  padding: 0 4px 0 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.01em;
+  color: var(--rn-clr-content-tertiary);
+}
+.ie-drill-group .ie-drill-btn { height: 20px; padding: 0 7px; border-radius: 5px; }
+.ie-drill-group .ie-drill-btn--large { height: 26px; padding: 0 10px; }
+`;
+
+type SegmentTone = 'accent' | 'danger' | 'old';
+
+/** A light outlined strip: a muted "Label" and its buttons. */
+function SegmentedGroup({ label, large = false, children }: { label: string; large?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="ie-drill-group">
+      <span className="ie-drill-group__label" style={large ? { fontSize: '12px' } : undefined}>
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function SegmentButton({
+  onClick,
+  title,
+  tone,
+  large = false,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  tone?: SegmentTone;
+  large?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`ie-drill-btn${tone ? ` ie-drill-btn--${tone}` : ''}${large ? ' ie-drill-btn--large' : ''}`}
+    >
+      {children}
+    </button>
   );
 }
