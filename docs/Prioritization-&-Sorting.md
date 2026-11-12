@@ -211,7 +211,7 @@ A powerful table view for unified priority management across an entire document 
 *   **Bulk Operations:**
     *   **Increase/Decrease:** Adjust all selected priorities by a percentage.
     *   **Spread:** Distribute priorities evenly across a range (e.g., set selected items from 10 to 50).
-    *   **Set Fixed:** Set all selected items to a specific value.
+    *   **Adjust Proportionally:** Rescale the selected priorities into a new range, keeping their order and relative spacing.
 *   **Sorting/Filtering:** Sort by name, priority, next repetition date, etc. Filter by search text, type, or priority range.
 *   **Multi-Select Type Filter:** Hold `Cmd/Ctrl` while clicking in the "All Types" dropdown to instantly filter by multiple categories at once (e.g. showing only "Extracts" and items that "Has Cards").
 *   **Filter-Aware Bulk Actions:** When any filter is active (search, type, or priority range), bulk action buttons automatically adapt:
