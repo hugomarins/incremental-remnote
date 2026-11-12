@@ -267,7 +267,10 @@ interface CardStats {
     lapses: number;
     /** Share of `gradeableCount` that was not a lapse; null when nothing is graded. */
     retention: number | null;
-    /** No repetitions at all — RemNote's "New Card". */
+    /**
+     * Nothing graded since the last RESET — RemNote's "New Card". A reset card
+     * is new again even though its history is long.
+     */
     isNew: boolean;
     cardAgeText: string;
     cardAgeMs: number;
@@ -310,7 +313,12 @@ function computeCardStats(card: any): CardStats {
     const cardAgeDays = Math.max(0, Math.floor(cardAgeMs / (1000 * 60 * 60 * 24)));
     const cardAgeText = formatStabilityDays(cardAgeDays);
 
-    const lastRep = sortedHistory.length > 0 ? sortedHistory[sortedHistory.length - 1] : null;
+    const isNew = gradeableReps.length === 0;
+    // A new card has no "last practice": after a RESET, the RESET entry itself is
+    // the newest one, and RemNote dates the card's due time slightly BEFORE it. Read
+    // as a practice, that gave a negative interval and a stale date in the past, so
+    // every freshly reset card was flagged STALE.
+    const lastRep = isNew ? null : activeHistory[activeHistory.length - 1];
     const lastPracticeDate = lastRep ? new Date(lastRep.date) : null;
     const nextRepDate = card.nextRepetitionTime ? new Date(card.nextRepetitionTime) : null;
 
@@ -346,9 +354,12 @@ function computeCardStats(card: any): CardStats {
     let nextIntervalMs: number | null = null;
     if (lastRep && nextRepDate) {
         nextIntervalMs = nextRepDate.getTime() - lastRep.date;
-        // Stale means overdue by more than twice the last interval.
-        staleDate = new Date(lastRep.date + 2 * nextIntervalMs);
-        isStale = Date.now() > staleDate.getTime();
+        // Stale means overdue by more than twice the last interval. A due date at
+        // or before the last practice gives no interval to double.
+        if (nextIntervalMs > 0) {
+            staleDate = new Date(lastRep.date + 2 * nextIntervalMs);
+            isStale = Date.now() > staleDate.getTime();
+        }
     }
 
     return {
@@ -358,7 +369,7 @@ function computeCardStats(card: any): CardStats {
         gradeableCount: gradeableReps.length,
         lapses,
         retention,
-        isNew: sortedHistory.length === 0,
+        isNew,
         cardAgeText,
         cardAgeMs,
         firstRepDate,
@@ -1174,6 +1185,25 @@ function FlashcardRepetitionHistory() {
                                     title="The card you were reviewing"
                                 >
                                     IN QUEUE
+                                </span>
+                            )}
+                            {stats.isNew && (
+                                <span
+                                    style={{
+                                        padding: '1px 5px',
+                                        backgroundColor: '#3b82f6',
+                                        color: 'white',
+                                        borderRadius: 4,
+                                        fontSize: 9,
+                                        fontWeight: 'bold',
+                                    }}
+                                    title={
+                                        stats.sortedHistory.length > 0
+                                            ? 'Nothing graded since the last reset: the card is new again'
+                                            : 'Never practised'
+                                    }
+                                >
+                                    NEW
                                 </span>
                             )}
                             {stats.isStale && (

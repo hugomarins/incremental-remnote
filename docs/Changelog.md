@@ -6,7 +6,7 @@ This page documents the major changes and improvements for each version of the I
 
 ### ✨ New
 
-**Flashcard Repetition History**: added **⟲ Reset SRS** beside ➕ Repetition, to reset a single card without touching the other clozes of the bullet.
+**Flashcard Repetition History**: added **⟲ Reset SRS** beside ➕ Repetition, to reset a single card without touching the other clozes of the bullet. They and never-practised cards now show a NEW badge.
 
 📖 [Reset one card](Plugin-Widgets-Reference.md#reset-srs)
 

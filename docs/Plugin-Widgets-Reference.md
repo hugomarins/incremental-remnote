@@ -113,7 +113,8 @@ Each card's section also carries its [Forgetting Curve](Reviewing-Items-in-the-Q
 - **Card identifiers** — `Forward Card (…)` and `Backward Card (…)` show the side the card asks; `Cloze (…)` shows the clozed words themselves. Rem references inside the text resolve to `[the referenced Rem]` and reference pins to 📌, so a cloze over a reference reads `Cloze (a [Carena])` rather than losing the word that identifies it.
 - **Collapsed** — the four tiles from RemNote's panel: **Next Practice**, **Last Practiced**, **Repetitions** (lapses in red, retention underneath) and **Time Spent**.
 - **Expanded** — the full analytics below.
-- Sections start **collapsed** when the Rem has more than one card, except the card you were reviewing (badged `IN QUEUE`); a single-card Rem opens straight into its table. **Expand all / Collapse all** is in the header, and `↑`/`↓` walk the sections with `Enter` to open the selected one.
+- Sections start **collapsed** when the Rem has more than one card, except the card you were reviewing (badged `IN QUEUE`); a single-card Rem opens straight into its table.
+- **Badges** — `NEW` on a card never practised, or with nothing graded since its last reset; `STALE` on a card overdue by more than twice its last interval. **Expand all / Collapse all** is in the header, and `↑`/`↓` walk the sections with `Enter` to open the selected one.
 
 **Per-card analytics** *(expanded)*:
 
@@ -138,7 +139,7 @@ Three things to know about the figures:
 
 ##### Reset one card { #reset-srs }
 
-**⟲ Reset SRS** *(beside ➕ Repetition)*: restarts **this card only** as a new card. Click once to arm it, then click again to confirm (Esc or clicking elsewhere cancels). Past repetitions stay in the table; the schedule restarts from the reset.
+**⟲ Reset SRS** *(beside ➕ Repetition)*: restarts **this card only** as a new card. Click once to arm it, then click again to confirm (Esc or clicking elsewhere cancels). Past repetitions stay in the table; the schedule restarts from the reset, and the card shows the `NEW` badge.
 
 Use it when only one cloze of a bullet needs relearning. RemNote's own reset (`/srs` → **Reset SRS Data**, or **Reset Flashcards for Bullet**) always resets **every** card of the bullet, even if you tick a single cloze in the `/srs` dialog.
 
