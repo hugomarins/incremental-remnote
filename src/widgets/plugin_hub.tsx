@@ -1,4 +1,5 @@
 import { renderWidget, usePlugin, useTrackerPlugin } from '@remnote/plugin-sdk';
+import { DrillIcon } from '../components/DrillIcon';
 import { withHoverTips } from '../components/HoverTipLayer';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import '../style.css';
@@ -342,12 +343,13 @@ const GlobeIcon = ({ size = 18 }: IconProps) => {
   );
 };
 
+/** The Mastery Drill's own icon (components/DrillIcon), at the row's size and weight. */
+// In colour, like the globe and the play button beside it: the drill is something to act on, not a setting.
+const DRILL_ICON_COLOR = '#f43f5e';
 const TargetIcon = ({ size = 18 }: IconProps) => (
-  <svg {...iconAttrs(size)} aria-hidden>
-    <circle cx="12" cy="12" r="10" />
-    <circle cx="12" cy="12" r="6" />
-    <circle cx="12" cy="12" r="2" />
-  </svg>
+  <span style={{ color: DRILL_ICON_COLOR, display: 'inline-flex' }}>
+    <DrillIcon size={size} strokeWidth={iconAttrs(size).strokeWidth as number} />
+  </span>
 );
 
 const KeyboardIcon = ({ size = 18 }: IconProps) => (

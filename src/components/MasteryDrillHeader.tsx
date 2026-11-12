@@ -2,12 +2,12 @@
  * The Mastery Drill header, shared by the popup drill (widgets/mastery_drill.tsx)
  * and the regular-queue drill's bar (widgets/mastery_drill_queue_bar.tsx).
  *
- * Row 1 manages the drill (counts, card list, Remove, and the Clear group). Row 2
- * is the popup's only: Go to Rem and the editors stand in for what the regular
- * queue gives natively, so its bar has row 1 alone. The Edit Later group (current
- * and previous card) is in both: in row 2 in the popup, in row 1 in the queue bar.
- * Related actions share one segmented group ("Clear: All · Low Priority · Old") so
- * the queue bar fits in one line beside the Beautiful queue's priority badge. The header only renders
+ * Row 1 manages the drill: the count, then captioned clusters — CARD (List,
+ * Remove), EDIT LATER (Current, Previous; queue bar only) and CLEAR (All, Low
+ * priority, Old). Row 2 is the popup's only: Go to Rem and the editors stand in
+ * for what the regular queue gives natively, with the EDIT LATER cluster among
+ * them. The captions mark the groups without boxing their names, and keep the
+ * queue bar on one line beside the Beautiful queue's priority badge. The header only renders
  * and collects the Edit Later note and the priority edit: what each action does,
  * and where its panel opens, is up to the widget — the popup swaps its whole
  * window, the queue bar opens a popup.
@@ -16,6 +16,7 @@
 import React from 'react';
 import { CardPriorityInfo } from '../lib/card_priority/types';
 import { formatDrillWait } from '../lib/mastery_drill_cooling';
+import { DrillIcon } from './DrillIcon';
 import { InlinePriorityEditor } from './InlineEditors';
 import { PriorityBadge } from './PriorityBadge';
 
@@ -102,98 +103,97 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
     returnFocusToQueue();
   };
 
-  // "Edit Later: Current · Previous". Current is the popup's cardActions.onEditLater or
+  // EDIT LATER · Current · Previous. Current is the popup's cardActions.onEditLater or
   // the queue bar's onEditLaterCurrent; Previous keeps the rating of the card just rated.
   const hasEditLaterCurrent = !!(props.onEditLaterCurrent ?? cardActions?.onEditLater);
-  const editLaterGroup = (hasEditLaterCurrent || props.onEditLaterPrevious) && (
-    <SegmentedGroup label="Edit Later" large={!compact}>
+  const editLaterCluster = (hasEditLaterCurrent || props.onEditLaterPrevious) && (
+    <Cluster caption="Edit later" tone="edit">
       {hasEditLaterCurrent && (
-        <SegmentButton
-          onClick={() => openEditLater('current')}
-          tone="accent"
-          large={!compact}
-          title="Mark the card on screen for Edit Later and remove it from the drill"
-        >
+        <ClusterButton onClick={() => openEditLater('current')} title="Mark the card on screen for Edit Later and remove it from the drill">
           Current
-        </SegmentButton>
+        </ClusterButton>
       )}
       {props.onEditLaterPrevious && (
-        <SegmentButton
+        <ClusterButton
           onClick={() => openEditLater('previous')}
-          tone="accent"
-          large={!compact}
           title="Mark the card you just rated for Edit Later, keeping its rating, and remove it from the drill"
         >
           Previous
-        </SegmentButton>
+        </ClusterButton>
       )}
-    </SegmentedGroup>
+    </Cluster>
   );
 
   return (
-    <div className={compact ? 'flex flex-col' : 'border-b rn-clr-border-primary flex flex-col'}>
+    <div className={`ie-drill-header${compact ? '' : ' ie-drill-header--popup border-b rn-clr-border-primary'} flex flex-col`}>
       <style>{DRILL_HEADER_CSS}</style>
       {/* Row 1: the drill as a whole */}
-      <div className={`flex items-center flex-wrap ${compact ? 'gap-1.5 px-2 py-1' : 'gap-2 px-2 pt-2 pb-1'}`}>
-        <span
-          className={`whitespace-nowrap flex-shrink-0 ${compact ? 'font-semibold text-sm' : 'font-bold text-lg'}`}
-          style={{ color: 'var(--rn-clr-content-primary)' }}
-        >
-          {compact ? '🎯 Mastery Drill' : 'Mastery Drill'}
-        </span>
-        <span
-          onClick={props.onOpenCardList}
-          className="ie-drill-chip ie-drill-chip--count"
-          title={`List every card in the drill${compact ? '' : ' (L)'}`}
-        >
-          {readyCount} remaining
-        </span>
-        {coolingCount > 0 && (
-          <span
-            className="ie-drill-chip"
-            title={`${coolingCount} card${plural(coolingCount, ' is', 's are')} still cooling and will appear later${
-              firstReadyAt !== undefined ? ` (the first in ${formatDrillWait(firstReadyAt - Date.now())})` : ''
-            }`}
+      <div className={`ie-drill-row ${compact ? 'px-2 pt-1 pb-1.5' : 'px-3 pt-2 pb-2'}`}>
+        <div className="ie-drill-stat">
+          <span className="ie-drill-title">Mastery Drill</span>
+          <div className="ie-drill-stat__line">
+            <span className="ie-drill-icon">
+              <DrillIcon size={compact ? 16 : 18} accent="var(--ie-drill-count)" />
+            </span>
+            <span
+              onClick={props.onOpenCardList}
+              className="ie-drill-count"
+              title={`List every card in the drill${compact ? '' : ' (L)'}`}
+            >
+              {readyCount} remaining
+            </span>
+            {coolingCount > 0 && (
+              <span
+                className="ie-drill-cooling"
+                title={`${coolingCount} card${plural(coolingCount, ' is', 's are')} still cooling and will appear later${
+                  firstReadyAt !== undefined ? ` (the first in ${formatDrillWait(firstReadyAt - Date.now())})` : ''
+                }`}
+              >
+                · {coolingCount} cooling
+              </span>
+            )}
+          </div>
+        </div>
+        <Cluster caption="Card">
+          <ClusterButton
+            onClick={props.onOpenCardList}
+            icon={ListGlyph}
+            title={`List every card in the drill and check whether RemNote can show it${compact ? '' : ' (L)'}`}
           >
-            {coolingCount} cooling
-          </span>
-        )}
-        <span className="ie-drill-sep" />
-        <button
-          onClick={props.onOpenCardList}
-          className="ie-drill-btn"
-          title={`List every card in the drill and check whether RemNote can show it${compact ? '' : ' (L)'}`}
-        >
-          List
-        </button>
-        <button onClick={props.onRemoveCurrent} className="ie-drill-btn ie-drill-btn--danger" title="Remove the card on screen from the Mastery Drill">
-          Remove
-        </button>
-        {compact && editLaterGroup}
-        <SegmentedGroup label="Clear">
-          <SegmentButton onClick={props.onClearAll} tone="danger" title="Clear all items from the Mastery Drill queue">
+            List
+          </ClusterButton>
+          <ClusterButton onClick={props.onRemoveCurrent} icon={CrossGlyph} title="Remove the card on screen from the Mastery Drill">
+            Remove
+          </ClusterButton>
+        </Cluster>
+        {compact && editLaterCluster}
+        <Cluster caption="Clear" tone="clear">
+          <ClusterButton onClick={props.onClearAll} title="Clear all items from the Mastery Drill queue">
             All
-          </SegmentButton>
-          <SegmentButton onClick={props.onClearLowPriority} tone="danger" title="Remove low priority cards from the Mastery Drill queue">
+          </ClusterButton>
+          <ClusterButton onClick={props.onClearLowPriority} title="Remove low priority cards from the Mastery Drill queue">
             Low priority
-          </SegmentButton>
+          </ClusterButton>
           {oldCount > 0 && (
-            <SegmentButton
+            <ClusterButton
               onClick={props.onClearOld}
-              tone="old"
+              old
               title={`${oldCount} card${plural(oldCount, ' has', 's have')} been ready to drill for more than ${oldThreshold} days. The Mastery Drill is intended for cards you recently rated Hard or Again — after this much time, the spaced repetition algorithm will handle them at their scheduled date instead. Click to remove them, if you prefer to trust the scheduler rather than drilling them now.`}
             >
-              Old · {oldCount} &gt; {oldThreshold}d
-            </SegmentButton>
+              Old{' '}
+              <span className="ie-drill-old-count">
+                {oldCount} &gt; {oldThreshold}d
+              </span>
+            </ClusterButton>
           )}
-        </SegmentedGroup>
+        </Cluster>
       </div>
 
       {/* Row 2: the card on screen (popup only) */}
       {cardActions && (
-      <div className="flex items-center gap-2 flex-wrap px-2 pb-2">
+      <div className="flex items-end gap-2 flex-wrap px-3 pb-2">
         {priority && (
-          <div className="cursor-pointer" onClick={() => setEditingPriority(priority.info.priority)} title="Click to change priority">
+          <div className="cursor-pointer pb-1" onClick={() => setEditingPriority(priority.info.priority)} title="Click to change priority">
             <PriorityBadge
               priority={priority.info.priority}
               percentile={priority.info.kbPercentile ?? undefined}
@@ -212,7 +212,7 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
         >
           Go to Rem
         </button>
-        {editLaterGroup}
+        {editLaterCluster}
         <button
           onClick={cardActions.onEditPrevious}
           className={`${actionSize} rounded font-medium transition-colors shadow-sm whitespace-nowrap`}
@@ -248,7 +248,7 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
       {props.showDescription && (
         <div className="px-4 pb-2 flex items-baseline gap-2 flex-nowrap overflow-hidden">
           <span className="text-sm whitespace-nowrap flex-shrink-0">Deliberately practice again your poorly rated flashcards.</span>
-          <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+          <span className="text-xs truncate" style={{ color: 'var(--rn-clr-content-tertiary)' }}>
             Flashcards you have rated <i>Again</i> or <i>Hard</i> will appear and remain in the Drill until you rate them <i>Good</i> or better.
           </span>
         </div>
@@ -336,86 +336,107 @@ export function EditLaterNote({
 }
 
 /*
- * Plain CSS, not Tailwind: the plugin's Tailwind uses the OS colour scheme for `dark:`,
- * which disagrees with RemNote's own theme whenever the two differ (a light RemNote on a
- * dark Mac got the dark fills). RemNote's theme reaches the iframe as --rn-clr-* and
- * as `body.dark`, so the accents key on that.
+ * Plain CSS with fixed colours, not Tailwind and not --rn-clr-*: the plugin's Tailwind
+ * takes `dark:` from the OS, which disagrees with RemNote whenever the two themes
+ * differ, and the theme variables did not reach this iframe reliably (the group
+ * outlines vanished). RemNote's own theme reaches it as `body.dark`, so the dark
+ * values key on that. Design "C · Captioned clusters" (docs/demos/mastery-drill-bar.html).
  */
 const DRILL_HEADER_CSS = `
-.ie-drill-chip {
-  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px;
-  font-size: 11.5px; font-weight: 500; white-space: nowrap; cursor: default;
-  color: var(--rn-clr-content-secondary); background: var(--rn-clr-background-secondary);
+.ie-drill-header {
+  --ie-drill-text: #1f2937; --ie-drill-btn: #374151; --ie-drill-cap: #9aa1ad;
+  --ie-drill-track: #f5f6f8; --ie-drill-track-border: #e6e8ec; --ie-drill-hover: #ffffff;
+  --ie-drill-count: #e11d48; --ie-drill-edit: #ea580c; --ie-drill-clear: #dc2626;
+  --ie-drill-old: #a16207; --ie-drill-old-bg: #fde68a; --ie-drill-old-ink: #78350f;
+  color: var(--ie-drill-text);
 }
-.ie-drill-chip--count { cursor: pointer; color: #be123c; background: rgba(225, 29, 72, 0.08); }
-body.dark .ie-drill-chip--count { color: #fda4af; background: rgba(251, 113, 133, 0.14); }
-.ie-drill-sep { width: 1px; height: 14px; margin: 0 2px; background: var(--rn-clr-border-primary); flex-shrink: 0; }
+body.dark .ie-drill-header {
+  --ie-drill-text: #e5e7eb; --ie-drill-btn: #d1d5db; --ie-drill-cap: #7a808c;
+  --ie-drill-track: #23252d; --ie-drill-track-border: #33363f; --ie-drill-hover: #30333c;
+  --ie-drill-count: #fb7185; --ie-drill-edit: #fb923c; --ie-drill-clear: #f87171;
+  --ie-drill-old: #facc15; --ie-drill-old-bg: rgba(250, 204, 21, 0.2); --ie-drill-old-ink: #fde047;
+}
+.ie-drill-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 6px 14px; }
+.ie-drill-stat, .ie-drill-cluster { display: flex; flex-direction: column; gap: 2px; }
+.ie-drill-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--ie-drill-text); white-space: nowrap; line-height: 14px;
+}
+.ie-drill-header--popup .ie-drill-title { font-size: 13px; line-height: 16px; }
+.ie-drill-caption {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--ie-drill-cap); padding-left: 3px; white-space: nowrap; line-height: 12px;
+}
+.ie-drill-cluster--edit .ie-drill-caption { color: var(--ie-drill-edit); }
+.ie-drill-cluster--clear .ie-drill-caption { color: var(--ie-drill-clear); }
+.ie-drill-stat__line { display: flex; align-items: center; gap: 6px; height: 28px; white-space: nowrap; }
+.ie-drill-icon { color: var(--ie-drill-text); display: inline-flex; }
+.ie-drill-count {
+  font-size: 12.5px; font-weight: 600; color: var(--ie-drill-count); cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.ie-drill-count:hover { text-decoration: underline; text-underline-offset: 2px; }
+.ie-drill-cooling { font-size: 12px; color: var(--ie-drill-cap); cursor: default; }
+.ie-drill-track {
+  display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px;
+  background: var(--ie-drill-track); border: 1px solid var(--ie-drill-track-border);
+}
 .ie-drill-btn {
-  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 6px;
-  font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer;
-  color: var(--rn-clr-content-secondary); background: transparent; border: 0;
-  transition: background-color 120ms ease, color 120ms ease;
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px;
+  border: 0; border-radius: 6px; background: transparent; cursor: pointer; white-space: nowrap;
+  font-size: 12px; font-weight: 500; color: var(--ie-drill-btn);
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
-.ie-drill-btn:hover { color: var(--rn-clr-content-primary); background: var(--rn-clr-background-secondary); }
-.ie-drill-btn--large { height: 30px; padding: 0 11px; font-size: 13px; }
-.ie-drill-btn--danger { color: #dc2626; }
-.ie-drill-btn--danger:hover { color: #b91c1c; background: rgba(220, 38, 38, 0.07); }
-body.dark .ie-drill-btn--danger { color: #f87171; }
-body.dark .ie-drill-btn--danger:hover { color: #fca5a5; background: rgba(248, 113, 113, 0.12); }
-.ie-drill-btn--accent { color: #c2410c; }
-.ie-drill-btn--accent:hover { color: #9a3412; background: rgba(234, 88, 12, 0.08); }
-body.dark .ie-drill-btn--accent { color: #fb923c; }
-body.dark .ie-drill-btn--accent:hover { color: #fdba74; background: rgba(251, 146, 60, 0.12); }
-.ie-drill-btn--old { color: #a16207; background: rgba(234, 179, 8, 0.12); }
-.ie-drill-btn--old:hover { color: #854d0e; background: rgba(234, 179, 8, 0.22); }
-body.dark .ie-drill-btn--old { color: #facc15; background: rgba(250, 204, 21, 0.12); }
-body.dark .ie-drill-btn--old:hover { color: #fde047; background: rgba(250, 204, 21, 0.2); }
-.ie-drill-group {
-  display: inline-flex; align-items: center; gap: 1px; padding: 2px; flex-shrink: 0;
-  border: 1px solid var(--rn-clr-border-primary); border-radius: 8px; white-space: nowrap;
+.ie-drill-header--popup .ie-drill-btn { height: 26px; padding: 0 11px; font-size: 13px; }
+.ie-drill-btn:hover { background: var(--ie-drill-hover); color: var(--ie-drill-text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.ie-drill-btn svg { width: 13px; height: 13px; opacity: 0.7; }
+.ie-drill-btn--old { color: var(--ie-drill-old); }
+.ie-drill-old-count {
+  font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 0 5px;
+  background: var(--ie-drill-old-bg); color: var(--ie-drill-old-ink);
 }
-.ie-drill-group__label {
-  padding: 0 4px 0 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.01em;
-  color: var(--rn-clr-content-tertiary);
-}
-.ie-drill-group .ie-drill-btn { height: 20px; padding: 0 7px; border-radius: 5px; }
-.ie-drill-group .ie-drill-btn--large { height: 26px; padding: 0 10px; }
 `;
 
-type SegmentTone = 'accent' | 'danger' | 'old';
-
-/** A light outlined strip: a muted "Label" and its buttons. */
-function SegmentedGroup({ label, large = false, children }: { label: string; large?: boolean; children: React.ReactNode }) {
+/** A captioned group of buttons on a soft track. */
+function Cluster({ caption, tone, children }: { caption: string; tone?: 'edit' | 'clear'; children: React.ReactNode }) {
   return (
-    <div className="ie-drill-group">
-      <span className="ie-drill-group__label" style={large ? { fontSize: '12px' } : undefined}>
-        {label}
-      </span>
-      {children}
+    <div className={`ie-drill-cluster${tone ? ` ie-drill-cluster--${tone}` : ''}`}>
+      <span className="ie-drill-caption">{caption}</span>
+      <div className="ie-drill-track">{children}</div>
     </div>
   );
 }
 
-function SegmentButton({
+function ClusterButton({
   onClick,
   title,
-  tone,
-  large = false,
+  icon,
+  old = false,
   children,
 }: {
   onClick: () => void;
   title: string;
-  tone?: SegmentTone;
-  large?: boolean;
+  icon?: React.ReactNode;
+  /** The amber Old segment of CLEAR. */
+  old?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={`ie-drill-btn${tone ? ` ie-drill-btn--${tone}` : ''}${large ? ' ie-drill-btn--large' : ''}`}
-    >
+    <button onClick={onClick} title={title} className={`ie-drill-btn${old ? ' ie-drill-btn--old' : ''}`}>
+      {icon}
       {children}
     </button>
   );
 }
+
+const ListGlyph = (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden="true">
+    <path d="M3 4h10M3 8h10M3 12h6" />
+  </svg>
+);
+
+const CrossGlyph = (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden="true">
+    <path d="M4 4l8 8M12 4l-8 8" />
+  </svg>
+);

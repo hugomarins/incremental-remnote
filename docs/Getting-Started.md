@@ -63,7 +63,7 @@ Click the **🌐 globe** in the panel header to collapse the panel to a single r
 | Icon | What it does |
 |------|--------------|
 | 🌐 | Expands the panel again. A **blue dot** on it means a tip is waiting |
-| 🎯 | Opens the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md), with the number of cards ready to drill on a badge. Only appears when the drill is on and at least 10 cards are ready |
+| <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 3.5V7h-3.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="1.4" fill="#f43f5e"/></svg> | Opens the [Mastery Drill](History-Queue-Dashboard-and-Mastery-Drill.md), with the number of cards ready to drill on a badge. Only appears when the drill is on and at least 10 cards are ready |
 | ⌨ | Opens the [Keyboard Shortcuts](Keyboard-Shortcuts.md) page |
 | ⚙ | Opens the plugin's [settings popup](Plugin-Settings-Reference.md) |
 | 👁 | Opens the **Priority Review Queue** Rem |

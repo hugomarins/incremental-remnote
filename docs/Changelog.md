@@ -2,6 +2,24 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.225 - November 12th, 2026
+
+### ✨ New
+
+**Mastery Drill**: added **Edit Later → Previous**, to tag the card you just rated without losing its rating, and brought **Edit Later** for the card on screen to the regular-queue drill.
+
+**Mastery Drill**: added the **Priority Cap** setting, which keeps cards below a chosen priority out of the drill (default 100: every card goes).
+
+### ✨ Improved
+
+**Mastery Drill**: cards rated *Again* now wait for their scheduler's relearning step when it is longer than the Minimum Delay, so a card on a 1-day step no longer returns after 3 hours.
+
+**Mastery Drill**: redesigned the drill bar into captioned groups (Card, Edit Later, Clear) that fit beside the Beautiful queue's priority badge, with a new drill icon, also used in the collapsed panel and the sidebar notification. The Card List gained an **Old** filter and badge.
+
+<iframe src="../demos/mastery-drill-bar.html" title="Mastery Drill bar demo" loading="lazy" style="width:100%;height:190px;border:0;display:block"></iframe>
+
+📖 [Mastery Drill: Queue Management](History-Queue-Dashboard-and-Mastery-Drill.md#queue-management) · [Minimum Delay](History-Queue-Dashboard-and-Mastery-Drill.md#minimum-delay) · [Priority Cap](History-Queue-Dashboard-and-Mastery-Drill.md#drill-priority-cap)
+
 ## v1.0.224 - November 12th, 2026
 
 ### ✨ Improved

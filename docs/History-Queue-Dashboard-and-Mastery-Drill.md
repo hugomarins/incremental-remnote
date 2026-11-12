@@ -280,7 +280,8 @@ Inspired by SuperMemo's *Final Drill*, the **Mastery Drill** creates a focused s
   - Unlike *SuperMemo*, these reviews **are recorded** in your repetition history.
 - Cards stay in the drill until you rate them **Good** or **Easy** inside the Mastery Drill.
 - A periodic notification widget appears in the Left Sidebar when ≥ 10 cards are pending, with a motivational phrase and a direct *Start Drill* button.
-- If the [Incremental RemNote panel is collapsed](Getting-Started.md#collapsed-panel), the notification is not shown as a card — the panel's 🎯 icon carries the drill instead, with the same count on a badge.
+- If the [Incremental RemNote panel is collapsed](Getting-Started.md#collapsed-panel), the notification is not shown as a card — the panel's drill icon (a target wrapped in a return arrow) carries the drill instead, with the same count on a badge.
+- Cards below the [Priority Cap](#drill-priority-cap) are not sent to the drill.
 
 !!! warning "Known limitation — [Card Clusters](https://help.remnote.com/en/articles/10104223-card-clusters) in the popup drill"
     Inside a cluster, RemNote reports only the **cluster anchor** to plugins: the visible sibling advances on screen, but the card identity the plugin receives stays on the first one. In ordinary queues and the [regular-queue drill](#regular-queue-drill), the plugin sees each sibling and reads its rating back from the card's history, so every sibling you rate *Forgot*/*Hard* enters the drill and every one you rate *Good*/*Easy* leaves it.
@@ -302,7 +303,7 @@ Use the Mastery Drill to review only items you struggled with recently, ensuring
 
 Cards rated *Again* or *Hard* enter the drill queue immediately but wait before they appear in it, so you never re-review a card seconds after rating it. Rating a card *Again* or *Hard* again — inside the drill or in a regular queue — restarts the wait. While cards wait, a **"X cooling"** badge shows in the drill toolbar (hover it for when the first one is ready), and the Left Sidebar notification leaves them out of its count, so it only counts cards that are ready to drill.
 
-- **Again:** the card waits the **Minimum Delay** (default **180 minutes**), so a lapse is relearned while the failure is fresh.
+- **Again:** the card waits the **Minimum Delay** (default **180 minutes**), so a lapse is relearned while the failure is fresh — or until the **relearning step** its scheduler gave it is over, if that is longer. A card on a scheduler with a 1-day relearning step (an SM-2 scheduler, say) stays out of the drill until it is due.
 - **Hard:** the card waits a **share of the new interval** the rating gave it (default **5%**), never less than the Minimum Delay and never more than the **Hard maximum** (default **7 days**).
 
 #### Why Hard cards wait longer { #hard-card-delay }
@@ -318,6 +319,10 @@ A *Hard* rating is a pass: the scheduler has already sent the card out, maybe fo
 
 The share and the maximum are the settings **Hard Cards: Share of the Interval** and **Hard Cards: Maximum Delay**. Changing them also applies to cards already waiting. A share of 0 gives Hard cards the Minimum Delay. Cards that entered the drill before this feature (v1.0.173) keep the Minimum Delay.
 
+### Priority Cap { #drill-priority-cap }
+
+**Mastery Drill Priority Cap** (default **100**) keeps low-priority material out of the drill. A card rated *Again* or *Hard* enters the drill only if its [priority](Priorities-for-Flashcards.md) is the cap or a more important one (a number this low or lower); the rest are left to their normal schedule. At 100 every card goes. A card already in the drill stays until you rate it again; if it is then below the cap, it leaves instead of restarting its wait. To clear the low-priority cards already in the drill, use [Clear → Low priority](#queue-management).
+
 ### Where the Drill Runs { #where-the-drill-runs }
 
 The drill runs in one of two places, chosen with **Where the Drill Runs** in the [IE Settings popup](Plugin-Settings-Reference.md#mastery-drill) (*Mastery Drill*):
@@ -329,7 +334,7 @@ The drill runs in one of two places, chosen with **Where the Drill Runs** in the
 | **Other cards of a drill Rem** | Skipped by the plugin, behind the Reveal Delay | Never shown |
 | **Tools** | The [queue tools](#queue-management), in the drill bar | The queue tools plus the [per-card actions](#editor-access) |
 
-`dri`, the sidebar notification and the panel's 🎯 follow the setting. The commands **Mastery Drill (popup)** and **Mastery Drill (regular queue)** start either one whatever it says.
+`dri`, the sidebar notification and the panel's drill icon follow the setting. The commands **Mastery Drill (popup)** and **Mastery Drill (regular queue)** start either one whatever it says.
 
 #### The regular-queue drill { #regular-queue-drill }
 
@@ -339,7 +344,7 @@ RemNote practises whole Rems, not a hand-picked set of cards. So each session cr
 
 - **Reveal Delay** (default 500 ms): each card stays hidden this long, then fades in, so a skipped card is not seen. Most skips take under 150 ms; one that comes right after a rating can take longer and show briefly. A longer delay hides more of them, but every card appears that much later.
 - **"Time to Take a Break"**: skipping a card counts as seeing it, and RemNote then hides the other cards of that Rem for an hour, sometimes including its drill card. When RemNote shows its "Time to Take a Break" screen for them, the drill presses **Keep Practicing** itself and a toast says how many drill cards it is continuing with. It affects only the drill session, not your other queues. If the press ever fails, the screen stays up with Keep Practicing highlighted and a note under the buttons: press it, or **Esc**.
-- **The drill bar**, under the queue's top bar, has the same [queue tools](#queue-management) as the popup's top row. The Card List and the clear views open in their own popup. It has no per-card editing actions: the regular queue already lets you edit the card, open its Rem and set its priority.
+- **The drill bar**, under the queue's top bar, has the same [queue tools](#queue-management) as the popup's top row, plus **Edit Later** for the card on screen or the previous one. The Card List and the clear views open in their own popup. The regular queue already lets you edit the card, open its Rem and set its priority.
 - Ratings work as in any queue: *Again*/*Hard* keep the card in the drill and restart its [minimum delay](#minimum-delay), *Good*/*Easy* take it out. The session is recorded as **Mastery Drill** in the [Practiced Queues History](#practiced-queues-history-live-dashboard), and with **Auto-focus Queue Dashboard** on, the dashboard opens in the right sidebar as for any queue (the popup drill never opens it).
 - **[Card Cluster](https://help.remnote.com/en/articles/10104223-card-clusters) cards**: RemNote tells plugins nothing when a cluster card is rated, so the drill reads the rating from the card's own history a moment after the next card appears (or after you leave the queue). A cluster card rated *Good* or *Easy* leaves the drill like any other, and *Again*/*Hard* restarts its delay. When the drill starts, it also drops any card whose last rating since it entered the drill was *Good* or *Easy* — which catches any rating that was missed, such as a cluster card rated in the popup. The drill's **Remove from Drill** acts on the sibling on screen.
 
@@ -347,14 +352,17 @@ RemNote practises whole Rems, not a hand-picked set of cards. So each session cr
 
 ### Queue Management { #queue-management }
 
-The drill toolbar's top row — the whole drill bar in the regular queue — holds the tools for the drill as a whole:
+The drill toolbar's top row — the whole drill bar in the regular queue — holds the tools for the drill as a whole, in captioned groups. Try it *(a mock: nothing runs)*:
 
-- **Remaining / cooling:** how many cards are ready now, and how many are still [waiting](#minimum-delay).
-- **List Cards:** Lists every card in the drill and whether RemNote can show it — see [Card List](#card-list). Clicking the **Remaining** badge, or pressing **L** in the popup, opens it too.
-- **Clear Queue:** Empties the entire Mastery Drill queue at any time to start fresh.
-- **Clear Low Priority Cards:** Opens a distribution view showing how many drill cards fall into each of 20 priority buckets (0–5, 6–10, …, 96–100). Set a priority threshold and remove all cards above it in one click — useful when the queue has accumulated low-priority cards that aren't worth drilling urgently.
-- **Remove from Drill:** Takes the card on screen out of the drill without rating it.
-- **Old Items Warning:** If cards have been ready to drill for longer than the configured threshold (default: 7 days), a warning badge appears. Time spent cooling does not count, so a Hard card that waited a week is not flagged the day it becomes ready. Hover the badge to read why stale items may be better left to the scheduler. Clear them with one click to keep sessions focused on fresh struggles.
+<iframe src="../demos/mastery-drill-bar.html" title="Mastery Drill bar demo" loading="lazy" style="width:100%;height:190px;border:0;display:block"></iframe>
+
+- **Remaining / cooling:** how many cards are ready now, and how many are still [waiting](#minimum-delay). Click the count to open the [Card List](#card-list).
+- **Card → List:** lists every card in the drill and whether RemNote can show it — see [Card List](#card-list). **L** opens it too in the popup.
+- **Card → Remove:** takes the card on screen out of the drill without rating it.
+- **Edit Later → Current / Previous** (in the popup, on the [second row](#editor-access)): asks for an optional note, tags the Rem with RemNote's *Edit Later* (the note goes in its Message) and takes the card out of the drill. **Previous** acts on the card you just rated and keeps its rating — handy when a card shows its flaws only once you see the answer, and you want to rate it first. **Enter** sets the note, **Esc** cancels.
+- **Clear → All:** empties the drill to start fresh.
+- **Clear → Low priority:** opens a distribution view of how many drill cards fall into each of 20 priority buckets (0–5, 6–10, …, 96–100). Set a threshold and remove every card above it in one click. To keep such cards out in the first place, set the [Priority Cap](#drill-priority-cap).
+- **Clear → Old** (amber, shown only when there are any): the cards ready to drill for longer than the **Old Items Threshold** (default 7 days), e.g. *14 > 7d*. Time spent cooling does not count, so a Hard card that waited a week is not flagged the day it becomes ready. Hover it to read why stale cards may be better left to the scheduler; click it to remove them.
 
 The clear views work from the keyboard: **←**/**→** choose a button, **Enter** runs it, **Esc** goes back. In Clear Low Priority, **↑**/**↓** move the threshold by 5.
 
@@ -381,25 +389,26 @@ Each row shows the card's text, its type (e.g. *Cloze (…)*, *Forward Card*), w
 | **Card switched off** | The card was switched off on its own; open the Rem and run */Enable All Cloze Cards*, or click the greyed cloze → *Enable this card*. |
 | **Not surfaced** | RemNote does not show the card, and no Rem-level cause explains it. |
 
-Cards RemNote cannot show are listed first, then the cards that are due now, then the ones still cooling. **Remove N unplayable** takes every card RemNote cannot show out at once. Per row, **Go to Rem** opens the Rem (closing the drill), **↗** opens it in a browser tab and keeps the list open, and **Remove** takes the card out of the drill.
+Cards RemNote cannot show are listed first, then the [old](#queue-management) ones (with an amber **Old · ready 12 days** badge), then the cards that are due now, then the ones still cooling. **Remove N unplayable** takes every card RemNote cannot show out at once. Per row, **Go to Rem** opens the Rem (closing the drill), **↗** opens it in a browser tab and keeps the list open, and **Remove** takes the card out of the drill.
 
 #### Filtering the list { #card-list-filters }
 
-Under the header, three chips split the drill into groups, each with its count:
+Under the header, four chips split the drill into groups, each with its count:
 
 | Chip | Cards |
 |---|---|
 | **Due now** | Past their cooling time, and RemNote can show them. The drill should be serving these. |
 | **Cooling** | Resting after a recent rating; the drill holds them back until the time is up. |
 | **Unplayable** | RemNote will never show them, cooling or not. |
+| **Old** | Ready to drill for longer than the Old Items Threshold: the cards **Clear → Old** removes. |
 
-Click a chip (or press **1**, **2**, **3**) to hide or show its group. To find a card that is due but never came up in the drill, turn off **Cooling** and **Unplayable**: what remains is everything the drill should be showing you now.
+Click a chip (or press **1**, **2**, **3**, **4**) to hide or show its group. To find a card that is due but never came up in the drill, turn off **Cooling** and **Unplayable**: what remains is everything the drill should be showing you now. To review the old cards before clearing them, leave only **Old** on.
 
 | Key | Action |
 |---|---|
 | **↑** / **↓** | Choose a card |
 | **Enter** | Go to the chosen card's Rem |
-| **1** / **2** / **3** | Show or hide *Due now* / *Cooling* / *Unplayable* |
+| **1** / **2** / **3** / **4** | Show or hide *Due now* / *Cooling* / *Unplayable* / *Old* |
 | **Delete** | Remove the chosen card from the drill |
 | **Shift+Delete** | Remove every card RemNote cannot show |
 | **Esc** | Back to the drill |
@@ -410,7 +419,7 @@ In the popup, the drill toolbar's bottom row provides per-card actions for the c
 
 - **Priority Badge:** Shows the current card's priority. Click it to open an inline priority editor directly in the toolbar — no popup needed.
 - **Go to Rem:** Opens the Rem in RemNote's native Editor (closes the drill popup; a resume trigger re-opens it on return).
-- **Edit Later:** Prompts for an optional note, marks the card's Rem with the *Edit Later* powerup (storing the note in the Message slot), and removes the card from the drill queue.
+- **Edit Later → Current / Previous:** prompts for an optional note, marks the Rem of the card on screen (**Current**) or of the card you just rated (**Previous**, which keeps its rating) with the *Edit Later* powerup, storing the note in the Message slot, and removes the card from the drill queue.
 - **Edit Previous:** Opens an inline editor for the card you just rated — useful for quick corrections after seeing the answer.
 - **Edit Current:** Opens an inline editor for the currently visible card.
 
@@ -464,9 +473,10 @@ Three tabs are added to the right sidebar:
 | `Forgetting Curve` | Shown | Draws the current card's [Forgetting Curve](Reviewing-Items-in-the-Queue.md#forgetting-curve) at the top of the dashboard. Set to *Hidden* to remove it. |
 | `Enable Mastery Drill` | Off | Master switch for all Mastery Drill features: the drill, its sidebar notification and commands, and the tracking of *Again*/*Hard* cards. Flashcard and Practiced Queue history are not affected. Requires a reload. |
 | `Old Items Threshold` | 7 days | Number of days a card can stay ready to drill before it is flagged as stale (time spent cooling does not count). Hover the warning badge in the toolbar for an explanation. |
-| `Mastery Drill Minimum Delay` | 180 min | A card rated *Again* or *Hard* will not appear in the drill until at least this many minutes have passed. The whole wait for *Again*; the floor for *Hard*. See [Minimum Delay](#minimum-delay). |
+| `Mastery Drill Minimum Delay` | 180 min | A card rated *Again* or *Hard* will not appear in the drill until at least this many minutes have passed. For *Again*, the wait is this or the scheduler's relearning step, whichever is longer; the floor for *Hard*. See [Minimum Delay](#minimum-delay). |
 | `Hard Cards: Share of the Interval` | 5% | A card rated *Hard* waits this share of its new interval before returning to the drill. 0 gives Hard cards the Minimum Delay. See [Why Hard cards wait longer](#hard-card-delay). |
 | `Hard Cards: Maximum Delay` | 7 days | The longest a card rated *Hard* waits, however long its interval. |
+| `Mastery Drill Priority Cap` | 100 | Only cards with this priority or a more important one enter the drill; 100 sends every card. See [Priority Cap](#drill-priority-cap). |
 | `Disable Mastery Drill Notification` | Off | Hides the periodic Left Sidebar notification widget. The notification only counts cards that have passed the minimum delay and are genuinely ready to drill. |
 | `Where the Drill Runs` | Regular queue | *Regular queue* (RemNote's own queue, with every plugin widget) or *Popup* (embedded queue). See [Where the Drill Runs](#where-the-drill-runs). |
 | `Reveal Delay (regular-queue drill)` | 500 ms | How long each card stays hidden before it fades in during a regular-queue drill, so skipped cards are not seen. 0 turns it off. |
