@@ -63,6 +63,14 @@ interface PrioritizedItemData {
 /** Card priority sources that are derived, not owned: they follow an ancestor or the default setting. */
 const isDerivedCardSource = (source: string | null) => source === 'inherited' || source === 'default';
 
+/** Every card source is labelled, so a manual priority is never mistaken for a default one. */
+const CARD_SOURCE_LABELS: Record<string, { short: string; tip: string }> = {
+  manual: { short: 'man.', tip: 'Manual priority — set on this rem' },
+  incremental: { short: 'inc.', tip: 'Incremental priority — follows this rem\'s Incremental Rem priority' },
+  inherited: { short: 'inh.', tip: 'Inherited priority — follows an ancestor; becomes manual if changed' },
+  default: { short: 'def.', tip: 'Default priority — from the default setting; becomes manual if changed' },
+};
+
 function BatchPriority() {
   const colorScale = usePriorityColorScale();
   console.log('🚀 BatchPriority: Component rendering');
@@ -1477,7 +1485,7 @@ function BatchPriority() {
         {/* Table */}
         <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden', flex: 1 }}>
           {/* Table Header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 80px 80px 120px 120px 60px', ...styles.tableHeader }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 120px 60px 80px 120px 120px 60px', ...styles.tableHeader }}>
             <div style={{ padding: '8px' }}>✓</div>
             <div style={{ padding: '8px', cursor: 'pointer' }} onClick={() => handleSort('hierarchy')}>
               Name {sortField === 'hierarchy' && (sortDirection === 'asc' ? '↑' : '↓')}
@@ -1522,7 +1530,7 @@ function BatchPriority() {
                   key={remData.remId}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '40px 1fr 80px 80px 80px 120px 120px 60px',
+                    gridTemplateColumns: '40px 1fr 120px 60px 80px 120px 120px 60px',
                     ...styles.tableRow,
                     paddingLeft: sortField === 'hierarchy' ? `${remData.depth * 20 + 8}px` : '8px'
                   }}
@@ -1576,9 +1584,9 @@ function BatchPriority() {
                     {remData.hasCardPriority && remData.currentCardPriority !== null && (
                       <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#fef3c7', color: '#92400e', whiteSpace: 'nowrap' }}>
                         Card: {remData.currentCardPriority}
-                        {isDerivedCardSource(remData.cardPrioritySource) && (
-                          <span style={{ fontWeight: 400 }} title={`${remData.cardPrioritySource === 'inherited' ? 'Inherited' : 'Default'} priority — becomes manual if changed`}>
-                            {' '}({remData.cardPrioritySource === 'inherited' ? 'inh.' : 'def.'})
+                        {remData.cardPrioritySource && CARD_SOURCE_LABELS[remData.cardPrioritySource] && (
+                          <span style={{ fontWeight: 400 }} title={CARD_SOURCE_LABELS[remData.cardPrioritySource].tip}>
+                            {' '}({CARD_SOURCE_LABELS[remData.cardPrioritySource].short})
                           </span>
                         )}
                       </span>
