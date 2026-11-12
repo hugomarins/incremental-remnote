@@ -13,7 +13,7 @@ A **source pin** is a pin reference to the highlight that holds a passage: click
 ## Using it { #pin-source-quote }
 
 1. Open the source in a pane: a **PDF**, a **saved web article** (RemNote's reader view of a page), or a **PDF in Text Reader mode**. It can sit next to your notes or in another RemNote window: the command looks in the current window first, then in the others.
-2. Focus the Rem whose text comes from that source, or select several Rems.
+2. Focus the Rem whose text comes from that source, or select several Rems. In the queue (the Learn New queue included), the card on screen is the target; a Rem selected in the previewer (`P`) takes its place.
 3. Run **Pin Source Quote**: `Opt+Shift+Q` / `Alt+Shift+Q`, or quick code `psq`.
 
 A toast reports where the passage was found and what was reused or created — for example *📌 PDF p.95: reused 0, created 1*.
@@ -69,9 +69,9 @@ Answer, books in the order to try:
 - `page` (optional): a page to search first; the whole PDF is searched if the passage is not near it.
 - `id` and `detail` (optional): passed back by the Local Media Bridge, not shown.
 
-## Pinning every quote in a subtree## Pinning every quote in a subtree { #quote-rems-in-descendants }
+## Pinning every quote in a subtree { #quote-rems-in-descendants }
 
-**Pin Source Quote (Quote Rems in descendants)** — `Ctrl+Opt+Shift+Q` / `Ctrl+Alt+Shift+Q` (`Ctrl` on macOS too), or quick code `psqd` — runs Pin Source Quote on every Rem formatted as a **Quote** in the focused Rem and all its descendants, the focused Rem included. With several Rems selected, it covers each of them and their descendants.
+**Pin Source Quote (Quote Rems in descendants)** — `Ctrl+Opt+Shift+Q` / `Ctrl+Alt+Shift+Q` (`Ctrl` on macOS too), or quick code `psqd` — runs Pin Source Quote on every Rem formatted as a **Quote** in the focused Rem and all its descendants, the focused Rem included. With several Rems selected, it covers each of them and their descendants; in the queue, the card's Rem and its descendants.
 
 Other Rems in the subtree are left alone. The run works like a [multi-Rem selection](#pin-source-quote): one question about [which view](#text-reader) for a PDF with a Text Reader version, a final toast with the totals, and the passages not found listed together at the end.
 

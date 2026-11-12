@@ -214,7 +214,7 @@ In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) opened from the queue's 
   Puts back the text that the last AI transcription replaced on the focused highlight. The previous text is kept on the device where you transcribed. See [Undoing a transcription](AI-Transcription-of-PDF-Highlights.md#restore).
 
 - **[Pin Source Quote](Source-Pins.md#pin-source-quote)** (`Opt+Shift+Q` / `Alt+Shift+Q`) — `quick: psq`
-  Pins the source of the focused Rem's text: finds the passage in the PDF or saved web article open in a pane and appends a pin to its highlight, reusing a highlight that already covers it or creating one. Works in a PDF's page view, a saved web article and a PDF's Text Reader view (asking which, when a PDF has both). Needs the local helper — see [Source Pins](Source-Pins.md).
+  Pins the source of the focused or selected Rems' text (in the queue, the card on screen): finds the passage in the PDF or saved web article open in a pane and appends a pin to its highlight, reusing a highlight that already covers it or creating one. Works in a PDF's page view, a saved web article and a PDF's Text Reader view (asking which, when a PDF has both). Needs the local helper — see [Source Pins](Source-Pins.md).
 
 - **[Pin Source Quote (Quote Rems in descendants)](Source-Pins.md#quote-rems-in-descendants)** (`Ctrl+Opt+Shift+Q` / `Ctrl+Alt+Shift+Q`) — `quick: psqd`
   Runs Pin Source Quote on every Rem formatted as a Quote in the focused Rem and all its descendants, or in each selected Rem's subtree; other Rems are left alone.

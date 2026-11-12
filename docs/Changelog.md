@@ -2,6 +2,20 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.226 - November 12th, 2026
+
+### ✨ Improved
+
+**Source Pins**: Pin Source Quote now works from the queue, Learn New included, pinning the card on screen (or the Rems selected in the previewer).
+
+📖 [Using Pin Source Quote](Source-Pins.md#pin-source-quote)
+
+### 🐛 Fixed
+
+**Flashcard Priorities**: `Opt+P` and `Ctrl+Opt+P` now open for the card on screen in the Learn New queue instead of reporting that no Rem was found.
+
+📖 [In the queue, and in a Card Cluster](Priorities-for-Flashcards.md#priority-in-card-clusters)
+
 ## v1.0.225 - November 12th, 2026
 
 ### ✨ New

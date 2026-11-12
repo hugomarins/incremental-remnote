@@ -4,7 +4,6 @@ import {
   ReactRNPlugin,
   RichTextElementRemInterface,
   RichTextInterface,
-  SelectionType,
 } from '@remnote/plugin-sdk';
 import { AI_OCR_HELPER_URL } from '../ai_ocr';
 import { HighlightColorName, sourceHighlightColorId } from '../consts';
@@ -13,7 +12,7 @@ import { safeRemTextToString } from '../pdfUtils';
 import { getIESetting } from '../settings';
 import DOMPurify from 'dompurify';
 import { broadestMatch, quoteCandidates } from './quote';
-import { getEffectiveSelection } from '../editor_selection';
+import { resolvePriorityTargets } from '../priority_targets';
 import { MessageDialog, showMessageDialog } from '../message_dialog';
 import { sourcesInOtherWindows } from '../window_sources';
 import { highlightDataFor, highlightSpan, mathPlaceholder, parseArticle, viewerHtml } from './html';
@@ -643,13 +642,19 @@ export async function pinSourceQuotesInTree(plugin: ReactRNPlugin) {
   await pinSourcesOfRems(plugin, quotes);
 }
 
+/**
+ * The Rems a command acts on, wherever it was run: in the queue the card (or
+ * IncRem) on screen, unless a Rem is selected in the previewer; in the editor a
+ * multi-Rem or table-row selection, else the focused Rem. Same resolution as the
+ * priority commands (lib/priority_targets).
+ */
 async function selectedOrFocusedRems(plugin: ReactRNPlugin): Promise<PluginRem[]> {
-  const selection = await getEffectiveSelection(plugin);
-  if (selection?.type === SelectionType.Rem && selection.remIds?.length) {
-    return (await plugin.rem.findMany(selection.remIds)) || [];
+  const { remIds } = await resolvePriorityTargets(plugin);
+  if (!remIds.length) {
+    console.warn(`[PinSourceQuote] No target Rem resolved on ${await plugin.window.getURL()}`);
+    return [];
   }
-  const focused = await plugin.focus.getFocusedRem();
-  return focused ? [focused] : [];
+  return (await plugin.rem.findMany(remIds)) || [];
 }
 
 async function pinSourcesOfRems(plugin: ReactRNPlugin, rems: PluginRem[]) {

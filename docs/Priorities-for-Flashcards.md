@@ -226,7 +226,7 @@ If a Rem is both an Incremental Rem (reading material) AND has Flashcards, you m
 
 #### In the queue, and in a Card Cluster { #priority-in-card-clusters }
 
-In the queue the widget opens for the card on screen, unless you have selected another Rem (in the previewer, for instance), which then wins. A selection left over from the editor does not count: it is forgotten when you enter a queue.
+In the queue (the Learn New queue included) the widget opens for the card on screen, unless you have selected another Rem (in the previewer, for instance), which then wins. A selection left over from the editor does not count: it is forgotten when you enter a queue.
 
 Inside a [Card Cluster](https://help.remnote.com/en/articles/10104223-card-clusters) the widget, the [Quick Priority shortcuts](Prioritization-&-Sorting.md#quick-priority-shortcuts) and the priority badge in the queue's top bar all follow the **sibling being shown**, not the first card of the cluster.
 
