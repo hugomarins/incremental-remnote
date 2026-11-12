@@ -1,5 +1,9 @@
 # Mastery Drill
 
+<iframe src="../demos/mastery-drill-bar.html" title="Mastery Drill bar demo" loading="lazy" style="width:100%;height:190px;border:0;display:block"></iframe>
+
+*The drill bar — try it (a mock: nothing runs).*
+
 Inspired by SuperMemo's *Final Drill*, the **Mastery Drill** creates a focused sub-queue of cards you have recently struggled with, so you can target them deliberately until they stick.
 
 ![Mastery Drill](assets/mastery-drill.png){ width="900" }
@@ -91,9 +95,7 @@ RemNote practises whole Rems, not a hand-picked set of cards. So each session cr
 
 ## Queue Management { #queue-management }
 
-The left part of the drill toolbar — the whole drill bar in the regular queue — holds the tools for the drill as a whole, in captioned groups. Try it *(a mock: nothing runs)*:
-
-<iframe src="../demos/mastery-drill-bar.html" title="Mastery Drill bar demo" loading="lazy" style="width:100%;height:190px;border:0;display:block"></iframe>
+The left part of the drill toolbar — the whole drill bar in the regular queue — holds the tools for the drill as a whole, in captioned groups (try them in the [demo at the top](#)):
 
 - **Remaining / cooling:** how many cards are ready now, and how many are still [waiting](#minimum-delay). Click the count to open the [Card List](#card-list).
 - **Card → List:** lists every card in the drill and whether RemNote can show it — see [Card List](#card-list). **L** opens it too in the popup.
