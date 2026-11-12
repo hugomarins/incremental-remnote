@@ -344,12 +344,12 @@ const GlobeIcon = ({ size = 18 }: IconProps) => {
 };
 
 /** The Mastery Drill's own icon (components/DrillIcon), at the row's size and weight. */
-// In colour, like the globe and the play button beside it: the drill is something to act on, not a setting.
-const DRILL_ICON_COLOR = '#f43f5e';
+/**
+ * The Mastery Drill's own icon (components/DrillIcon), as in the drill bar: the outline
+ * in the row's colour, only the centre dot in rose.
+ */
 const TargetIcon = ({ size = 18 }: IconProps) => (
-  <span style={{ color: DRILL_ICON_COLOR, display: 'inline-flex' }}>
-    <DrillIcon size={size} strokeWidth={iconAttrs(size).strokeWidth as number} />
-  </span>
+  <DrillIcon size={size} accent="#f43f5e" strokeWidth={iconAttrs(size).strokeWidth as number} />
 );
 
 const KeyboardIcon = ({ size = 18 }: IconProps) => (

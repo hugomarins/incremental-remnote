@@ -344,7 +344,7 @@ RemNote practises whole Rems, not a hand-picked set of cards. So each session cr
 
 - **Reveal Delay** (default 500 ms): each card stays hidden this long, then fades in, so a skipped card is not seen. Most skips take under 150 ms; one that comes right after a rating can take longer and show briefly. A longer delay hides more of them, but every card appears that much later.
 - **"Time to Take a Break"**: skipping a card counts as seeing it, and RemNote then hides the other cards of that Rem for an hour, sometimes including its drill card. When RemNote shows its "Time to Take a Break" screen for them, the drill presses **Keep Practicing** itself and a toast says how many drill cards it is continuing with. It affects only the drill session, not your other queues. If the press ever fails, the screen stays up with Keep Practicing highlighted and a note under the buttons: press it, or **Esc**.
-- **The drill bar**, under the queue's top bar, has the same [queue tools](#queue-management) as the popup's top row, plus **Edit Later** for the card on screen or the previous one. The Card List and the clear views open in their own popup. The regular queue already lets you edit the card, open its Rem and set its priority.
+- **The drill bar**, under the queue's top bar, has the same [queue tools](#queue-management) as the popup's toolbar, plus **Edit Later** for the card on screen or the previous one. The Card List and the clear views open in their own popup. The regular queue already lets you edit the card, open its Rem and set its priority.
 - Ratings work as in any queue: *Again*/*Hard* keep the card in the drill and restart its [minimum delay](#minimum-delay), *Good*/*Easy* take it out. The session is recorded as **Mastery Drill** in the [Practiced Queues History](#practiced-queues-history-live-dashboard), and with **Auto-focus Queue Dashboard** on, the dashboard opens in the right sidebar as for any queue (the popup drill never opens it).
 - **[Card Cluster](https://help.remnote.com/en/articles/10104223-card-clusters) cards**: RemNote tells plugins nothing when a cluster card is rated, so the drill reads the rating from the card's own history a moment after the next card appears (or after you leave the queue). A cluster card rated *Good* or *Easy* leaves the drill like any other, and *Again*/*Hard* restarts its delay. When the drill starts, it also drops any card whose last rating since it entered the drill was *Good* or *Easy* — which catches any rating that was missed, such as a cluster card rated in the popup. The drill's **Remove from Drill** acts on the sibling on screen.
 
@@ -352,14 +352,14 @@ RemNote practises whole Rems, not a hand-picked set of cards. So each session cr
 
 ### Queue Management { #queue-management }
 
-The drill toolbar's top row — the whole drill bar in the regular queue — holds the tools for the drill as a whole, in captioned groups. Try it *(a mock: nothing runs)*:
+The left part of the drill toolbar — the whole drill bar in the regular queue — holds the tools for the drill as a whole, in captioned groups. Try it *(a mock: nothing runs)*:
 
 <iframe src="../demos/mastery-drill-bar.html" title="Mastery Drill bar demo" loading="lazy" style="width:100%;height:190px;border:0;display:block"></iframe>
 
 - **Remaining / cooling:** how many cards are ready now, and how many are still [waiting](#minimum-delay). Click the count to open the [Card List](#card-list).
 - **Card → List:** lists every card in the drill and whether RemNote can show it — see [Card List](#card-list). **L** opens it too in the popup.
 - **Card → Remove:** takes the card on screen out of the drill without rating it.
-- **Edit Later → Current / Previous** (in the popup, on the [second row](#editor-access)): asks for an optional note, tags the Rem with RemNote's *Edit Later* (the note goes in its Message) and takes the card out of the drill. **Previous** acts on the card you just rated and keeps its rating — handy when a card shows its flaws only once you see the answer, and you want to rate it first. **Enter** sets the note, **Esc** cancels.
+- **Edit Later → Current / Previous** (in the popup, among the [per-card groups](#editor-access) at the right): asks for an optional note, tags the Rem with RemNote's *Edit Later* (the note goes in its Message) and takes the card out of the drill. **Previous** acts on the card you just rated and keeps its rating — handy when a card shows its flaws only once you see the answer, and you want to rate it first. **Enter** sets the note, **Esc** cancels.
 - **Clear → All:** empties the drill to start fresh.
 - **Clear → Low priority:** opens a distribution view of how many drill cards fall into each of 20 priority buckets (0–5, 6–10, …, 96–100). Set a threshold and remove every card above it in one click. To keep such cards out in the first place, set the [Priority Cap](#drill-priority-cap).
 - **Clear → Old** (amber, shown only when there are any): the cards ready to drill for longer than the **Old Items Threshold** (default 7 days), e.g. *14 > 7d*. Time spent cooling does not count, so a Hard card that waited a week is not flagged the day it becomes ready. Hover it to read why stale cards may be better left to the scheduler; click it to remove them.
@@ -415,13 +415,13 @@ Click a chip (or press **1**, **2**, **3**, **4**) to hide or show its group. To
 
 ### Editor Access { #editor-access }
 
-In the popup, the drill toolbar's bottom row provides per-card actions for the currently visible card (the regular queue offers these natively):
+In the popup, the right end of the drill toolbar holds per-card groups for the card on screen (the regular queue offers these natively):
 
-- **Priority Badge:** Shows the current card's priority. Click it to open an inline priority editor directly in the toolbar — no popup needed.
-- **Go to Rem:** Opens the Rem in RemNote's native Editor (closes the drill popup; a resume trigger re-opens it on return).
+- **Rem → priority badge:** the current card's priority. Click it to open an inline priority editor directly in the toolbar — no popup needed.
+- **Rem → Go to Rem:** opens the Rem in RemNote's native Editor (closes the drill popup; a resume trigger re-opens it on return).
 - **Edit Later → Current / Previous:** prompts for an optional note, marks the Rem of the card on screen (**Current**) or of the card you just rated (**Previous**, which keeps its rating) with the *Edit Later* powerup, storing the note in the Message slot, and removes the card from the drill queue.
-- **Edit Previous:** Opens an inline editor for the card you just rated — useful for quick corrections after seeing the answer.
-- **Edit Current:** Opens an inline editor for the currently visible card.
+- **Edit → Current:** opens an inline editor for the card on screen.
+- **Edit → Previous:** opens an inline editor for the card you just rated — useful for quick corrections after seeing the answer.
 
 ![Mastery Drill Editor](assets/uploaded/ee94ab_final-drill-editor.png){ width="900" }
 

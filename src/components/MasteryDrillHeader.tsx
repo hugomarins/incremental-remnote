@@ -4,10 +4,10 @@
  *
  * Row 1 manages the drill: the count, then captioned clusters — CARD (List,
  * Remove), EDIT LATER (Current, Previous; queue bar only) and CLEAR (All, Low
- * priority, Old). Row 2 is the popup's only: Go to Rem and the editors stand in
- * for what the regular queue gives natively, with the EDIT LATER cluster among
- * them. The captions mark the groups without boxing their names, and keep the
- * queue bar on one line beside the Beautiful queue's priority badge. The header only renders
+ * priority, Old). The popup adds its per-card clusters at the right end of the same
+ * line — REM (priority, Go to Rem), EDIT LATER and EDIT — standing in for what the
+ * regular queue gives natively. The captions mark the groups without boxing their
+ * names, and keep the queue bar on one line beside the Beautiful queue's priority badge. The header only renders
  * and collects the Edit Later note and the priority edit: what each action does,
  * and where its panel opens, is up to the widget — the popup swaps its whole
  * window, the queue bar opens a popup.
@@ -39,11 +39,11 @@ export interface MasteryDrillHeaderProps {
    */
   onEditLaterPrevious?: (message: string) => Promise<void>;
   /**
-   * The queue bar's Edit Later for the card on screen, in row 1. The popup passes its
-   * own in cardActions (row 2) instead.
+   * The queue bar's Edit Later for the card on screen. The popup passes its own in
+   * cardActions instead.
    */
   onEditLaterCurrent?: (message: string) => Promise<void>;
-  /** Row 2, popup only. */
+  /** The popup's per-card clusters, at the right end of the row. */
   cardActions?: {
     /** The current card's priority, editable in place. */
     priority?: { info: CardPriorityInfo; onSave: (value: number) => Promise<void> } | null;
@@ -57,12 +57,6 @@ export interface MasteryDrillHeaderProps {
   notice?: React.ReactNode;
 }
 
-const neutral: React.CSSProperties = {
-  backgroundColor: 'var(--rn-clr-background-primary)',
-  color: 'var(--rn-clr-content-primary)',
-  border: '1px solid var(--rn-clr-border-primary)',
-};
-
 export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
   const { variant, readyCount, coolingCount, firstReadyAt, oldCount, oldThreshold, cardActions } = props;
   const priority = cardActions?.priority;
@@ -72,7 +66,6 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
   const [editLaterMessage, setEditLaterMessage] = React.useState('');
   const [editingPriority, setEditingPriority] = React.useState<number | null>(null);
 
-  const actionSize = 'px-3 py-1.5 text-sm';
   const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
   const openEditLater = (target: 'current' | 'previous') => {
@@ -187,49 +180,43 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
             </ClusterButton>
           )}
         </Cluster>
-      </div>
-
-      {/* Row 2: the card on screen (popup only) */}
-      {cardActions && (
-      <div className="flex items-end gap-2 flex-wrap px-3 pb-2">
-        {priority && (
-          <div className="cursor-pointer pb-1" onClick={() => setEditingPriority(priority.info.priority)} title="Click to change priority">
-            <PriorityBadge
-              priority={priority.info.priority}
-              percentile={priority.info.kbPercentile ?? undefined}
-              compact
-              useAbsoluteColoring={priority.info.kbPercentile == null}
-              source={priority.info.source}
-              isCardPriority
-            />
+        {cardActions && (
+          // The popup's per-card actions, pushed to the right end of the same line: the
+          // regular queue gives these natively, so the queue bar has none of them.
+          <div className="ie-drill-card-side">
+            <Cluster caption="Rem">
+              {priority && (
+                <span
+                  className="ie-drill-badge"
+                  onClick={() => setEditingPriority(priority.info.priority)}
+                  title="Click to change priority"
+                >
+                  <PriorityBadge
+                    priority={priority.info.priority}
+                    percentile={priority.info.kbPercentile ?? undefined}
+                    compact
+                    useAbsoluteColoring={priority.info.kbPercentile == null}
+                    source={priority.info.source}
+                    isCardPriority
+                  />
+                </span>
+              )}
+              <ClusterButton onClick={cardActions.onGoToRem} title="Go to the current Rem (closes popup)">
+                Go to Rem
+              </ClusterButton>
+            </Cluster>
+            {editLaterCluster}
+            <Cluster caption="Edit" tone="editor">
+              <ClusterButton onClick={cardActions.onEditCurrent} title="Edit the card on screen">
+                Current
+              </ClusterButton>
+              <ClusterButton onClick={cardActions.onEditPrevious} title="Edit the card you just rated">
+                Previous
+              </ClusterButton>
+            </Cluster>
           </div>
         )}
-        <button
-          onClick={cardActions.onGoToRem}
-          className={`${actionSize} rounded transition-colors shadow-sm font-medium whitespace-nowrap`}
-          style={neutral}
-          title="Go to the current Rem (closes popup)"
-        >
-          Go to Rem
-        </button>
-        {editLaterCluster}
-        <button
-          onClick={cardActions.onEditPrevious}
-          className={`${actionSize} rounded font-medium transition-colors shadow-sm whitespace-nowrap`}
-          style={{ ...neutral, backgroundColor: 'var(--rn-clr-background-secondary)' }}
-          title="Edit the card you just rated"
-        >
-          Edit Previous
-        </button>
-        <button
-          onClick={cardActions.onEditCurrent}
-          className={`${actionSize} rounded bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors shadow-sm whitespace-nowrap`}
-          title="Edit the currently visible card"
-        >
-          Edit Current
-        </button>
       </div>
-      )}
 
       {editingPriority !== null && priority && (
         <div className="px-2 pt-1">
@@ -346,14 +333,14 @@ const DRILL_HEADER_CSS = `
 .ie-drill-header {
   --ie-drill-text: #1f2937; --ie-drill-btn: #374151; --ie-drill-cap: #9aa1ad;
   --ie-drill-track: #f5f6f8; --ie-drill-track-border: #e6e8ec; --ie-drill-hover: #ffffff;
-  --ie-drill-count: #e11d48; --ie-drill-edit: #ea580c; --ie-drill-clear: #dc2626;
+  --ie-drill-count: #e11d48; --ie-drill-edit: #ea580c; --ie-drill-clear: #dc2626; --ie-drill-editor: #2563eb;
   --ie-drill-old: #a16207; --ie-drill-old-bg: #fde68a; --ie-drill-old-ink: #78350f;
   color: var(--ie-drill-text);
 }
 body.dark .ie-drill-header {
   --ie-drill-text: #e5e7eb; --ie-drill-btn: #d1d5db; --ie-drill-cap: #7a808c;
   --ie-drill-track: #23252d; --ie-drill-track-border: #33363f; --ie-drill-hover: #30333c;
-  --ie-drill-count: #fb7185; --ie-drill-edit: #fb923c; --ie-drill-clear: #f87171;
+  --ie-drill-count: #fb7185; --ie-drill-edit: #fb923c; --ie-drill-clear: #f87171; --ie-drill-editor: #60a5fa;
   --ie-drill-old: #facc15; --ie-drill-old-bg: rgba(250, 204, 21, 0.2); --ie-drill-old-ink: #fde047;
 }
 .ie-drill-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 6px 14px; }
@@ -369,6 +356,9 @@ body.dark .ie-drill-header {
 }
 .ie-drill-cluster--edit .ie-drill-caption { color: var(--ie-drill-edit); }
 .ie-drill-cluster--clear .ie-drill-caption { color: var(--ie-drill-clear); }
+.ie-drill-cluster--editor .ie-drill-caption { color: var(--ie-drill-editor); }
+.ie-drill-card-side { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 6px 14px; margin-left: auto; }
+.ie-drill-badge { display: inline-flex; align-items: center; padding: 0 4px; cursor: pointer; }
 .ie-drill-stat__line { display: flex; align-items: center; gap: 6px; height: 28px; white-space: nowrap; }
 .ie-drill-icon { color: var(--ie-drill-text); display: inline-flex; }
 .ie-drill-count {
@@ -398,7 +388,7 @@ body.dark .ie-drill-header {
 `;
 
 /** A captioned group of buttons on a soft track. */
-function Cluster({ caption, tone, children }: { caption: string; tone?: 'edit' | 'clear'; children: React.ReactNode }) {
+function Cluster({ caption, tone, children }: { caption: string; tone?: 'edit' | 'clear' | 'editor'; children: React.ReactNode }) {
   return (
     <div className={`ie-drill-cluster${tone ? ` ie-drill-cluster--${tone}` : ''}`}>
       <span className="ie-drill-caption">{caption}</span>
