@@ -51,6 +51,9 @@ import {
 import { IncrementalRem, getIncrementalRemFromRem, isKnownIncRemId } from '../lib/incremental_rem';
 import { markIncRemDirty } from '../lib/incremental_rem/persistence';
 import { flushCacheUpdatesNow, flushRatedCardsNow, updateCardPriorityCache, updateCardPriorityCacheAfterRating } from '../lib/card_priority/cache';
+// Static, never `await import()`: a lazily loaded chunk fails in the index
+// sandbox (classic-script eval of `import.meta`), see the note in tracker.ts.
+import { readCardPriorityByRem } from '../lib/card_priority/shared_read';
 import { setCurrentIncrementalRem } from '../lib/incremental_rem';
 import { transferToDismissed } from '../lib/dismissed';
 import { IncrementalRep } from '../lib/incremental_rem/types';
@@ -1375,7 +1378,6 @@ export function registerGlobalRemChangedListener(plugin: ReactRNPlugin) {
 
         // A shared copy, not a read per event: each full read costs ~0.3 s of
         // main-thread time, and a bulk edit fires this for hundreds of Rems.
-        const { readCardPriorityByRem } = await import('../lib/card_priority/shared_read');
         const cachedEntry = (await readCardPriorityByRem(plugin)).get(data.remId);
 
         if (
