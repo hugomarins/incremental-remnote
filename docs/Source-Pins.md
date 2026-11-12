@@ -6,7 +6,7 @@ A **source pin** is a pin reference to the highlight that holds a passage: click
 
 ## Requirements { #requirements }
 
-- The local helper, running — see [Setup](AI-Transcription-of-PDF-Highlights.md#setup). Pin Source Quote only needs Python and PyMuPDF; no AI and no Claude account are involved.
+- The [AI helper](Desktop-Helpers.md#ai-helper), running — see [Setting up the AI helper](Desktop-Helpers.md#setup). Pin Source Quote only needs Python and PyMuPDF; no AI and no Claude account are involved.
 - RemNote **desktop**.
 - The source must already have its **Highlights** document, which RemNote creates with the first highlight. For a PDF or article you have never highlighted, make one highlight first.
 
@@ -37,7 +37,7 @@ Without a source finder, the command asks you to open the source, as before.
 
 ### Setting one up { #source-finder-setup }
 
-The [AI helper](AI-Transcription-of-PDF-Highlights.md#setup) runs the source finder. Name its command in `~/.incremental-remnote/ai-ocr/source-finder.json`:
+The [AI helper](Desktop-Helpers.md#ai-helper) runs the source finder. Name its command in `~/.incremental-remnote/ai-ocr/source-finder.json`:
 
 ```json
 { "command": ["/usr/local/bin/python3", "~/my-library-index/find_pdf.py"] }
@@ -130,7 +130,7 @@ This happens after the Rem is created and never slows down or interrupts Create 
 |---|---|
 | *Open the source PDF or web article in a pane first (in any RemNote window).* | Open the source next to your notes or in another RemNote window, then run the command again. A source just opened in another window can take a couple of seconds to be seen. Without a source open, it also means no [source finder](#no-source-open) is set up. |
 | *Passage not found in the PDFs of its book* | The source finder named a book, but none of the PDFs it listed holds the passage: the one you use may be a different edition, or missing from its list. Open the right PDF and run the command again. |
-| *AI helper is not running* | Start the helper ([Setup](AI-Transcription-of-PDF-Highlights.md#setup)). |
+| *AI helper is not running* | Start the helper ([Setting up the AI helper](Desktop-Helpers.md#setup)). |
 | *This PDF has no Highlights document yet — make one highlight in it first.* | Highlight anything in the source once, so RemNote creates its Highlights document, then try again. |
 | *Passage not found* | Check that the Rem's text was taken from this source, and that the right PDF or article is open. |
 

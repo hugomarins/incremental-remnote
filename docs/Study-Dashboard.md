@@ -126,7 +126,7 @@ In Document mode the root row is the rem the dashboard was opened from (or its c
 
 RemNote keeps a card's reviews only inside the card itself. Deleting a Rem sends its cards to the trash, and RemNote empties the trash after two weeks, so those reviews drop out of every total, the ones here included. The time you spent on them is still part of your study.
 
-With the desktop [helper](AI-Transcription-of-PDF-Highlights.md#setup) running, the plugin keeps them. Every six hours, and each time you open the dashboard, the helper copies every review it finds in RemNote's local database into an archive of its own, trashed Rems included. It only reads RemNote's database and never writes to it.
+With the [AI helper](Desktop-Helpers.md#ai-helper) running, the plugin keeps them. Every six hours, and each time you open the dashboard, the helper copies every review it finds in RemNote's local database into an archive of its own, trashed Rems included. It only reads RemNote's database and never writes to it.
 
 **Include deleted Rems** (beside the Context options, on by default) adds those reviews back:
 
@@ -140,6 +140,8 @@ A review that still exists somewhere is counted once. That covers Preserve histo
 The [Practiced Queues](History-Queue-Dashboard-and-Mastery-Drill.md#refresh-statistics-authoritative-summary-recompute) summary counts them too, on every device, once a desktop with the helper has refreshed its statistics.
 
 If the helper isn't running, the checkbox reads *(helper not running)* and the dashboard shows only what RemNote still holds. The archive starts when the helper does, and it can catch only what is still in RemNote's two-week trash at that point.
+
+To look up a deleted card itself, with each of its reviews, see [Finding a deleted card](Desktop-Helpers.md#find-deleted-cards).
 
 ### Recovering reviews from old backups { #recover-from-backups }
 

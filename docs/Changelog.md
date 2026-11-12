@@ -12,6 +12,12 @@ This page documents the major changes and improvements for each version of the I
 
 📖 [Mastery Drill](Mastery-Drill.md)
 
+### 📚 Docs - one page for the desktop helpers
+
+A new **Desktop Helpers** page lists every helper the plugin works with (AI helper, Local Media Bridge, Logos bridge, your source finder), with the AI helper's setup and how to look up the reviews of a card you deleted.
+
+📖 [Desktop Helpers](Desktop-Helpers.md)
+
 ## v1.0.224 - November 12th, 2026
 
 ### ✨ Improved

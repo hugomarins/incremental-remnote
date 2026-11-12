@@ -205,7 +205,7 @@ In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) opened from the queue's 
   > When you **author** a text layer, write `\[…\]` / `\(…\)`, not `$$…$$` / `$…$`. RemNote unescapes markdown inside dollar-delimited spans before the math parser sees them, which strips the backslash from `\,` `\;` `\{` `\}` `\%` `\\` — the formula still renders, just wrongly (a thin space becomes a literal comma). Dollar delimiters are recognised by this command for PDFs you did not author.
 
 - **AI Transcribe PDF Highlight** — `quick: ait`
-  Replaces the focused PDF highlight's raw text with an AI transcription of the highlighted region: clean text, formulas as LaTeX, list markers kept. Same as the **✨** button in the PDF highlight toolbar. Needs the local helper — see [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md#setup).
+  Replaces the focused PDF highlight's raw text with an AI transcription of the highlighted region: clean text, formulas as LaTeX, list markers kept. Same as the **✨** button in the PDF highlight toolbar. Needs the [AI helper](Desktop-Helpers.md#ai-helper) and Claude Code — see [AI Transcription of PDF Highlights → Setup](AI-Transcription-of-PDF-Highlights.md#setup).
 
 - **Open in Logos** — `quick: olg`
   Opens the focused extract at its passage in Logos, or the book's Incremental Rem at its Logos bookmark, looking up through the parents when the focused Rem has neither. Registered only while the **Logos Bible Software Bridge** setting is on; needs the LogosBridge helper — see [Logos Bible Software Integration](Logos-Bible-Software-Integration.md#review).

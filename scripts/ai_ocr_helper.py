@@ -1283,7 +1283,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {'ok': True, 'claude': find_claude(), 'model': MODEL,
                                         'ytDlp': find_tool('yt-dlp'), 'ffmpeg': find_tool('ffmpeg'),
                                         'transcripts': True, 'whisper': whisper_ready(), 'localVideo': True,
-                                        'extractTitles': True, 'historyArchive': True})
+                                        'extractTitles': True, 'historyArchive': history_archive is not None})
         if self.path.startswith(MEDIA_PREFIX):
             return self.send_media()
         self.send_json(404, {'ok': False, 'error': 'POST /ocr or /locate'})
