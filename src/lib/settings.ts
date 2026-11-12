@@ -104,6 +104,7 @@ import {
   masteryDrillMinDelayMinutesId,
   masteryDrillHardIntervalPercentId,
   masteryDrillHardMaxDaysId,
+  masteryDrillMaxPriorityId,
   disableFinalDrillNotificationId,
   masteryDrillModeId,
   MasteryDrillMode,
@@ -217,6 +218,7 @@ export interface IESettings {
   [masteryDrillMinDelayMinutesId]: number;
   [masteryDrillHardIntervalPercentId]: number;
   [masteryDrillHardMaxDaysId]: number;
+  [masteryDrillMaxPriorityId]: number;
   [disableFinalDrillNotificationId]: boolean;
   [masteryDrillModeId]: MasteryDrillMode;
   [masteryDrillRevealDelayId]: number;
@@ -315,6 +317,7 @@ export const IE_SETTINGS_DEFAULTS: IESettings = {
   [masteryDrillMinDelayMinutesId]: 180,
   [masteryDrillHardIntervalPercentId]: 5,
   [masteryDrillHardMaxDaysId]: 7,
+  [masteryDrillMaxPriorityId]: 100,
   [disableFinalDrillNotificationId]: false,
   [masteryDrillModeId]: 'native',
   [masteryDrillRevealDelayId]: 500,
@@ -1147,8 +1150,10 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     title: 'Mastery Drill Minimum Delay',
     description:
       'A card rated Again or Hard will not appear in the drill until this long after its last ' +
-      'review, so the same card is not repeated too soon. Hard cards with long intervals wait ' +
-      'longer (see the two settings below).',
+      'review, so the same card is not repeated too soon. A card rated Again also waits for the ' +
+      "relearning step its scheduler gave it, when that is longer: with a 1-day step, it stays " +
+      'out of the drill until it is due. Hard cards with long intervals wait longer (see the two ' +
+      'settings below).',
   },
   [masteryDrillHardIntervalPercentId]: {
     kind: 'number',
@@ -1163,7 +1168,7 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
       'returns to the drill, so you recall it from long-term memory rather than from the review ' +
       'you just did. Never shorter than the Minimum Delay, never longer than the maximum below. ' +
       '5% means a card sent 60 days out waits 3 days. Cards rated Again always use the Minimum ' +
-      'Delay. 0 gives Hard cards the Minimum Delay too.',
+      'Delay (or their relearning step, if longer). 0 gives Hard cards the Minimum Delay too.',
   },
   [masteryDrillHardMaxDaysId]: {
     kind: 'number',
@@ -1177,6 +1182,19 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     description:
       'The longest a card rated Hard waits before it returns to the drill, however long its ' +
       'interval. A 1-year card at 5% would wait 18 days; the default 7 days caps it.',
+  },
+  [masteryDrillMaxPriorityId]: {
+    kind: 'number',
+    group: 'masteryDrill',
+    showWhen: { id: enableMasteryDrillId, equals: true },
+    min: 0,
+    max: 100,
+    integer: true,
+    title: 'Mastery Drill Priority Cap',
+    description:
+      'Only cards with this priority or a more important one (a number this low or lower) go to ' +
+      'the drill when you rate them Again or Hard. Lower-priority material is left to its normal ' +
+      'schedule. 100 sends every card. Cards already in the drill stay until you rate them.',
   },
   [disableFinalDrillNotificationId]: {
     kind: 'boolean',

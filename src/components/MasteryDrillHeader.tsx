@@ -4,7 +4,9 @@
  *
  * Row 1 manages the drill (counts, card list, clearing, Remove from Drill). Row 2 is
  * the popup's only: Go to Rem, Edit Later and the editors stand in for what the
- * regular queue gives natively, so its bar has row 1 alone. The header only renders
+ * regular queue gives natively, so its bar has row 1 alone. Edit Later on the
+ * previous card is in both — the regular queue has no native way to it — in row 2
+ * in the popup and row 1 in the queue bar. The header only renders
  * and collects the Edit Later note and the priority edit: what each action does,
  * and where its panel opens, is up to the widget — the popup swaps its whole
  * window, the queue bar opens a popup.
@@ -29,6 +31,11 @@ export interface MasteryDrillHeaderProps {
   onClearLowPriority: () => void;
   onClearOld: () => void;
   onRemoveCurrent: () => void;
+  /**
+   * Tags the card shown before the current one (usually the one just rated) Edit Later
+   * with this note, keeping its rating. Omitted: no button.
+   */
+  onEditLaterPrevious?: (message: string) => Promise<void>;
   /** Row 2, popup only. */
   cardActions?: {
     /** The current card's priority, editable in place. */
@@ -53,22 +60,51 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
   const { variant, readyCount, coolingCount, firstReadyAt, oldCount, oldThreshold, cardActions } = props;
   const priority = cardActions?.priority;
   const compact = variant === 'queue';
-  const [editLaterOpen, setEditLaterOpen] = React.useState(false);
+  // Which card the open Edit Later note is for; null while closed.
+  const [editLaterTarget, setEditLaterTarget] = React.useState<'current' | 'previous' | null>(null);
   const [editLaterMessage, setEditLaterMessage] = React.useState('');
   const [editingPriority, setEditingPriority] = React.useState<number | null>(null);
 
   const actionSize = 'px-3 py-1.5 text-sm';
   const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
-  const confirmEditLater = async () => {
-    await cardActions?.onEditLater(editLaterMessage);
-    setEditLaterOpen(false);
+  const openEditLater = (target: 'current' | 'previous') => {
     setEditLaterMessage('');
+    setEditLaterTarget(target);
+  };
+  // In the regular queue the note's input holds the focus, which keeps RemNote's own
+  // shortcuts (Space, 1-4) from working; hand it back once the note closes.
+  const returnFocusToQueue = () => {
+    if (!compact) return;
+    try {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      window.parent?.focus();
+    } catch (_) {
+      /* cross-origin safe */
+    }
+  };
+  const confirmEditLater = async () => {
+    if (editLaterTarget === 'previous') await props.onEditLaterPrevious?.(editLaterMessage);
+    else await cardActions?.onEditLater(editLaterMessage);
+    setEditLaterTarget(null);
+    setEditLaterMessage('');
+    returnFocusToQueue();
   };
   const cancelEditLater = () => {
-    setEditLaterOpen(false);
+    setEditLaterTarget(null);
     setEditLaterMessage('');
+    returnFocusToQueue();
   };
+
+  const editLaterPreviousButton = props.onEditLaterPrevious && (
+    <button
+      onClick={() => openEditLater('previous')}
+      className={`${compact ? 'text-xs px-2 py-1' : actionSize} rounded border border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-900/20 font-medium whitespace-nowrap`}
+      title="Mark the card you just rated for Edit Later, keeping its rating, and remove it from the drill"
+    >
+      Previous → Edit Later
+    </button>
+  );
 
   return (
     <div className={compact ? 'flex flex-col' : 'border-b rn-clr-border-primary flex flex-col'}>
@@ -131,6 +167,7 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
         >
           Remove from Drill
         </button>
+        {compact && editLaterPreviousButton}
         {oldCount > 0 && (
           <div
             className="flex items-center gap-1.5 px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800"
@@ -173,15 +210,13 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
           Go to Rem
         </button>
         <button
-          onClick={() => {
-            setEditLaterMessage('');
-            setEditLaterOpen(true);
-          }}
+          onClick={() => openEditLater('current')}
           className={`${actionSize} rounded bg-orange-500 text-white hover:bg-orange-600 font-medium transition-colors shadow-md whitespace-nowrap`}
           title="Mark for Edit Later and remove from drill"
         >
           Edit Later
         </button>
+        {editLaterPreviousButton}
         <button
           onClick={cardActions.onEditPrevious}
           className={`${actionSize} rounded font-medium transition-colors shadow-sm whitespace-nowrap`}
@@ -223,8 +258,9 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
         </div>
       )}
 
-      {editLaterOpen && (
+      {editLaterTarget && (
         <EditLaterNote
+          label={editLaterTarget === 'previous' ? 'Edit Later note (previous card):' : undefined}
           value={editLaterMessage}
           onChange={setEditLaterMessage}
           onConfirm={confirmEditLater}
@@ -244,12 +280,14 @@ export function MasteryDrillHeader(props: MasteryDrillHeaderProps) {
 
 /** The one-line Edit Later note: Enter sets, Esc cancels. Also used by the card editor. */
 export function EditLaterNote({
+  label = 'Edit Later note:',
   value,
   onChange,
   onConfirm,
   onCancel,
   bordered = true,
 }: {
+  label?: string;
   value: string;
   onChange: (v: string) => void;
   onConfirm: () => void;
@@ -262,7 +300,7 @@ export function EditLaterNote({
       style={{ borderColor: 'var(--rn-clr-border-primary)', backgroundColor: 'var(--rn-clr-background-primary)' }}
     >
       <span className="text-xs font-medium" style={{ color: 'var(--rn-clr-content-secondary)' }}>
-        Edit Later note:
+        {label}
       </span>
       <input
         type="text"

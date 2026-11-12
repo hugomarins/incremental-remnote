@@ -137,6 +137,8 @@ export const masteryDrillMinDelayMinutesId = 'mastery_drill_min_delay_minutes';
 export const masteryDrillHardIntervalPercentId = 'mastery_drill_hard_interval_percent';
 /** …capped here, in days. The Minimum Delay stays the floor. */
 export const masteryDrillHardMaxDaysId = 'mastery_drill_hard_max_days';
+/** Cards whose priority number is above this are not sent to the drill. 100 = every card. */
+export const masteryDrillMaxPriorityId = 'mastery_drill_max_priority';
 export const disableFinalDrillNotificationId = 'disable_final_drill_notification';
 /** Where the drill runs: the popup's embedded queue, or RemNote's own queue. */
 export const masteryDrillModeId = 'mastery_drill_mode';
