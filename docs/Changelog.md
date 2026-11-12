@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.223 - November 12th, 2026
+
+### 🐛 Fixed
+
+**Flashcard Priorities**: priority changes made by editing a Rem reach the priority cache again, and the console no longer fills with `ChunkLoadError` for `9304.js` (broken since v1.0.220).
+
+📖 [Startup: how the priority cache is built](Priorities-for-Flashcards.md#startup-cache)
+
 ## v1.0.222 - November 11th, 2026
 
 ### ✨ Improved
