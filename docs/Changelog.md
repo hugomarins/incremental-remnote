@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.224 - November 12th, 2026
+
+### ✨ Improved
+
+**Batch Priority Change**: now also gathers the flashcards a document shows through portals and filtered table views. Their inherited or default priorities can be changed too, and become manual after a confirmation. Rows now show front → back, their location, and the parent row of table cells.
+
+📖 [Portals and table views](Prioritization-&-Sorting.md#batch-priority-portals)
+
 ## v1.0.223 - November 12th, 2026
 
 ### 🐛 Fixed

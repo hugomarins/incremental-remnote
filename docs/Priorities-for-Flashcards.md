@@ -284,6 +284,7 @@ While the tool above is specialized for migrations, the **[Prioritization-&-Sort
 - **Bulk Adjustment:** Increase or decrease all selected card priorities by a specific amount or percentage.
 - **Range Spreading:** Evenly distribute priorities across a range (e.g., set top cards from 0 to 10).
 - **Filtering:** Use the "Has Cards" filter to focus exclusively on flashcard management.
+- **Portals & Table Views:** also covers flashcards the document shows through portals and filtered table views; their inherited priorities become manual when changed, after a confirmation. See [Portals and table views](Prioritization-&-Sorting.md#batch-priority-portals).
 
 **Access:** Search for "Batch Priority Change" in the Command Palette, or use the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) (⋯ → **Incremental RemNote…**) on any document.
 

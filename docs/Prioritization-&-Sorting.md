@@ -219,6 +219,16 @@ A powerful table view for unified priority management across an entire document 
     *   **Preview Filtered** — calculates new priorities only for the filtered subset, preserving existing calculations for items outside the filter.
     *   **Apply to Filtered** — applies changes exclusively to the filtered items.
     *   When no filters are active, buttons revert to their standard labels and affect all items as before.
+*   **Card sources:** each card priority shows where it comes from: **(man.)** manual, **(inc.)** from the Rem's Incremental priority, **(inh.)** inherited from an ancestor, **(def.)** the default setting.
+*   **Identifying cards:** each row shows the card as front → back, with its location (up to 5 ancestors) underneath. A table cell such as `[True/False]` is prefixed with its row. Hover a name for the full text.
+
+#### Portals and table views { #batch-priority-portals }
+
+**Include portals & table views** (on by default) also gathers the Rems a document shows through portals and table views, for example table flashcards brought into a study document. A filtered table view contributes only the rows its filters let through, plus their cells. These rows are marked **⧉**; hover the mark to see where the Rem actually lives.
+
+*   **Inherited and default priorities are included for these rows**, since the parent they follow usually lives outside the document. Changing one makes it **manual**, so it stops following its parent.
+*   **You confirm before that happens:** on apply, a dialog lists every card whose inherited or default priority would become manual, with where it lives and its current and new value. Use ←→ to choose and Enter to confirm, or Esc to cancel.
+*   Inside the document's own tree, inherited priorities are still left out: change the parent they inherit from instead.
 
 ![batch priority change widget](assets/batch-priority-change-widget-new.png){ width="900" }
 
