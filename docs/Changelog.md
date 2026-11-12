@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.222 - November 11th, 2026
+
+### ✨ Improved
+
+**Visited Rem History**: Incremental Rems and Rems with their own card priority now show a priority badge you can click to edit, as in the Flashcard and IncRem histories.
+
+📖 [Visited Rem History](History-Queue-Dashboard-and-Mastery-Drill.md#visited-rem-history)
+
 ## v1.0.221 - November 11th, 2026
 
 ### ✨ New
