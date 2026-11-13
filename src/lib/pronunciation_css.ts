@@ -11,14 +11,10 @@
  * sierra-remnote anchor marks.
  *
  * In the queue, the card's "Extra details" list shows the audio Rem with a bullet of
- * its own. That item carries no tags itself, but the editor nested in it (for the
- * Rem's children) holds a container with `data-rem-container-tags` naming the Rem's
- * powerups, so `:has()` reaches the bullet through it (saved DOM, 2026-11-13):
- *   .extra-card-detail__item
- *     > .rem-bullet__container > .rem-bullet (> .perfect-circle__inner > svg .rem-bullet__core)
- *     > #hierarchy-editor > #hierarchy-editor-inner
- *         > .container-node[data-rem-container-tags="pronunciation extra-card-detail"]
+ * its own, reached through lib/extra_details_css.
  */
+import { extraDetailsItem } from './extra_details_css';
+
 export const PRONUNCIATION_POWERUP_NAME = 'Pronunciation';
 export const PRONUNCIATION_POWERUP_CODE = 'pronunciation';
 export const PRONUNCIATION_CSS_ID = 'pronunciation-mark';
@@ -40,9 +36,7 @@ const DARK = url(speakingHead('#5eead4'));
 
 const PILL = `.hierarchy-editor__tag-bar__tag[data-test^="Applied Powerup Pill ${PRONUNCIATION_POWERUP_NAME}"]`;
 const EDITOR_BULLET = `.rn-editor__rem__body[data-rem-tags~="${SLUG}"] .rem-bullet__container .rem-bullet`;
-const EXTRA_DETAILS_BULLET =
-  `.extra-card-detail__item:has(> #hierarchy-editor > #hierarchy-editor-inner > [data-rem-container-tags~="${SLUG}"])` +
-  ` > .rem-bullet__container .rem-bullet`;
+const EXTRA_DETAILS_BULLET = `${extraDetailsItem(SLUG)} > .rem-bullet__container .rem-bullet`;
 /** Both bullets, each with `prefix` and `suffix` added. */
 const bullets = (prefix = '', suffix = '') =>
   [EDITOR_BULLET, EXTRA_DETAILS_BULLET].map((b) => `${prefix}${b}${suffix}`).join(',\n');

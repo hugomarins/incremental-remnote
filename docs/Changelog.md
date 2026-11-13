@@ -14,6 +14,12 @@ This page documents the major changes and improvements for each version of the I
 
 📖 [Read Aloud → Add pronunciation](Read-Aloud.md#pronunciation)
 
+### ✨ Improved
+
+**True or False Cards**: a True/False statement shown under a card's **Extra details** in the queue now gets its ✓/✗ bullet there too, as in the editor.
+
+📖 [True or False Cards](Utilities-True-or-False-Cards.md)
+
 ### ♻️ Changed
 
 **Local Media Bridge**: **Upscale image with ChatGPT**, **Read aloud** and **Add pronunciation** now appear only while the Local Media Bridge setting is on, since both need its helper.

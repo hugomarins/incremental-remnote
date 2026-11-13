@@ -29,6 +29,20 @@ The slug in `data-rem-tags` and `data-queue-rem-container-tags` is the powerup's
 
 Write selectors against the slugified name. To fix a mismatch, change the CSS, never the code: tagged Rems are keyed on the code.
 
+## Extra details in the queue { #extra-details }
+
+The queue lists a card's Extra Card Detail Rems under **Extra details**, each in a `.extra-card-detail__item` with its own bullet. The item itself carries no tags or Rem id, but it nests an editor for the Rem's children whose container names the Rem's tags (saved DOM of the Beautiful queue, 2026-11-13):
+
+```
+.extra-card-detail__item (.queue-beautiful-extra-card-detail__item)
+  > .rem-bullet__container (absolute, left -24px) > .rem-bullet.perfect-circle > .perfect-circle__inner > svg (.rem-bullet__ring, .rem-bullet__core)
+  > div > … .RichTextViewer                         ← the Rem's text
+  > #hierarchy-editor.rn-editor > #hierarchy-editor-inner
+      > .container-node[data-rem-container-tags="pronunciation extra-card-detail"][data-rem-container-id=<remId>]
+```
+
+So `.extra-card-detail__item:has(> #hierarchy-editor > #hierarchy-editor-inner > [data-rem-container-tags~="slug"]) > .rem-bullet__container` reaches a tagged Rem's bullet there; the child combinators keep it off tagged children of that Rem. `src/lib/extra_details_css.ts` builds it; the pronunciation and True/False bullet rules use it (and the sierra-remnote and Context for Cloze plugins copy it). The Compact queue's markup was not saved.
+
 ## The tag bar collapses past one tag
 
 Individual `.hierarchy-editor__tag-bar__tag` pills render only while a Rem has a **single** tag. With a second one, the bar collapses into a "2 tags" chip, taking any icon painted on a pill with it. A marker that must always show belongs on the row border or the bullet, not a pill. `SHOW_LEFT_BORDER_CSS` in `src/register/settings.ts` is an example.
