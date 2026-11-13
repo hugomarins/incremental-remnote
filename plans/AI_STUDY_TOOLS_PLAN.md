@@ -55,6 +55,49 @@ Entry point for every later phase: `ensureSourcePins(plugin, sourceRemId, quotes
 
 - [ ] Changelog entry, feature page, settings/commands references (per `DOCUMENTATION.md`), version bump.
 
+### Phase A — Read aloud (audio of a document)
+
+**Goal:** a command reads the focused Rem and its descendants, in tree order, turns them into a spoken script (verbatim, lightly adapted, or summarised), makes the audio with a TTS API and puts it into RemNote as a playable, stored audio Rem.
+
+Decisions (2026-11-13):
+
+- **Lives in IE**, not a separate plugin: it reuses the audio storage door (`localize_media.ts`, the `audio` bridge op), the Local Media Bridge connection, and this plan's scope → recipe → review → insert pipeline.
+- **Hidden without the helper:** the command is registered only while the **Local Media Bridge** setting is on, and so is **Upscale image with ChatGPT** (both need the helper; users without it should not see them).
+- **Split of work** (same as Upscale): the plugin reads the tree, applies the reading rules, shows the popup and inserts; the helper (`/tts`, `scripts/media_bridge/tts.py`) calls the TTS APIs, joins the parts into a mono mp3 (ffmpeg), serves it for the import door and keeps a copy. API keys stay in a local `.env` read by the helper, never in plugin settings (those are synced in plain text, account-wide).
+- **Engines** (chosen by ear on mixed English/Portuguese notes): Gemini TTS, one call per language block (`speechConfig.languageCode` takes one code), voice drawn from an approved list; Azure `en-US-AndrewMultilingualNeural`, one `<voice>` per language run, when the script has ≥ 3 inline foreign terms (only Azure switches language mid-sentence). ElevenLabs and macOS `say` were rejected. No style instructions in the text (Gemini reads them aloud).
+- **Modes** (popup choice): **Literal** (reading rules only, no LLM), **Adapted** (a cheap LLM pass that only puts formulas into words, spells units out and marks foreign terms; no content change), **Summary** (an LLM writes the script).
+- **Summary:**
+  - a **maximum duration** field (minutes); the prompt gets a word budget at ~150 words per minute, and the estimate is shown before generating;
+  - an **additional instructions** text field, shown only when Summary is selected (e.g. "focus on the definitions", "end with a 3-question quiz"), appended to the summary prompt;
+  - the **summary text is inserted too** (popup option, default on), as children of the audio Rem, the first one saying it is an AI summary of the document;
+  - LLM: `claude -p` through the AI helper (`/run`, subscription, no per-call charge); when it fails for usage limits, the helper falls back to the Anthropic API with `ANTHROPIC_API_KEY` from its `.env` (about US$0.05–0.10 per note).
+- **Review before paying:** the popup shows the editable script, engine, voice, estimated duration and cost; nothing is synthesised until **Generate**. Above ~12 min it suggests Summary.
+- **Placement:** the audio Rem is the first child of the read Rem, caption `🔊 Audio (<voice>)`; an optional setting names a tag to put on it (the author uses `AI audio`).
+
+Reading rules (Literal mode; the other modes start from the same text):
+
+| Element | Rule |
+|---|---|
+| Tree | Depth-first, collapsed children included. A heading is read as a section title with a pause after it. |
+| Powerup property Rems (Next Rep Date, Priority…), tags, source links, the 🤖 marker | Skip. |
+| Images, audio, video, drawings, embeds | Skip silently. Tables and code: skip, or say “table omitted”. |
+| Existing `🔊 Audio` Rems | Never read (no audio of an audio). |
+| Rem references | Read the text the reference shows (the alias, when it points at one). |
+| Pins (📌 references to highlights) | Skip. |
+| Portals | Read once. |
+| Bold / italic | Formatting dropped. **Italic words in the other language become inline language marks** (the author italicises foreign terms), which also drives the Azure switch. |
+| Cards | `front :: back` read as “front — back”; cloze read whole; optional quiz style (front, pause, back). |
+| LaTeX, units | Without an LLM: units from a dictionary (kN ⇒ kilonewtons); a formula is skipped with “formula omitted”. |
+| Language | Per Rem (stopword heuristic), with the same marks the script format uses. |
+
+Script format (shared with the author's `/audio-to-remnote` skill, parsed by `tts.py`): plain text, one idea per line; `[pt]`/`[en]` line prefix for the line's language; `<pt>…</pt>`/`<en>…</en>` around foreign **terms** only (names and acronyms never); `[pause]`/`[pausa]` alone on a line = answer gap before the next line (max(5 s, 2 s + 0.5 s per word)), `[pause N]` fixes N s.
+
+- [x] **A1. Helper `/tts`** (helper v8): `tts.py` (script parser and checker, engine choice, Gemini/Azure calls with 429 backoff, mp3 assembly; importable and a CLI), `POST /tts/plan` (free: errors, engine, calls, characters, estimated duration and cost), `POST /tts` → task, `GET /tts/<id>` (stage, result with the served mp3 URL). Keys from the environment or the `envFile` named in `~/.remnote-media-bridge/tts.json`; copies kept in its `audioHome` as `<short-subject>_<remId>.txt/.mp3`.
+- [ ] **A2. Plugin, Literal mode:** “Read aloud” command (hidden without the bridge; Upscale hidden the same way), tree → script with the rules above, popup (editable script, plan from `/tts/plan`, Generate), insert through the `audio` op code path, optional tag setting.
+- [ ] **A3. Adapted and Summary modes** through `/run` (`claude -p`, API fallback), maximum duration field, summary text inserted under the audio Rem.
+- [ ] **A4. Docs** (feature page, settings, changelog) when A2 ships.
+- [ ] Later, maybe: a helper-free mode (plugin calls the APIs itself) for users without the helper — needs a way to get a `data:`/`blob:` audio through the import door, untested.
+
 ## Risks and open questions
 
 - **LLM reliability:** verbatim quotes and valid JSON are not guaranteed. Mitigated by locating every quote (fuzzy matcher, whole-document fallback) and validation — quality only becomes visible on real books.

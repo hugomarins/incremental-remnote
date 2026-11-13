@@ -48,6 +48,12 @@ Endpoints (127.0.0.1:3460, CORS open, for the plugin iframe):
                                "Upscale image with ChatGPT" command; runs upscale_image.py,
                                i.e. Codex CLI image generation + the fidelity check)
   GET  /upscale/<id>           {status: queued|running|done, stage, result?}
+  POST /tts/plan {script, engine?}  what a /tts run would do: errors, engine, voices, calls,
+                               characters, estSeconds, estCostUsd. No API call.
+  POST /tts {script, engine?, voice?, remId?, subject?} → {taskId}   (plugin → helper: the
+                               "Read aloud" command; runs tts.py: Gemini or Azure TTS, mp3)
+  GET  /tts/<id>               {status: running|done, stage, result?}; result.url serves the
+                               mp3 for the `audio` op; a copy is kept in tts.py's audioHome
   GET  /next?wait=25&v=2       plugin long-poll → {id, op, remIds, …} or 204. A plugin
                                polling without v=2 is an older build: it gets only
                                localize jobs, the rest wait for a build that knows them.
@@ -76,7 +82,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 7  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio
+VERSION = 8  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},
@@ -102,6 +108,7 @@ REDELIVER_AFTER_S = 120  # a localize job taken but never answered goes back to 
 REPEATABLE_OPS = {"localize"}
 
 UPSCALE_SCRIPT = Path(__file__).resolve().parent / "upscale_image.py"
+TTS_SCRIPT = Path(__file__).resolve().parent / "tts.py"
 UPSCALE_HOME = Path(os.environ.get("REMNOTE_UPSCALE_HOME", Path.home() / "Pictures" / "remnote-upscale"))
 
 # --- server --------------------------------------------------------------------
@@ -186,6 +193,13 @@ class Handler(BaseHTTPRequestHandler):
             out = {k: task.get(k) for k in ("id", "remId", "status", "stage", "result")}
             out["elapsed"] = round(time.time() - task["createdAt"])
             return self._json(200, out)
+        if url.path.startswith("/tts/"):
+            task = _tts_tasks.get(url.path[len("/tts/"):])
+            if not task:
+                return self._json(404, {"error": "no such task (helper restarted?)"})
+            out = {k: task.get(k) for k in ("id", "remId", "status", "stage", "result")}
+            out["elapsed"] = round(time.time() - task["createdAt"])
+            return self._json(200, out)
         if url.path.startswith("/jobs/"):
             job = _jobs.get(url.path[len("/jobs/"):])
             if not job:
@@ -247,6 +261,27 @@ class Handler(BaseHTTPRequestHandler):
             }
             _tasks[task["id"]] = task
             threading.Thread(target=_run_upscale, args=(task,), daemon=True).start()
+            return self._json(200, {"taskId": task["id"]})
+        if url.path in ("/tts", "/tts/plan"):
+            script = body.get("script")
+            if not isinstance(script, str) or not script.strip():
+                return self._json(400, {"error": "script required"})
+            engine = body.get("engine") or "auto"
+            if engine not in ("auto", "gemini", "azure"):
+                return self._json(400, {"error": f"unknown engine {engine!r}"})
+            try:
+                tts = _tts_module()
+            except Exception as err:
+                return self._json(500, {"error": f"tts.py did not load: {err}"})
+            if url.path == "/tts/plan":
+                return self._json(200, tts.plan(script, engine, body.get("voice")))
+            task = {
+                "id": uuid.uuid4().hex[:12], "remId": str(body.get("remId") or ""), "script": script,
+                "engine": engine, "voice": body.get("voice") or None, "subject": body.get("subject") or "",
+                "status": "running", "stage": "starting", "result": None, "createdAt": time.time(),
+            }
+            _tts_tasks[task["id"]] = task
+            threading.Thread(target=_run_tts, args=(task,), daemon=True).start()
             return self._json(200, {"taskId": task["id"]})
         if url.path == "/clipboard":
             text = body.get("text")
@@ -331,6 +366,54 @@ def _run_upscale(task: dict) -> None:
         task["status"], task["stage"] = "done", "done"
         print(f"{time.strftime('%H:%M:%S')} upscale {tid} {task['remId']}: "
               f"{'ok ' + str(task['result'].get('verdict')) if task['result'].get('ok') else task['result'].get('message')}",
+              file=sys.stderr, flush=True)
+
+
+# --- text to speech (plugin → helper) -------------------------------------------------------
+
+_tts_tasks: dict[str, dict] = {}
+_tts_lock = threading.Lock()  # one synthesis at a time (Gemini's per-minute limit)
+_tts_mod = None
+
+
+def _tts_module():
+    """tts.py, loaded by path: under -I the script's folder is not on sys.path."""
+    global _tts_mod
+    if _tts_mod is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("remnote_bridge_tts", TTS_SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod  # dataclasses look their module up there
+        spec.loader.exec_module(mod)
+        _tts_mod = mod
+    return _tts_mod
+
+
+def _run_tts(task: dict) -> None:
+    tid = task["id"]
+    try:
+        tts = _tts_module()
+        task["stage"] = "waiting for another audio" if _tts_lock.locked() else "starting"
+        with _tts_lock:
+            out = OUT_DIR / f"tts-{tid}.mp3"
+            res = tts.synthesize(task["script"], out, task["engine"], task["voice"],
+                                 progress=lambda msg: task.__setitem__("stage", msg))
+        task["stage"] = "saving"
+        subject = task["subject"] or res.get("title") or "audio"
+        kept = tts.keep_copy(task["script"], out, task["remId"] or "norem", subject)
+        name = f"{kept.stem}.mp3"
+        shutil.copyfile(out, STORE / name)
+        out.unlink(missing_ok=True)
+        task["result"] = {"ok": True, **{k: v for k, v in res.items() if k != "file"},
+                          "url": f"{BASE}/files/{quote(name)}", "saved": str(kept)}
+    except Exception as err:  # reported to the plugin, which shows it
+        task["result"] = {"ok": False, "message": str(err)}
+    finally:
+        task["status"] = "done"
+        task["stage"] = "done"
+        r = task["result"] or {}
+        print(f"{time.strftime('%H:%M:%S')} tts {tid} {task['remId']}: "
+              f"{'ok ' + str(r.get('seconds')) + ' s ' + str(r.get('voice')) if r.get('ok') else r.get('message')}",
               file=sys.stderr, flush=True)
 
 
