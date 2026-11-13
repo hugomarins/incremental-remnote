@@ -10,6 +10,10 @@ Engines, chosen by ear on notes that mix English and Portuguese:
   - Azure en-US-AndrewMultilingualNeural, when the script has >= 3 inline foreign terms:
     the only engine that switches language mid-sentence. Each language run goes in its
     own <voice> (inside a single <voice>, word-level <lang> is ignored).
+  - ElevenLabs (eleven_multilingual_v2 by default), offered for users who have its key;
+    like Gemini, one call per language block (no word-level language switch: the
+    author's tests had it read Portuguese terms as English, or Portuguese as Spanish).
+    Voices are the account's own (GET /v2/voices, cached), shown by first name.
 Only engines whose keys are set are offered; "auto" suggests one of them, and any
 available engine may be picked instead. The script keeps its marks either way: Azure
 switches language on them, Gemini drops them and reads the term in the line's language.
@@ -22,12 +26,13 @@ Script format (plain text, one idea per line):
                                        max(5 s, 2 s + 0.5 s per word of that line)
   [pause N]                            N seconds
 
-Keys: GEMINI_API_KEY, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, from the environment or
+Keys: GEMINI_API_KEY, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, ELEVENLABS_API_KEY, from the environment or
 from the .env file named by "envFile" in ~/.remnote-media-bridge/tts.json (or
 ~/.remnote-media-bridge/.env). They are never printed.
 
 tts.json (optional): {"envFile": "...", "audioHome": "...", "geminiVoices": [...],
-"geminiModel": "...", "azureVoices": [...]}  ("azureVoice": "..." is still read)
+"geminiModel": "...", "azureVoices": [...], "elevenModel": "...", "elevenUsdPerMChars": N}
+("azureVoice": "..." is still read)
 
 CLI:
   tts.py script.txt --plan              engine, calls, estimate; no API call
@@ -79,6 +84,15 @@ CHARS_PER_S = 13.0
 GEMINI_TOKENS_PER_S = 23.0
 GEMINI_USD_PER_M_TOKENS = 20.0
 AZURE_USD_PER_M_CHARS = 15.0
+ELEVEN_MODEL = "eleven_multilingual_v2"
+# ElevenLabs bills credits (1 per character on multilingual v2, 0.5 on flash/turbo) from a
+# monthly plan, so a dollar figure is only indicative: ~US$0.20 per 1,000 characters.
+ELEVEN_USD_PER_M_CHARS = 200.0
+ELEVEN_LANGUAGE_MODELS = ("eleven_flash_v2_5", "eleven_turbo_v2_5")  # accept language_code
+ELEVEN_FALLBACK_VOICES = {"George": "JBFqnCBsd6RMkjVDRZzb", "Alice": "Xb7hH8MSUJpSbSDYk0k2",
+                          "Brian": "nPczCjzI2devNBz1zQrb", "Eric": "cjVigY5qzO86Huf0OWal",
+                          "Matilda": "XrExE9yKIg1WjnnlVkGX", "Daniel": "onwK4e9ZLuTAKqWW03F9"}
+VOICE_CACHE_S = 600
 
 INLINE = re.compile(r"<(pt|en)>(.*?)</\1>", re.S)
 LANG_PREFIX = re.compile(r"^\[(pt|en)\]\s*")
@@ -113,8 +127,9 @@ def _read_env_file(path: Path) -> dict:
 
 
 def keys() -> dict:
-    """GEMINI_API_KEY, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, ANTHROPIC_API_KEY (whatever is set)."""
-    names = ("GEMINI_API_KEY", "AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION", "ANTHROPIC_API_KEY")
+    """The TTS keys and ANTHROPIC_API_KEY (whatever is set)."""
+    names = ("GEMINI_API_KEY", "AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION", "ELEVENLABS_API_KEY",
+             "ANTHROPIC_API_KEY")
     found = {}
     env_file = config().get("envFile")
     for source in (dict(os.environ),
@@ -229,13 +244,40 @@ ENGINES = {
     "gemini": {"label": "Gemini TTS", "needs": ("GEMINI_API_KEY",), "mixes": False},
     "azure": {"label": "Azure multilingual", "needs": ("AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION"),
               "mixes": True},
+    "elevenlabs": {"label": "ElevenLabs", "needs": ("ELEVENLABS_API_KEY",), "mixes": False},
 }
+# Engines that make one call per language block (the line's language for every word).
+BLOCK_ENGINES = ("gemini", "elevenlabs")
+
+_eleven_voices: dict = {"at": 0.0, "voices": {}}
+
+
+def eleven_voices(key: str | None = None) -> dict[str, str]:
+    """First name -> voice id: the account's voices (cached), else a few stock ones."""
+    key = key or keys().get("ELEVENLABS_API_KEY")
+    if key and time.time() - _eleven_voices["at"] > VOICE_CACHE_S:
+        _eleven_voices["at"] = time.time()
+        try:
+            req = urllib.request.Request("https://api.elevenlabs.io/v2/voices?page_size=100",
+                                         headers={"xi-api-key": key})
+            with urllib.request.urlopen(req, timeout=15, context=_ssl_context()) as res:
+                found = {}
+                for v in json.loads(res.read()).get("voices", []):
+                    name = re.split(r"\s+-\s+", v.get("name") or "", maxsplit=1)[0].strip()
+                    if name and v.get("voice_id"):
+                        found.setdefault(name, v["voice_id"])
+                _eleven_voices["voices"] = found
+        except (OSError, ValueError):
+            pass  # keep the last list (or the stock voices)
+    return _eleven_voices["voices"] or ELEVEN_FALLBACK_VOICES
 
 
 def engine_voices(engine: str) -> list[str]:
     cfg = config()
     if engine == "azure":
         return cfg.get("azureVoices") or [cfg.get("azureVoice") or AZURE_VOICE]
+    if engine == "elevenlabs":
+        return list(eleven_voices())
     return cfg.get("geminiVoices") or GEMINI_VOICES
 
 
@@ -245,7 +287,7 @@ def missing_keys(engine: str, key_set: dict) -> list[str]:
 
 def suggest_engine(n_inline: int, available: list[str]) -> str | None:
     """Azure for many inline terms (only it switches mid-sentence), else Gemini; among the available."""
-    order = ["azure", "gemini"] if n_inline >= INLINE_LIMIT else ["gemini", "azure"]
+    order = (["azure", "gemini"] if n_inline >= INLINE_LIMIT else ["gemini", "azure"]) + ["elevenlabs"]
     return next((e for e in order if e in available), None)
 
 
@@ -262,12 +304,12 @@ def engine_note(engine: str, n_inline: int) -> str:
     terms = f"{n_inline} marked term{'s' if n_inline != 1 else ''}"
     if ENGINES[engine]["mixes"]:
         return f"{terms} switch language mid-sentence"
-    return f"{terms} read in the line's language (Gemini cannot switch mid-sentence)"
+    return f"{terms} read in the line's language ({ENGINES[engine]['label']} cannot switch mid-sentence)"
 
 
 def build_calls(items, engine: str) -> list:
     """Calls and pauses, in order.
-    Gemini: ("gemini", lang, text)  consecutive lines of one language, no pause between.
+    Gemini, ElevenLabs: (engine, lang, text)  consecutive lines of one language, no pause between.
     Azure:  ("azure", [Line, ...])  consecutive lines, no pause between.
     GAP_S goes between consecutive calls; a [pause] takes its place."""
     calls: list = []
@@ -276,18 +318,24 @@ def build_calls(items, engine: str) -> list:
             calls.append(("pause", it.seconds))
             continue
         last = calls[-1] if calls else None
-        if engine == "gemini":
+        if engine in BLOCK_ENGINES:
             txt = plain(it.text)
-            if last and last[0] == "gemini" and last[1] == it.lang and len(last[2]) + len(txt) <= MAX_CALL_CHARS:
-                calls[-1] = ("gemini", it.lang, last[2] + "\n\n" + txt)
+            if last and last[0] == engine and last[1] == it.lang and len(last[2]) + len(txt) <= MAX_CALL_CHARS:
+                calls[-1] = (engine, it.lang, last[2] + "\n\n" + txt)
             else:
-                calls.append(("gemini", it.lang, txt))
+                calls.append((engine, it.lang, txt))
         else:
             if last and last[0] == "azure" and sum(len(f.text) for f in last[1]) + len(it.text) <= MAX_CALL_CHARS:
                 last[1].append(it)
             else:
                 calls.append(("azure", [it]))
     return calls
+
+
+def usd_per_m_chars(engine: str) -> float:
+    if engine == "elevenlabs":
+        return float(config().get("elevenUsdPerMChars") or ELEVEN_USD_PER_M_CHARS)
+    return AZURE_USD_PER_M_CHARS
 
 
 def voice_label(voice: str) -> str:
@@ -303,7 +351,7 @@ def _estimate(items, lines, engine: str) -> dict:
     chars = sum(len(plain(l.text)) for l in lines)
     seconds = chars / CHARS_PER_S + sum(pauses) + GAP_S * max(0, n_calls - 1)
     cost = (seconds * GEMINI_TOKENS_PER_S * GEMINI_USD_PER_M_TOKENS / 1e6 if engine == "gemini"
-            else chars * AZURE_USD_PER_M_CHARS / 1e6)
+            else chars * usd_per_m_chars(engine) / 1e6)
     return {"calls": n_calls, "answerPauses": pauses, "characters": chars,
             "estSeconds": round(seconds), "estCostUsd": round(cost, 3)}
 
@@ -420,6 +468,19 @@ def azure(lines: list[Line], dest: Path, key: str, region: str, voice: str, log)
         ssml(lines, voice).encode("utf-8"), log))
 
 
+def elevenlabs(lang: str, text: str, dest: Path, key: str, voice: str, log) -> None:
+    model = config().get("elevenModel") or ELEVEN_MODEL
+    voice_id = eleven_voices(key).get(voice, voice)
+    body = {"text": text, "model_id": model}
+    if model in ELEVEN_LANGUAGE_MODELS:
+        body["language_code"] = lang
+    pcm = dest.with_suffix(".pcm")
+    pcm.write_bytes(_post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=pcm_{RATE}",
+        {"xi-api-key": key, "Content-Type": "application/json"}, json.dumps(body).encode(), log))
+    _ffmpeg("-f", "s16le", "-ar", RATE, "-ac", 1, "-i", pcm, dest)
+
+
 def silence(seconds: float, dest: Path) -> Path:
     _ffmpeg("-f", "lavfi", "-i", f"anullsrc=r={RATE}:cl=mono", "-t", seconds, "-c:a", "pcm_s16le", dest)
     return dest
@@ -465,10 +526,12 @@ def synthesize(script: str, out: Path, engine: str = "auto", voice: str | None =
             if prev_speech:
                 parts.append(silence(GAP_S, tmp / f"g_{i:03d}.wav"))
             done += 1
-            log(f"{'Gemini' if eng == 'gemini' else 'Azure'} {done}/{total}")
+            log(f"{ENGINES[eng]['label']} {done}/{total}")
             w = tmp / f"s_{i:03d}.wav"
             if eng == "gemini":
                 tokens += gemini(c[1], c[2], w, ks["GEMINI_API_KEY"], voice, log)
+            elif eng == "elevenlabs":
+                elevenlabs(c[1], c[2], w, ks["ELEVENLABS_API_KEY"], voice, log)
             else:
                 azure(c[1], w, ks["AZURE_SPEECH_KEY"], ks["AZURE_SPEECH_REGION"], voice, log)
             parts.append(w)
@@ -488,7 +551,7 @@ def synthesize(script: str, out: Path, engine: str = "auto", voice: str | None =
         summary["audioTokens"] = tokens
         summary["costUsd"] = round(tokens * GEMINI_USD_PER_M_TOKENS / 1e6, 3)
     else:
-        summary["costUsd"] = round(p["characters"] * AZURE_USD_PER_M_CHARS / 1e6, 3)
+        summary["costUsd"] = round(p["characters"] * usd_per_m_chars(eng) / 1e6, 3)
     return summary
 
 
@@ -524,7 +587,7 @@ def keep_copy(script: str, mp3: Path, rem_id: str, subject: str, folder: Path | 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("script", type=Path)
-    ap.add_argument("--engine", choices=["auto", "gemini", "azure"], default="auto")
+    ap.add_argument("--engine", choices=["auto", *ENGINES], default="auto")
     ap.add_argument("--voice")
     ap.add_argument("--out", type=Path, help="mp3 (default: next to the script)")
     ap.add_argument("--plan", action="store_true", help="engine, calls and estimate; no API call")

@@ -7,11 +7,19 @@ import '../rn_theme_vars.css';
 import {
   getTtsTask,
   insertAudio,
+  insertSummaryText,
+  loadDraft,
   planTts,
   ReadAloudContext,
+  ReadAloudDraft,
+  ReadAloudMode,
+  saveDraft,
+  sourceHash,
   startTts,
+  startWrite,
   TtsEngine,
   TtsPlan,
+  WriteResult,
 } from '../lib/read_aloud';
 
 const POLL_MS = 1500;
@@ -19,11 +27,48 @@ const PLAN_DEBOUNCE_MS = 500;
 
 type Phase =
   | { kind: 'editing' }
+  | { kind: 'writing'; stage: string; elapsed: number }
   | { kind: 'running'; stage: string; elapsed: number }
   | { kind: 'inserting' }
   | { kind: 'error'; message: string };
 
 const muted = { color: 'var(--rn-clr-content-secondary)' };
+
+const MODES: [ReadAloudMode, string, string][] = [
+  ['literal', 'Literal', 'The note as written, with the reading rules. No AI.'],
+  [
+    'adapted',
+    'Adapted',
+    'The whole note, made listenable by AI: formulas and units in words, terms marked.',
+  ],
+  ['summary', 'Summary', 'A spoken summary written by AI, within a maximum length.'],
+];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const SAVE_DEBOUNCE_MS = 800;
+
+function writtenInfo(w: WriteResult | undefined, currentHash: string | undefined): string {
+  if (!w) {
+    return "Written with claude -p (your Claude subscription); if that fails, with the Anthropic API key in the helper's .env.";
+  }
+  const how =
+    w.via === 'claude-cli'
+      ? 'with claude -p (your subscription)'
+      : `with the Anthropic API, ~US$${(w.costUsd ?? 0).toFixed(2)}`;
+  const when = w.writtenAt
+    ? ` on ${new Date(w.writtenAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
+    : '';
+  const stale =
+    w.sourceHash && currentHash && w.sourceHash !== currentHash
+      ? ' The note has changed since: rewrite to include the changes.'
+      : '';
+  return (
+    `Written by ${w.model ?? 'Claude'} ${how}${when}.` +
+    (w.fallbackReason ? ` claude -p failed: ${w.fallbackReason}.` : '') +
+    stale
+  );
+}
 
 const SKIP_LABELS: Record<string, string> = {
   images: 'image',
@@ -89,11 +134,25 @@ const fieldStyle: React.CSSProperties = {
 /**
  * Read aloud: the script built from the rem tree (lib/read_aloud.ts), editable, with
  * the helper's free estimate; Generate synthesises it (/tts) and adds the audio rem.
+ * Modes: Literal (that script), Adapted and Summary (the helper's LLM step, /tts/write,
+ * writes the script from the tree's outline; Summary can also insert its text).
  */
 export function ReadAloudPopup() {
   const plugin = usePlugin();
   const [context, setContext] = useState<ReadAloudContext | null>(null);
-  const [script, setScript] = useState('');
+  const [mode, setMode] = useState<ReadAloudMode>('literal');
+  // One script per mode, so switching back keeps what was written or edited.
+  const [scripts, setScripts] = useState<Record<ReadAloudMode, string>>({
+    literal: '',
+    adapted: '',
+    summary: '',
+  });
+  const script = scripts[mode];
+  const setScript = (text: string) => setScripts((all) => ({ ...all, [mode]: text }));
+  const [written, setWritten] = useState<Partial<Record<ReadAloudMode, WriteResult>>>({});
+  const [maxMinutes, setMaxMinutes] = useState('5');
+  const [instructions, setInstructions] = useState('');
+  const [insertText, setInsertText] = useState(true);
   const [engine, setEngine] = useState('auto');
   const [voice, setVoice] = useState('');
   const [plan, setPlan] = useState<TtsPlan | null>(null);
@@ -102,18 +161,58 @@ export function ReadAloudPopup() {
   const [lastPlanned, setLastPlanned] = useState('auto');
   const [phase, setPhase] = useState<Phase>({ kind: 'editing' });
   const run = useRef(0);
+  // Set once the saved draft (if any) is restored; saving starts only then.
+  const [restored, setRestored] = useState(false);
 
   useEffect(() => {
     (async () => {
       const ctx = await plugin.widget.getWidgetContext<WidgetLocation.Popup>();
       const data = (ctx?.contextData as ReadAloudContext) ?? null;
       setContext(data);
-      setScript(data?.script ?? '');
+      const literal = data?.script ?? '';
+      const draft = data ? await loadDraft(plugin, data.remId) : undefined;
+      setScripts({
+        // A hand edit of the Literal script survives only while the note is unchanged.
+        literal: draft?.literal && draft.literalBase === literal ? draft.literal : literal,
+        adapted: draft?.adapted ?? '',
+        summary: draft?.summary ?? '',
+      });
+      if (draft) {
+        setWritten(draft.written ?? {});
+        if (draft.maxMinutes) setMaxMinutes(draft.maxMinutes);
+        if (draft.instructions) setInstructions(draft.instructions);
+        if (draft.insertText !== undefined) setInsertText(draft.insertText);
+        if (draft.mode && (draft.mode === 'literal' || draft[draft.mode])) setMode(draft.mode);
+      }
+      setRestored(true);
     })();
     return () => {
       run.current++; // stop polling when the popup closes
     };
   }, []);
+
+  // Keep this rem's drafts on the device (plugin local storage), debounced.
+  useEffect(() => {
+    if (!restored || !context) return;
+    const timer = setTimeout(() => {
+      const literalEdited = scripts.literal !== context.script;
+      const draft: ReadAloudDraft = {
+        savedAt: Date.now(),
+        mode,
+        ...(literalEdited ? { literalBase: context.script, literal: scripts.literal } : {}),
+        ...(scripts.adapted ? { adapted: scripts.adapted } : {}),
+        ...(scripts.summary ? { summary: scripts.summary } : {}),
+        written,
+        maxMinutes,
+        instructions,
+        insertText,
+      };
+      const worthKeeping =
+        literalEdited || !!scripts.adapted || !!scripts.summary || !!instructions.trim();
+      saveDraft(plugin, context.remId, worthKeeping ? draft : undefined).catch(() => {});
+    }, SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [restored, context, scripts, written, maxMinutes, instructions, insertText, mode]);
 
   // The helper's estimate, refreshed as the script or engine changes.
   useEffect(() => {
@@ -135,6 +234,46 @@ export function ReadAloudPopup() {
 
   const close = () => plugin.widget.closePopup();
 
+  // Adapted / Summary: the helper's LLM step writes the script from the outline.
+  const writeScript = async () => {
+    if (!context || mode === 'literal') return;
+    const target = mode;
+    const mine = ++run.current;
+    setPhase({ kind: 'writing', stage: 'starting', elapsed: 0 });
+    try {
+      const mins = parseFloat(maxMinutes.replace(',', '.'));
+      const taskId = await startWrite(
+        context,
+        target,
+        target === 'summary' && mins > 0 ? mins : null,
+        target === 'summary' ? instructions : ''
+      );
+      for (;;) {
+        await sleep(POLL_MS);
+        if (mine !== run.current) return;
+        const task = await getTtsTask<WriteResult>(taskId);
+        if (mine !== run.current) return;
+        if (task.status === 'done') {
+          const result = task.result;
+          if (!result?.ok) {
+            setPhase({ kind: 'error', message: result?.message ?? 'the AI step failed' });
+            return;
+          }
+          setScripts((all) => ({ ...all, [target]: result.script ?? '' }));
+          setWritten((all) => ({
+            ...all,
+            [target]: { ...result, writtenAt: Date.now(), sourceHash: sourceHash(context.source) },
+          }));
+          setPhase({ kind: 'editing' });
+          return;
+        }
+        setPhase({ kind: 'writing', stage: task.stage, elapsed: task.elapsed });
+      }
+    } catch (err) {
+      if (mine === run.current) setPhase({ kind: 'error', message: String(err) });
+    }
+  };
+
   const generate = async () => {
     if (!context || !plan?.ok || !plan.ready || !plan.engine) return;
     const mine = ++run.current;
@@ -149,7 +288,7 @@ export function ReadAloudPopup() {
         context.title
       );
       for (;;) {
-        await new Promise((r) => setTimeout(r, POLL_MS));
+        await sleep(POLL_MS);
         if (mine !== run.current) return;
         const task = await getTtsTask(taskId);
         if (mine !== run.current) return;
@@ -160,11 +299,20 @@ export function ReadAloudPopup() {
             return;
           }
           setPhase({ kind: 'inserting' });
-          const { warning } = await insertAudio(plugin, context, result);
+          const { remId, warning } = await insertAudio(plugin, context, result);
+          let textWarning = '';
+          if (mode === 'summary' && insertText && remId) {
+            try {
+              await insertSummaryText(plugin, remId, context, script, written.summary?.model);
+            } catch (err) {
+              textWarning = `summary text not inserted (${String(err)})`;
+            }
+          }
           const cost = result.costUsd != null ? `, ~US$${result.costUsd.toFixed(2)}` : '';
+          const notes = [warning, textWarning].filter(Boolean).join('; ');
           await plugin.app.toast(
             `Audio added (${result.voiceLabel}, ${minutes(result.seconds ?? 0)}${cost})` +
-              (warning ? ` — ${warning}` : '')
+              (notes ? ` — ${notes}` : '')
           );
           close();
           return;
@@ -180,13 +328,14 @@ export function ReadAloudPopup() {
     if (e.key === 'Escape') {
       e.preventDefault();
       close();
-    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && phase.kind !== 'running') {
+    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !busy) {
       e.preventDefault();
-      void generate();
+      if (mode !== 'literal' && !script.trim()) void writeScript();
+      else void generate();
     }
   };
 
-  const busy = phase.kind === 'running' || phase.kind === 'inserting';
+  const busy = phase.kind === 'running' || phase.kind === 'inserting' || phase.kind === 'writing';
   const stats = context?.stats;
   const skipped = Object.entries(stats?.skipped ?? {})
     .filter(([, n]) => n > 0)
@@ -218,6 +367,85 @@ export function ReadAloudPopup() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2" style={{ flexShrink: 0 }}>
+        {MODES.map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => {
+              setMode(id);
+              if (phase.kind === 'error') setPhase({ kind: 'editing' });
+            }}
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            className="py-1 px-3 text-sm rounded"
+            style={{
+              border: '1px solid var(--rn-clr-border-primary)',
+              background: mode === id ? '#3B82F6' : 'var(--rn-clr-background-primary)',
+              color: mode === id ? 'white' : 'var(--rn-clr-content-primary)',
+              cursor: busy ? 'default' : 'pointer',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+        <span className="text-xs" style={muted}>
+          {MODES.find(([id]) => id === mode)?.[2]}
+        </span>
+      </div>
+
+      {mode === 'summary' && (
+        <div className="flex flex-col gap-2 text-xs" style={{ flexShrink: 0 }}>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-1">
+              Maximum length
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={maxMinutes}
+                onChange={(e) => setMaxMinutes(e.target.value)}
+                disabled={busy}
+                className="rounded px-1 py-0.5"
+                style={{ ...fieldStyle, width: '4em' }}
+              />
+              min
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={insertText}
+                onChange={(e) => setInsertText(e.target.checked)}
+                disabled={busy}
+              />
+              Also insert the summary text under the audio
+            </label>
+          </div>
+          <textarea
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            disabled={busy}
+            rows={2}
+            placeholder="Additional instructions (optional), e.g. focus on the definitions; end with three questions to answer"
+            className="rounded px-2 py-1"
+            style={{ ...fieldStyle, resize: 'none' }}
+          />
+        </div>
+      )}
+
+      {mode !== 'literal' && (
+        <div className="flex items-center gap-2 text-xs" style={{ flexShrink: 0 }}>
+          <Button
+            label={script.trim() ? 'Rewrite with AI' : 'Write the script with AI'}
+            onClick={() => void writeScript()}
+            disabled={busy || !context}
+            title={script.trim() ? 'Replaces the script below' : '⌘↵'}
+          />
+          <span style={muted}>
+            {writtenInfo(written[mode], context ? sourceHash(context.source) : undefined)}
+          </span>
+        </div>
+      )}
+
       <div className="text-xs" style={{ ...muted, flexShrink: 0 }}>
         The script below is what will be spoken. Edit it freely: <code>[pt]</code> starts a
         Portuguese line, <code>&lt;en&gt;term&lt;/en&gt;</code> /{' '}
@@ -230,6 +458,9 @@ export function ReadAloudPopup() {
         onChange={(e) => setScript(e.target.value)}
         disabled={busy}
         spellCheck={false}
+        placeholder={
+          mode === 'literal' ? '' : 'Press “Write the script with AI” (⌘↵) to fill this in.'
+        }
         className="text-sm rounded px-2 py-1"
         style={{
           ...fieldStyle,
@@ -296,7 +527,9 @@ export function ReadAloudPopup() {
             {voices.length === 1 ? `${voiceLabel(voices[0])} · ` : ''}
             {plan.words} words · about {minutes(plan.estSeconds ?? 0)} · ~US$
             {(plan.estCostUsd ?? 0).toFixed(2)}
-            {(plan.estSeconds ?? 0) > 12 * 60 ? ' · long: consider a summary' : ''}
+            {mode !== 'summary' && (plan.estSeconds ?? 0) > 12 * 60
+              ? ' · long: consider a summary'
+              : ''}
           </span>
         )}
       </div>
@@ -344,7 +577,7 @@ export function ReadAloudPopup() {
 
       <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
         <span className="text-sm" style={{ ...muted, flex: 1 }}>
-          {phase.kind === 'running' &&
+          {(phase.kind === 'running' || phase.kind === 'writing') &&
             `${phase.stage[0]?.toUpperCase()}${phase.stage.slice(1)}… ${phase.elapsed} s — keep this window open`}
           {phase.kind === 'inserting' && 'Storing the audio in RemNote…'}
         </span>

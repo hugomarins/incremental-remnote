@@ -54,6 +54,10 @@ Endpoints (127.0.0.1:3460, CORS open, for the plugin iframe):
                                characters, estSeconds, estCostUsd. No API call.
   POST /tts {script, engine?, voice?, remId?, subject?} → {taskId}   (plugin → helper: the
                                "Read aloud" command; runs tts.py: Gemini or Azure TTS, mp3)
+  POST /tts/write {mode: adapted|summary, source, lang, title?, maxMinutes?, instructions?}
+                               → {taskId}: an LLM writes the spoken script from the plugin's
+                               outline (spoken_script.py: `claude -p`, Anthropic API fallback);
+                               result {script, errors, via, model, costUsd, fallbackReason?}
   GET  /tts/<id>               {status: running|done, stage, result?}; result.url serves the
                                mp3 for the `audio` op; a copy is kept in tts.py's audioHome
   GET  /next?wait=25&v=2       plugin long-poll → {id, op, remIds, …} or 204. A plugin
@@ -84,7 +88,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 9  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines
+VERSION = 10  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},
@@ -111,6 +115,7 @@ REPEATABLE_OPS = {"localize"}
 
 UPSCALE_SCRIPT = Path(__file__).resolve().parent / "upscale_image.py"
 TTS_SCRIPT = Path(__file__).resolve().parent / "tts.py"
+SPOKEN_SCRIPT = Path(__file__).resolve().parent / "spoken_script.py"
 UPSCALE_HOME = Path(os.environ.get("REMNOTE_UPSCALE_HOME", Path.home() / "Pictures" / "remnote-upscale"))
 
 # --- server --------------------------------------------------------------------
@@ -264,17 +269,42 @@ class Handler(BaseHTTPRequestHandler):
             _tasks[task["id"]] = task
             threading.Thread(target=_run_upscale, args=(task,), daemon=True).start()
             return self._json(200, {"taskId": task["id"]})
+        if url.path == "/tts/write":
+            source = body.get("source")
+            if not isinstance(source, str) or not source.strip():
+                return self._json(400, {"error": "source required"})
+            mode = body.get("mode")
+            if mode not in ("adapted", "summary"):
+                return self._json(400, {"error": f"unknown mode {mode!r}"})
+            try:
+                minutes = float(body["maxMinutes"]) if body.get("maxMinutes") else None
+            except (TypeError, ValueError):
+                return self._json(400, {"error": "maxMinutes must be a number"})
+            try:
+                _spoken_module()
+            except Exception as err:
+                return self._json(500, {"error": f"spoken_script.py did not load: {err}"})
+            task = {
+                "id": uuid.uuid4().hex[:12], "remId": str(body.get("remId") or ""), "mode": mode,
+                "source": source, "lang": body.get("lang") if body.get("lang") in ("pt", "en") else "en",
+                "title": str(body.get("title") or ""), "maxMinutes": minutes,
+                "instructions": str(body.get("instructions") or ""),
+                "status": "running", "stage": "starting", "result": None, "createdAt": time.time(),
+            }
+            _tts_tasks[task["id"]] = task
+            threading.Thread(target=_run_write, args=(task,), daemon=True).start()
+            return self._json(200, {"taskId": task["id"]})
         if url.path in ("/tts", "/tts/plan"):
             script = body.get("script")
             if not isinstance(script, str) or not script.strip():
                 return self._json(400, {"error": "script required"})
             engine = body.get("engine") or "auto"
-            if engine not in ("auto", "gemini", "azure"):
-                return self._json(400, {"error": f"unknown engine {engine!r}"})
             try:
                 tts = _tts_module()
             except Exception as err:
                 return self._json(500, {"error": f"tts.py did not load: {err}"})
+            if engine not in ("auto", *tts.ENGINES):
+                return self._json(400, {"error": f"unknown engine {engine!r}"})
             if url.path == "/tts/plan":
                 return self._json(200, tts.plan(script, engine, body.get("voice")))
             task = {
@@ -389,6 +419,42 @@ def _tts_module():
         spec.loader.exec_module(mod)
         _tts_mod = mod
     return _tts_mod
+
+
+_spoken_mod = None
+
+
+def _spoken_module():
+    """spoken_script.py (loads tts.py first, under the same module name)."""
+    global _spoken_mod
+    if _spoken_mod is None:
+        _tts_module()
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("remnote_bridge_spoken", SPOKEN_SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        _spoken_mod = mod
+    return _spoken_mod
+
+
+def _run_write(task: dict) -> None:
+    tid = task["id"]
+    try:
+        spoken = _spoken_module()
+        res = spoken.write(task["mode"], task["source"], task["lang"], task["title"],
+                           task["maxMinutes"], task["instructions"],
+                           progress=lambda msg: task.__setitem__("stage", msg))
+        task["result"] = {"ok": True, **res}
+    except Exception as err:  # reported to the plugin, which shows it
+        task["result"] = {"ok": False, "message": str(err)}
+    finally:
+        task["status"] = "done"
+        task["stage"] = "done"
+        r = task["result"] or {}
+        print(f"{time.strftime('%H:%M:%S')} tts-write {tid} {task['mode']} {task['remId']}: "
+              f"{'ok ' + str(r.get('via')) + ' US$' + str(r.get('costUsd')) if r.get('ok') else r.get('message')}",
+              file=sys.stderr, flush=True)
 
 
 def _run_tts(task: dict) -> None:

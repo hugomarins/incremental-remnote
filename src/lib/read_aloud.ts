@@ -2,7 +2,8 @@
  * "Read aloud": the focused rem and its descendants, in tree order, become a spoken
  * script; the Local Media Bridge helper turns it into an mp3 (POST /tts, which runs
  * scripts/media_bridge/tts.py: Gemini TTS one call per language block, or Azure's
- * multilingual voice when the script has many inline foreign terms); the mp3 is
+ * multilingual voice when the script has many inline foreign terms, or ElevenLabs;
+ * the user picks among the engines whose keys the helper has); the mp3 is
  * stored in RemNote as an audio rem, first child of the read rem.
  *
  * The plugin only reads and inserts. The API keys stay in the helper's .env; the
@@ -17,7 +18,7 @@
  * inline language marks (<en>…</en> in a Portuguese line, <pt>…</pt> in an English
  * one), which is also what sends a script to the multilingual voice.
  */
-import { ReactRNPlugin, RNPlugin, SelectionType } from '@remnote/plugin-sdk';
+import { ReactRNPlugin, RichTextInterface, RNPlugin, SelectionType } from '@remnote/plugin-sdk';
 import { mediaBridgeEnabledId, READ_ALOUD_POPUP, readAloudTagId } from './consts';
 import { MEDIA_BRIDGE_URL } from './media_bridge';
 import { runAudio } from './media_bridge_ops';
@@ -27,14 +28,35 @@ import { getIESetting } from './settings';
 
 export type { Lang, ReadAloudStats };
 
-/** The helper version whose /tts/plan lists the engines. */
-const MIN_HELPER_VERSION = 9;
+/** The helper version with /tts/write (Adapted and Summary modes) and ElevenLabs. */
+const MIN_HELPER_VERSION = 10;
 export interface ReadAloudContext {
   remId: string;
   title: string;
   lang: Lang;
+  /** The Literal script. */
   script: string;
+  /** The tree as an outline (formulas as LaTeX), for the LLM modes. */
+  source: string;
   stats: ReadAloudStats;
+}
+
+export type ReadAloudMode = 'literal' | 'adapted' | 'summary';
+
+/** What the helper's LLM step (/tts/write) returns. */
+export interface WriteResult {
+  ok: boolean;
+  message?: string;
+  script?: string;
+  errors?: string[];
+  via?: 'claude-cli' | 'anthropic-api';
+  model?: string;
+  costUsd?: number;
+  fallbackReason?: string;
+  seconds?: number;
+  /** Added by the popup: when, and from which version of the note (sourceHash). */
+  writtenAt?: number;
+  sourceHash?: string;
 }
 
 /** One TTS engine as the helper reports it: available = its API keys are set. */
@@ -87,12 +109,12 @@ export interface TtsResult {
   saved?: string;
 }
 
-export interface TtsTask {
+export interface TtsTask<R = TtsResult> {
   id: string;
   status: 'running' | 'done';
   stage: string;
   elapsed: number;
-  result: TtsResult | null;
+  result: R | null;
 }
 
 // --- helper -------------------------------------------------------------------------
@@ -104,7 +126,7 @@ async function helperProblem(): Promise<string | undefined> {
     if ((health?.version ?? 1) < MIN_HELPER_VERSION) {
       return (
         `The media-bridge helper running on this computer is version ${health?.version ?? 1}; ` +
-        `Read aloud needs ${MIN_HELPER_VERSION}. Restart it: ` +
+        `Read aloud needs ${MIN_HELPER_VERSION}. Restart it: curl -X POST localhost:3460/shutdown, then ` +
         'launchctl kickstart -k gui/$(id -u)/com.incrementalremnote.media-bridge'
       );
     }
@@ -149,11 +171,31 @@ export async function startTts(
   return body.taskId;
 }
 
-export async function getTtsTask(taskId: string): Promise<TtsTask> {
+export async function getTtsTask<R = TtsResult>(taskId: string): Promise<TtsTask<R>> {
   const res = await fetch(`${MEDIA_BRIDGE_URL}/tts/${taskId}`);
   const body = await res.json();
   if (!res.ok) throw new Error(body?.error ?? `helper answered ${res.status}`);
-  return body as TtsTask;
+  return body as TtsTask<R>;
+}
+
+/** Ask the helper's LLM step to write the Adapted or Summary script; returns the task id. */
+export async function startWrite(
+  context: ReadAloudContext,
+  mode: 'adapted' | 'summary',
+  maxMinutes: number | null,
+  instructions: string
+): Promise<string> {
+  const body = await postJSON<{ taskId?: string }>('/tts/write', {
+    mode,
+    source: context.source,
+    lang: context.lang,
+    title: context.title,
+    remId: context.remId,
+    maxMinutes,
+    instructions,
+  });
+  if (!body.taskId) throw new Error('the helper started no task');
+  return body.taskId;
 }
 
 // --- insert -------------------------------------------------------------------------
@@ -195,6 +237,114 @@ export async function insertAudio(
     }
   }
   return { remId, warning };
+}
+
+/** A script line → rich text: language prefix dropped, <en>/<pt> terms in italics. */
+function scriptLineToRichText(line: string): RichTextInterface {
+  const text = line.replace(/^\[(pt|en)\]\s*/, '');
+  const out: RichTextInterface = [];
+  let pos = 0;
+  for (const m of text.matchAll(/<(pt|en)>(.*?)<\/\1>/g)) {
+    if (m.index! > pos) out.push(text.slice(pos, m.index));
+    out.push({ i: 'm', text: m[2], l: true });
+    pos = m.index! + m[0].length;
+  }
+  if (pos < text.length) out.push(text.slice(pos));
+  return out;
+}
+
+/**
+ * The summary's text under the audio rem: a first child saying what it is, then one
+ * rem per script line ([pause] lines left out).
+ */
+export async function insertSummaryText(
+  plugin: RNPlugin,
+  audioRemId: string,
+  context: ReadAloudContext,
+  script: string,
+  model?: string
+): Promise<void> {
+  const audioRem = await plugin.rem.findOne(audioRemId);
+  if (!audioRem) throw new Error('the audio rem is gone');
+  const by = model ? ` (${model})` : '';
+  const header =
+    context.lang === 'pt'
+      ? `Resumo deste documento, escrito por IA${by}:`
+      : `Summary of this document, written by AI${by}:`;
+  const lines = [
+    header,
+    ...script
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !/^\[(pause|pausa)(\s+[\d.,]+)?\]$/i.test(l)),
+  ];
+  for (const [i, line] of lines.entries()) {
+    const rem = await plugin.rem.createRem();
+    if (!rem) throw new Error('could not create a rem');
+    await rem.setText(i === 0 ? [line] : scriptLineToRichText(line));
+    await rem.setParent(audioRem, i);
+  }
+}
+
+// --- drafts (per rem, this device) -------------------------------------------------
+
+/**
+ * What the popup keeps for a rem between openings: the AI-written scripts (with how
+ * they were written and from which version of the note), a hand-edited Literal script,
+ * and the Summary options. In the plugin's local storage (this device, not synced, kept
+ * across restarts); the most recent MAX_DRAFTS rems only.
+ */
+export interface ReadAloudDraft {
+  savedAt: number;
+  mode: ReadAloudMode;
+  /** The Literal script as built when it was edited, and the edit. */
+  literalBase?: string;
+  literal?: string;
+  adapted?: string;
+  summary?: string;
+  written?: Partial<Record<ReadAloudMode, WriteResult>>;
+  maxMinutes?: string;
+  instructions?: string;
+  insertText?: boolean;
+}
+
+const DRAFTS_KEY = 'read-aloud-drafts';
+const MAX_DRAFTS = 30;
+
+/** A short fingerprint of the note's outline, to tell when it changed since a script was written. */
+export function sourceHash(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return `${(h >>> 0).toString(36)}-${text.length}`;
+}
+
+export async function loadDraft(
+  plugin: RNPlugin,
+  remId: string
+): Promise<ReadAloudDraft | undefined> {
+  try {
+    const all = await plugin.storage.getLocal<Record<string, ReadAloudDraft>>(DRAFTS_KEY);
+    return all?.[remId];
+  } catch {
+    return undefined;
+  }
+}
+
+/** Save (or, with undefined, forget) a rem's draft, keeping the most recent MAX_DRAFTS. */
+export async function saveDraft(
+  plugin: RNPlugin,
+  remId: string,
+  draft: ReadAloudDraft | undefined
+): Promise<void> {
+  const all = {
+    ...((await plugin.storage.getLocal<Record<string, ReadAloudDraft>>(DRAFTS_KEY)) ?? {}),
+  };
+  if (draft) all[remId] = draft;
+  else delete all[remId];
+  const kept = Object.entries(all)
+    .sort(([, a], [, b]) => b.savedAt - a.savedAt)
+    .slice(0, MAX_DRAFTS);
+  await plugin.storage.setLocal(DRAFTS_KEY, Object.fromEntries(kept));
 }
 
 // --- the command --------------------------------------------------------------------

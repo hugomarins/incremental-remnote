@@ -116,6 +116,15 @@ describe('buildReadAloudScript', () => {
       '[pt] O que é o fairway? A via navegável mais ampla.',
       '[pt] Tabela omitida.',
     ]);
+    assert.deepEqual(out.source.split('\n'), [
+      '- Definições Básicas',
+      '  - Canal de Acesso (Approach Channel):',
+      '    - Canal externo (*outer channel)*: localizado em águas abertas, como *heave*, *pitch* e *roll*.',
+      '    - A força é \\(F = m a\\), de 120 kN [ver p. 12].',
+      '  - Veja o canal de navegação e a fonte .',
+      '  - O que é o fairway? ⇒ A via navegável mais ampla',
+      '  - (table omitted)',
+    ]);
     assert.equal(out.stats.skipped.properties, 2);
     assert.equal(out.stats.skipped.images, 1);
     assert.equal(out.stats.skipped.pins, 1);

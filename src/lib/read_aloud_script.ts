@@ -75,6 +75,8 @@ function isForeignTerm(text: string, lineLang: Lang): boolean {
 export interface Span {
   text: string;
   italic: boolean;
+  /** A formula's LaTeX (text is then the FORMULA placeholder). */
+  latex?: string;
 }
 
 const FORMULA = '\u0001F\u0001';
@@ -121,7 +123,7 @@ async function spansOf(
       }
       case 'x':
         count(stats, 'formulas');
-        out.push({ text: FORMULA, italic: false });
+        out.push({ text: FORMULA, italic: false, latex: String(el.text ?? '') });
         break;
       case 'n':
         out.push({ text: String(el.text ?? ''), italic: false });
@@ -210,6 +212,7 @@ const plainOf = (spans: Span[]) => spans.map((s) => s.text).join('');
 interface RawLine {
   front: Span[];
   back: Span[];
+  depth: number;
   placeholder?: 'table';
 }
 
@@ -223,7 +226,8 @@ async function collect(
   rem: PluginRem,
   out: RawLine[],
   stats: ReadAloudStats,
-  seen: Set<string>
+  seen: Set<string>,
+  depth = 0
 ): Promise<void> {
   if (seen.has(rem._id)) return;
   if (stats.rems >= MAX_REMS) {
@@ -249,28 +253,67 @@ async function collect(
   stats.rems++;
   if (isTable) {
     count(stats, 'tables');
-    out.push({ front: [], back: [], placeholder: 'table' });
+    out.push({ front: [], back: [], depth, placeholder: 'table' });
     return;
   }
   if ((rem.type as number) === REM_TYPE_PORTAL) {
     const included = await rem.getPortalDirectlyIncludedRem().catch(() => [] as PluginRem[]);
-    for (const child of included) await collect(plugin, child, out, stats, seen);
+    for (const child of included) await collect(plugin, child, out, stats, seen, depth);
     return;
   }
   if (isCode) count(stats, 'code');
   else {
     const front = await spansOf(plugin, rem.text, stats);
     const back = await spansOf(plugin, rem.backText, stats);
-    if (plainOf(front).trim() || plainOf(back).trim()) out.push({ front, back });
+    if (plainOf(front).trim() || plainOf(back).trim()) out.push({ front, back, depth });
   }
-  for (const child of await rem.getChildrenRem()) await collect(plugin, child, out, stats, seen);
+  for (const child of await rem.getChildrenRem())
+    await collect(plugin, child, out, stats, seen, depth + 1);
+}
+
+/** Spans as written text for an LLM: italic as *x*, formulas as \(LaTeX\). */
+function writtenOf(spans: Span[]): string {
+  return spans
+    .map((s) =>
+      s.latex !== undefined
+        ? `\\(${s.latex}\\)`
+        : s.italic && s.text.trim()
+          ? `*${s.text}*`
+          : s.text
+    )
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The tree as an indented outline, for the LLM modes (Adapted, Summary): the same rems
+ * and skips as the script, but formulas kept as LaTeX, italics as *x*, and a
+ * flashcard's back after " ⇒ ".
+ */
+function outlineOf(raw: RawLine[]): string {
+  return raw
+    .map((l) => {
+      const text =
+        l.placeholder === 'table'
+          ? '(table omitted)'
+          : [writtenOf(l.front), writtenOf(l.back)].filter(Boolean).join(' ⇒ ');
+      return `${'  '.repeat(l.depth)}- ${text}`;
+    })
+    .join('\n');
 }
 
 /** The focused rem's tree as a spoken script, in the script format tts.py reads. */
 export async function buildReadAloudScript(
   plugin: RNPlugin,
   rem: PluginRem
-): Promise<{ script: string; lang: Lang; title: string; stats: ReadAloudStats }> {
+): Promise<{
+  script: string;
+  source: string;
+  lang: Lang;
+  title: string;
+  stats: ReadAloudStats;
+}> {
   const stats: ReadAloudStats = { rems: 0, lines: 0, skipped: {}, truncated: false };
   const raw: RawLine[] = [];
   await collect(plugin, rem, raw, stats, new Set());
@@ -295,5 +338,5 @@ export async function buildReadAloudScript(
   });
   stats.lines = lines.length;
   const title = raw.length ? renderLine(raw[0].front, guesses[0] ?? lang).replace(/[.:]$/, '') : '';
-  return { script: lines.join('\n'), lang, title, stats };
+  return { script: lines.join('\n'), source: outlineOf(raw), lang, title, stats };
 }
