@@ -5,10 +5,10 @@ import '../style.css';
 import '../App.css';
 import '../rn_theme_vars.css';
 import {
+  enqueueReadAloudJob,
   getTtsTask,
-  insertAudio,
-  insertSummaryText,
   loadDraft,
+  minutes,
   planTts,
   ReadAloudContext,
   ReadAloudDraft,
@@ -29,8 +29,7 @@ const PLAN_DEBOUNCE_MS = 500;
 type Phase =
   | { kind: 'editing' }
   | { kind: 'writing'; stage: string; elapsed: number }
-  | { kind: 'running'; stage: string; elapsed: number }
-  | { kind: 'inserting' }
+  | { kind: 'starting' }
   | { kind: 'error'; message: string };
 
 const muted = { color: 'var(--rn-clr-content-secondary)' };
@@ -90,12 +89,6 @@ const SKIP_LABELS: Record<string, string> = {
 /** en-US-AndrewMultilingualNeural → Andrew; Kore → Kore. */
 const voiceLabel = (v: string) =>
   v.match(/^[a-z]{2}-[A-Z]{2}-(.+?)(?:Multilingual)?Neural$/)?.[1] ?? v;
-
-const minutes = (s: number) => {
-  const m = Math.floor(s / 60);
-  const r = Math.round(s % 60);
-  return m ? `${m} min ${r.toString().padStart(2, '0')} s` : `${r} s`;
-};
 
 function Button({
   label,
@@ -290,10 +283,13 @@ export function ReadAloudPopup() {
     }
   };
 
+  // The helper starts synthesising; the wait and the insert run in the tracker
+  // (lib/read_aloud.ts, runReadAloudJob), which reports with a message dialog. The
+  // popup only stays up long enough to show a failure to start.
   const generate = async () => {
     if (!context || !plan?.ok || !plan.ready || !plan.engine) return;
     const mine = ++run.current;
-    setPhase({ kind: 'running', stage: 'starting', elapsed: 0 });
+    setPhase({ kind: 'starting' });
     try {
       // The engine the estimate was made for (the suggestion, when left on automatic).
       const taskId = await startTts(
@@ -303,38 +299,21 @@ export function ReadAloudPopup() {
         context.remId,
         context.title
       );
-      for (;;) {
-        await sleep(POLL_MS);
-        if (mine !== run.current) return;
-        const task = await getTtsTask(taskId);
-        if (mine !== run.current) return;
-        if (task.status === 'done') {
-          const result = task.result ?? { ok: false, message: 'no result' };
-          if (!result.ok) {
-            setPhase({ kind: 'error', message: result.message ?? 'failed' });
-            return;
-          }
-          setPhase({ kind: 'inserting' });
-          const { remId, warning } = await insertAudio(plugin, context, result, mode);
-          let textWarning = '';
-          if (mode === 'summary' && insertText && remId) {
-            try {
-              await insertSummaryText(plugin, remId, context, script, written.summary?.model);
-            } catch (err) {
-              textWarning = `summary text not inserted (${String(err)})`;
-            }
-          }
-          const cost = result.costUsd != null ? `, ~US$${result.costUsd.toFixed(2)}` : '';
-          const notes = [warning, textWarning].filter(Boolean).join('; ');
-          await plugin.app.toast(
-            `Audio added (${result.voiceLabel}, ${minutes(result.seconds ?? 0)}${cost})` +
-              (notes ? ` — ${notes}` : '')
-          );
-          close();
-          return;
-        }
-        setPhase({ kind: 'running', stage: task.stage, elapsed: task.elapsed });
-      }
+      const withText = mode === 'summary' && insertText;
+      await enqueueReadAloudJob(plugin, {
+        id: `${taskId}-${Date.now()}`,
+        taskId,
+        target: { remId: context.remId, title: context.title, lang: context.lang },
+        mode,
+        ...(withText ? { summaryText: script, summaryModel: written.summary?.model } : {}),
+        queuedAt: Date.now(),
+      });
+      if (mine !== run.current) return;
+      await plugin.app.toast(
+        `🔊 Making the audio in the background (about ${minutes(plan.estSeconds ?? 0)} of speech) — ` +
+          'a message will say when it is in.'
+      );
+      close();
     } catch (err) {
       if (mine === run.current) setPhase({ kind: 'error', message: String(err) });
     }
@@ -351,7 +330,7 @@ export function ReadAloudPopup() {
     }
   };
 
-  const busy = phase.kind === 'running' || phase.kind === 'inserting' || phase.kind === 'writing';
+  const busy = phase.kind === 'starting' || phase.kind === 'writing';
   const stats = context?.stats;
   const skipped = Object.entries(stats?.skipped ?? {})
     .filter(([, n]) => n > 0)
@@ -611,16 +590,16 @@ export function ReadAloudPopup() {
 
       <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
         <span className="text-sm" style={{ ...muted, flex: 1 }}>
-          {(phase.kind === 'running' || phase.kind === 'writing') &&
+          {phase.kind === 'writing' &&
             `${phase.stage[0]?.toUpperCase()}${phase.stage.slice(1)}… ${phase.elapsed} s — keep this window open`}
-          {phase.kind === 'inserting' && 'Storing the audio in RemNote…'}
+          {phase.kind === 'starting' && 'Handing the script to the helper…'}
         </span>
         <Button label={busy ? 'Stop waiting' : 'Cancel'} onClick={close} />
         <Button
           label={phase.kind === 'error' ? 'Try again' : 'Generate'}
           primary
           disabled={!canGenerate}
-          title="⌘↵"
+          title="⌘↵ — runs in the background; a message says when the audio is in"
           onClick={() => void generate()}
         />
       </div>

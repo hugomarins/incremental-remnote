@@ -803,6 +803,11 @@ export const readAloudCommandId = 'read-aloud';
 export const addPronunciationCommandId = 'add-pronunciation';
 export const READ_ALOUD_POPUP = 'read_aloud_popup';
 export const readAloudTagId = 'read-aloud-tag';
+// Read aloud jobs handed off by the popup once the helper has started synthesising: the
+// tracker (register/tracker.ts) waits for the audio in the persistent index widget, inserts
+// it and reports with a message dialog, so the popup can close at once. A queue, so two
+// Generates in quick succession cannot overwrite each other. See lib/read_aloud.ts.
+export const pendingReadAloudJobsKey = 'pendingReadAloudJobs';
 
 // --- Cards on a scheduler other than the Global Default (lib/scheduler_cards.ts) ---
 // Synced and per KB: `<prefix>_<kbId>` is the manifest, `<prefix>_<kbId>_<n>` the shards.

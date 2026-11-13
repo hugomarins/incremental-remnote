@@ -1,7 +1,7 @@
 import { ReactRNPlugin } from '@remnote/plugin-sdk';
 import { loadIncrementalRemCache, writeIncRemCaches, applyIncRemCacheChanges } from '../lib/incremental_rem/cache';
 import { PriorityChangeEvent } from '../lib/priority_history';
-import { incrementalQueueActiveKey, currentIncRemKey, powerupCode, pendingPrioritySaveKey, pendingCardPriorityRemovalKey, pendingPriorityDeltaQueueKey, incRemCacheReloadKey, pendingIntervalBatchSaveKey, pendingIncRemCreateTailKey, pendingReviewJobQueueKey, pendingIncRemTransferTailKey, enableFlashcardPrioritisationId, priorityBandColorsReloadKey } from '../lib/consts';
+import { incrementalQueueActiveKey, currentIncRemKey, powerupCode, pendingPrioritySaveKey, pendingCardPriorityRemovalKey, pendingPriorityDeltaQueueKey, incRemCacheReloadKey, pendingIntervalBatchSaveKey, pendingIncRemCreateTailKey, pendingReviewJobQueueKey, pendingIncRemTransferTailKey, pendingReadAloudJobsKey, enableFlashcardPrioritisationId, priorityBandColorsReloadKey } from '../lib/consts';
 import { getIESetting } from '../lib/settings';
 import { withQueueMutex } from '../lib/mutex';
 // Static import (NOT dynamic): a dynamic import() of highlightActions emits a separate
@@ -14,6 +14,7 @@ import { shouldUseLightMode } from '../lib/mobileUtils';
 import { runReviewJob, ReviewJob, IncRemCacheChanges } from '../lib/incremental_rem/review_jobs';
 import { runIncRemTransferTail, IncRemTransferTailJob } from '../lib/incremental_rem/transfer';
 import { showMessageDialog } from '../lib/message_dialog';
+import { ReadAloudJob, runReadAloudJob } from '../lib/read_aloud';
 
 // Module-level flag to suppress IncRem cache reloads during batch writes.
 // IMPORTANT: This is intentionally a plain JS variable, NOT session storage.
@@ -767,6 +768,23 @@ export function registerIncrementalRemTracker(plugin: ReactRNPlugin) {
       transferTailRunning = false;
       incRemBatchActive = false;
       await plugin.storage.setSession('plugin_operation_active', false);
+    }
+  });
+
+  // Read aloud jobs (lib/read_aloud.ts): the popup starts the helper's synthesis, queues
+  // the task here and closes. Each job waits on the helper for minutes, so they run side
+  // by side, not in a drain loop, and WITHOUT plugin_operation_active: the user keeps
+  // editing meanwhile, and the audio rem is an ordinary insert.
+  const startedReadAloudJobs = new Set<string>();
+  plugin.track(async (rp) => {
+    const queued = await rp.storage.getSession<ReadAloudJob[]>(pendingReadAloudJobsKey);
+    if (!queued || queued.length === 0) return;
+    await plugin.storage.setSession(pendingReadAloudJobsKey, null);
+    for (const job of queued) {
+      if (startedReadAloudJobs.has(job.id)) continue;
+      startedReadAloudJobs.add(job.id);
+      console.log('[Tracker] readAloud job picked up for remId:', job.target.remId);
+      void runReadAloudJob(plugin, job);
     }
   });
 

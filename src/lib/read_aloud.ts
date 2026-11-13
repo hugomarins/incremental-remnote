@@ -25,7 +25,12 @@ import {
   RNPlugin,
   SelectionType,
 } from '@remnote/plugin-sdk';
-import { mediaBridgeEnabledId, READ_ALOUD_POPUP, readAloudTagId } from './consts';
+import {
+  mediaBridgeEnabledId,
+  pendingReadAloudJobsKey,
+  READ_ALOUD_POPUP,
+  readAloudTagId,
+} from './consts';
 import { MEDIA_BRIDGE_URL } from './media_bridge';
 import { runAudio } from './media_bridge_ops';
 import { showMessageDialog } from './message_dialog';
@@ -50,6 +55,9 @@ export interface ReadAloudContext {
 }
 
 export type ReadAloudMode = 'literal' | 'adapted' | 'summary';
+
+/** What inserting the audio needs of the context: where it goes and in which language. */
+export type ReadAloudTarget = Pick<ReadAloudContext, 'remId' | 'title' | 'lang'>;
 
 /** What the helper's LLM step (/tts/write) returns. */
 export interface WriteResult {
@@ -218,7 +226,7 @@ export async function startWrite(
 /** Store the mp3 in RemNote as the first child of the read rem, and tag it if the setting says so. */
 export async function insertAudio(
   plugin: RNPlugin,
-  context: ReadAloudContext,
+  context: ReadAloudTarget,
   result: TtsResult,
   mode: ReadAloudMode = 'literal'
 ): Promise<{ remId?: string; warning?: string }> {
@@ -322,7 +330,7 @@ function scriptLineToRichText(line: string): RichTextInterface {
 export async function insertSummaryText(
   plugin: RNPlugin,
   audioRemId: string,
-  context: ReadAloudContext,
+  context: ReadAloudTarget,
   script: string,
   model?: string
 ): Promise<void> {
@@ -348,6 +356,13 @@ export async function insertSummaryText(
   }
 }
 
+/** 75 → "1 min 15 s"; 40 → "40 s". */
+export const minutes = (s: number) => {
+  const m = Math.floor(s / 60);
+  const r = Math.round(s % 60);
+  return m ? `${m} min ${r.toString().padStart(2, '0')} s` : `${r} s`;
+};
+
 /** Words a script will speak: language prefixes, marks and [pause] lines left out. */
 export function scriptWords(script: string): number {
   return script
@@ -356,6 +371,98 @@ export function scriptWords(script: string): number {
     .filter((l) => l && !/^\[(pause|pausa)(\s+[\d.,]+)?\]$/i.test(l))
     .map((l) => l.replace(/^\[(pt|en)\]\s*/, '').replace(/<\/?(pt|en)>/g, ''))
     .reduce((n, l) => n + l.split(/\s+/).filter(Boolean).length, 0);
+}
+
+// --- background jobs ----------------------------------------------------------------
+
+/**
+ * A Generate handed off by the popup: the helper is already synthesising (taskId); the
+ * tracker (register/tracker.ts, in the persistent index widget) waits for the mp3,
+ * inserts it, and reports with a message dialog. The popup closes as soon as the job is
+ * queued, so a long script no longer holds it open, and closing it no longer loses the
+ * audio. Lives in this window's session: a reload of RemNote while it runs drops the job
+ * (the helper still keeps its copy of the mp3).
+ */
+export interface ReadAloudJob {
+  /** Unique per Generate, so a job the tracker reads twice runs once. */
+  id: string;
+  taskId: string;
+  target: ReadAloudTarget;
+  mode: ReadAloudMode;
+  /** The Summary script, to insert as text under the audio when asked for. */
+  summaryText?: string;
+  summaryModel?: string;
+  queuedAt: number;
+}
+
+/** Waiting stops after this long, or after this many failed polls in a row. */
+const JOB_TIMEOUT_MS = 60 * 60_000;
+const JOB_MAX_POLL_FAILURES = 10;
+const JOB_POLL_MS = 2000;
+
+export async function enqueueReadAloudJob(plugin: RNPlugin, job: ReadAloudJob): Promise<void> {
+  const queue = (await plugin.storage.getSession<ReadAloudJob[]>(pendingReadAloudJobsKey)) || [];
+  await plugin.storage.setSession(pendingReadAloudJobsKey, [...queue, job]);
+}
+
+async function waitForJob(taskId: string): Promise<TtsResult> {
+  const until = Date.now() + JOB_TIMEOUT_MS;
+  let failures = 0;
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, JOB_POLL_MS));
+    try {
+      const task = await getTtsTask(taskId);
+      failures = 0;
+      if (task.status === 'done') return task.result ?? { ok: false, message: 'no result' };
+    } catch (err) {
+      // A helper restart forgets its tasks: that answer repeats, a network blip does not.
+      if (++failures >= JOB_MAX_POLL_FAILURES) {
+        return { ok: false, message: `lost contact with the helper (${String(err)})` };
+      }
+    }
+  }
+  return { ok: false, message: `the helper took more than ${JOB_TIMEOUT_MS / 60_000} minutes` };
+}
+
+/** Wait for the helper's audio, insert it (and the summary text), and say how it went. */
+export async function runReadAloudJob(plugin: RNPlugin, job: ReadAloudJob): Promise<void> {
+  const name = job.target.title || 'Untitled rem';
+  const fail = (message: string) =>
+    showMessageDialog(plugin, {
+      title: 'Read aloud: no audio added',
+      message: `“${name}”: ${message}`,
+      tone: 'error',
+    });
+  try {
+    const result = await waitForJob(job.taskId);
+    if (!result.ok) {
+      await fail(result.message ?? 'the helper failed');
+      return;
+    }
+    const { remId, warning } = await insertAudio(plugin, job.target, result, job.mode);
+    const notes = warning ? [warning] : [];
+    if (job.summaryText && remId) {
+      try {
+        await insertSummaryText(plugin, remId, job.target, job.summaryText, job.summaryModel);
+      } catch (err) {
+        notes.push(`summary text not inserted (${String(err)})`);
+      }
+    }
+    const cost = result.costUsd != null ? `, ~US$${result.costUsd.toFixed(2)}` : '';
+    await showMessageDialog(plugin, {
+      title: job.mode === 'summary' ? 'Audio summary added' : 'Audio added',
+      message:
+        `“${name}”: ${result.voiceLabel ?? result.voice ?? 'TTS'}, ` +
+        `${minutes(result.seconds ?? 0)}${cost}. It is the first child of the rem.`,
+      detail: notes.length ? notes.join('; ') : undefined,
+      tone: notes.length ? 'info' : 'success',
+      // The read Rem: the audio sits at its top, as the first child.
+      openRemId: job.target.remId,
+    });
+  } catch (err) {
+    console.error('[ReadAloud] background job failed', err);
+    await fail(String(err));
+  }
 }
 
 // --- drafts (per rem, this device) -------------------------------------------------

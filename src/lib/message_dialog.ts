@@ -12,6 +12,8 @@ export interface MessageDialog {
   /** One box per entry under the message, e.g. one per quote of a bulk run. */
   items?: MessageItem[];
   tone?: 'error' | 'info' | 'success';
+  /** Adds an "Open Rem" button (←→ to reach it) that opens this Rem and closes the dialog. */
+  openRemId?: string;
 }
 
 export interface MessageItem {
