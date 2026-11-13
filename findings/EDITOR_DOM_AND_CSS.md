@@ -29,6 +29,15 @@ The slug in `data-rem-tags` and `data-queue-rem-container-tags` is the powerup's
 
 Write selectors against the slugified name. To fix a mismatch, change the CSS, never the code: tagged Rems are keyed on the code.
 
+## Plugin powerup pills have no name attribute { #plugin-powerup-pills }
+
+A row tagged with a built-in powerup and a plugin powerup draws them differently (saved DOM, 2026-11-13, a Rem with Extra Card Detail + the plugin's Pronunciation):
+
+- **Built-in** (Extra Card Detail): `span.hierarchy-editor__tag-bar__tag[data-test="Applied Powerup Pill Extra Card Detail"]` > `span` (name) + remove button, in a flex wrapper **before** the Tag Bar.
+- **Plugin powerup** (Pronunciation): inside `[data-test="Tag Bar"]`, `span.hierarchy-editor__tag-bar__tag` > `div` (`span.rem-powerup-icon` ⚡ + `.RichTextViewer` name) + `[data-test="Tag Close Button"]`. **No `data-test` with its name**, so `data-test^="Applied Powerup Pill <name>"` misses it.
+
+Match a plugin powerup's pill as `.rn-editor__rem__body[data-rem-tags~="slug"] .hierarchy-editor__tag-bar__tag:has(.rem-powerup-icon)` (its label: `> div:has(> .rem-powerup-icon)`); another plugin powerup on the same Rem would match too. `src/lib/pronunciation_css.ts` does this.
+
 ## Extra details in the queue { #extra-details }
 
 The queue lists a card's Extra Card Detail Rems under **Extra details**, each in a `.extra-card-detail__item` with its own bullet. The item itself carries no tags or Rem id, but it nests an editor for the Rem's children whose container names the Rem's tags (saved DOM of the Beautiful queue, 2026-11-13):

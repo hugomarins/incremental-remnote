@@ -5,10 +5,14 @@
  * only while a Rem has a single tag; with the Extra Card Detail powerup as well, the
  * bar may collapse into a "2 tags" chip (findings/EDITOR_DOM_AND_CSS.md).
  *
- * The pill is matched by its own `data-test` ("Applied Powerup Pill Pronunciation"),
- * so other tags on the Rem keep their names; the bullet by the powerup name's slug
- * in the row's `data-rem-tags` (`pronunciation`). Same technique as the
- * sierra-remnote anchor marks.
+ * The pill: RemNote draws a plugin powerup in the row's Tag Bar as a tag pill whose
+ * label is the ⚡ `.rem-powerup-icon` plus the name, WITHOUT the `data-test="Applied
+ * Powerup Pill <name>"` that the built-in ones (Extra Card Detail) get, outside the
+ * Tag Bar (saved DOM, 2026-11-13). So it is matched as the Tag Bar pill holding a
+ * powerup icon, in a row whose `data-rem-tags` has `pronunciation`, and only its
+ * label (⚡ + name) is swapped for the icon; the ✕ stays. The `data-test` rule stays
+ * as a fallback. The bullet: the same slug. Same technique as the sierra-remnote
+ * anchor marks.
  *
  * In the queue, the card's "Extra details" list shows the audio Rem with a bullet of
  * its own, reached through lib/extra_details_css.
@@ -34,7 +38,13 @@ const url = (svg: string) => `url("data:image/svg+xml,${encodeURIComponent(svg)}
 const LIGHT = url(speakingHead('#0f766e'));
 const DARK = url(speakingHead('#5eead4'));
 
-const PILL = `.hierarchy-editor__tag-bar__tag[data-test^="Applied Powerup Pill ${PRONUNCIATION_POWERUP_NAME}"]`;
+const ROW = `.rn-editor__rem__body[data-rem-tags~="${SLUG}"]`;
+/** The pill (a flex box: label, then the ✕). */
+const PILLS = [
+  `${ROW} .hierarchy-editor__tag-bar__tag:has(.rem-powerup-icon)`,
+  `.hierarchy-editor__tag-bar__tag[data-test^="Applied Powerup Pill ${PRONUNCIATION_POWERUP_NAME}"]`,
+];
+const pills = (prefix = '', suffix = '') => PILLS.map((p) => `${prefix}${p}${suffix}`).join(',\n');
 const EDITOR_BULLET = `.rn-editor__rem__body[data-rem-tags~="${SLUG}"] .rem-bullet__container .rem-bullet`;
 const EXTRA_DETAILS_BULLET = `${extraDetailsItem(SLUG)} > .rem-bullet__container .rem-bullet`;
 /** Both bullets, each with `prefix` and `suffix` added. */
@@ -42,19 +52,23 @@ const bullets = (prefix = '', suffix = '') =>
   [EDITOR_BULLET, EXTRA_DETAILS_BULLET].map((b) => `${prefix}${b}${suffix}`).join(',\n');
 
 export const PRONUNCIATION_CSS = `
-/* Pronunciation pill: the icon instead of the name. */
-${PILL} {
-  font-size: 0px;
+/* Pronunciation pill: the icon instead of ⚡ and the name. The icon is drawn on the
+   pill itself, a flex box, as a fixed-size first item: on the label it vanished,
+   because the label (Tailwind truncate + min-w-0) clips and may shrink to nothing.
+   The label is hidden; the ✕ stays. */
+${pills('', ' > :not(.rn-tag__close):not([data-test$="Close Button"]):not([data-test^="Remove Applied Powerup"])')} {
+  display: none;
 }
-${PILL}:before {
+${pills('', ':before')} {
   content: "";
-  display: inline-block;
+  flex: 0 0 14px;
+  align-self: center;
   width: 14px;
   height: 14px;
-  vertical-align: -2px;
+  margin: 0 2px 0 3px;
   background: center / contain no-repeat ${LIGHT};
 }
-.dark ${PILL}:before {
+${pills('.dark ', ':before')} {
   background-image: ${DARK};
 }
 
