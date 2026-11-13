@@ -48,7 +48,9 @@ Endpoints (127.0.0.1:3460, CORS open, for the plugin iframe):
                                "Upscale image with ChatGPT" command; runs upscale_image.py,
                                i.e. Codex CLI image generation + the fidelity check)
   GET  /upscale/<id>           {status: queued|running|done, stage, result?}
-  POST /tts/plan {script, engine?}  what a /tts run would do: errors, engine, voices, calls,
+  POST /tts/plan {script, engine?, voice?}  what a /tts run would do: errors, every engine
+                               (available = its keys are set, voices, note, estimate), the
+                               suggested one, and for the planned engine: voices, calls,
                                characters, estSeconds, estCostUsd. No API call.
   POST /tts {script, engine?, voice?, remId?, subject?} → {taskId}   (plugin → helper: the
                                "Read aloud" command; runs tts.py: Gemini or Azure TTS, mp3)
@@ -82,7 +84,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 8  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts
+VERSION = 9  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},

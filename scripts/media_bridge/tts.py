@@ -10,6 +10,9 @@ Engines, chosen by ear on notes that mix English and Portuguese:
   - Azure en-US-AndrewMultilingualNeural, when the script has >= 3 inline foreign terms:
     the only engine that switches language mid-sentence. Each language run goes in its
     own <voice> (inside a single <voice>, word-level <lang> is ignored).
+Only engines whose keys are set are offered; "auto" suggests one of them, and any
+available engine may be picked instead. The script keeps its marks either way: Azure
+switches language on them, Gemini drops them and reads the term in the line's language.
 
 Script format (plain text, one idea per line):
   [pt] / [en] at the start of a line   the line's language (default en)
@@ -24,7 +27,7 @@ from the .env file named by "envFile" in ~/.remnote-media-bridge/tts.json (or
 ~/.remnote-media-bridge/.env). They are never printed.
 
 tts.json (optional): {"envFile": "...", "audioHome": "...", "geminiVoices": [...],
-"geminiModel": "...", "azureVoice": "..."}
+"geminiModel": "...", "azureVoices": [...]}  ("azureVoice": "..." is still read)
 
 CLI:
   tts.py script.txt --plan              engine, calls, estimate; no API call
@@ -222,10 +225,44 @@ def inline_count(items) -> int:
     return sum(len(INLINE.findall(i.text)) for i in items if isinstance(i, Line))
 
 
-def choose_engine(requested: str, n_inline: int) -> str:
+ENGINES = {
+    "gemini": {"label": "Gemini TTS", "needs": ("GEMINI_API_KEY",), "mixes": False},
+    "azure": {"label": "Azure multilingual", "needs": ("AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION"),
+              "mixes": True},
+}
+
+
+def engine_voices(engine: str) -> list[str]:
+    cfg = config()
+    if engine == "azure":
+        return cfg.get("azureVoices") or [cfg.get("azureVoice") or AZURE_VOICE]
+    return cfg.get("geminiVoices") or GEMINI_VOICES
+
+
+def missing_keys(engine: str, key_set: dict) -> list[str]:
+    return [n for n in ENGINES[engine]["needs"] if not key_set.get(n)]
+
+
+def suggest_engine(n_inline: int, available: list[str]) -> str | None:
+    """Azure for many inline terms (only it switches mid-sentence), else Gemini; among the available."""
+    order = ["azure", "gemini"] if n_inline >= INLINE_LIMIT else ["gemini", "azure"]
+    return next((e for e in order if e in available), None)
+
+
+def choose_engine(requested: str, n_inline: int, available: list[str] | None = None) -> str | None:
     if requested and requested != "auto":
         return requested
-    return "azure" if n_inline >= INLINE_LIMIT else "gemini"
+    return suggest_engine(n_inline, list(ENGINES) if available is None else available)
+
+
+def engine_note(engine: str, n_inline: int) -> str:
+    """How the engine treats the script's <pt>/<en> marks."""
+    if not n_inline:
+        return ""
+    terms = f"{n_inline} marked term{'s' if n_inline != 1 else ''}"
+    if ENGINES[engine]["mixes"]:
+        return f"{terms} switch language mid-sentence"
+    return f"{terms} read in the line's language (Gemini cannot switch mid-sentence)"
 
 
 def build_calls(items, engine: str) -> list:
@@ -259,8 +296,23 @@ def voice_label(voice: str) -> str:
     return m.group(1) if m else voice
 
 
-def plan(script: str, engine: str = "auto", voice: str | None = None) -> dict:
-    """What a run would do and cost. No API call."""
+def _estimate(items, lines, engine: str) -> dict:
+    calls = build_calls(items, engine)
+    n_calls = sum(1 for c in calls if c[0] != "pause")
+    pauses = [c[1] for c in calls if c[0] == "pause"]
+    chars = sum(len(plain(l.text)) for l in lines)
+    seconds = chars / CHARS_PER_S + sum(pauses) + GAP_S * max(0, n_calls - 1)
+    cost = (seconds * GEMINI_TOKENS_PER_S * GEMINI_USD_PER_M_TOKENS / 1e6 if engine == "gemini"
+            else chars * AZURE_USD_PER_M_CHARS / 1e6)
+    return {"calls": n_calls, "answerPauses": pauses, "characters": chars,
+            "estSeconds": round(seconds), "estCostUsd": round(cost, 3)}
+
+
+def plan(script: str, engine: str = "auto", voice: str | None = None,
+         key_set: dict | None = None) -> dict:
+    """What a run would do and cost. No API call.
+    `engines` lists every engine with its availability (keys set), voices, note on the
+    marks and estimate; `suggested` is the one "auto" picks; `engine` the one planned."""
     errors = check(script)
     items = parse(script) if not errors else []
     lines = [i for i in items if isinstance(i, Line)]
@@ -268,24 +320,28 @@ def plan(script: str, engine: str = "auto", voice: str | None = None) -> dict:
         errors = ["the script is empty"]
     if errors:
         return {"ok": False, "errors": errors}
+    ks = keys() if key_set is None else key_set
     n_inline = inline_count(items)
-    eng = choose_engine(engine, n_inline)
-    calls = build_calls(items, eng)
-    n_calls = sum(1 for c in calls if c[0] != "pause")
-    pauses = [c[1] for c in calls if c[0] == "pause"]
-    chars = sum(len(plain(l.text)) for l in lines)
-    seconds = chars / CHARS_PER_S + sum(pauses) + GAP_S * max(0, n_calls - 1)
-    cost = (seconds * GEMINI_TOKENS_PER_S * GEMINI_USD_PER_M_TOKENS / 1e6 if eng == "gemini"
-            else chars * AZURE_USD_PER_M_CHARS / 1e6)
-    voices = config().get("geminiVoices") or GEMINI_VOICES
+    available = [e for e in ENGINES if not missing_keys(e, ks)]
+    suggested = suggest_engine(n_inline, available)
+    engines = [{"id": e, "label": ENGINES[e]["label"], "available": e in available,
+                "missing": missing_keys(e, ks), "voices": engine_voices(e),
+                "note": engine_note(e, n_inline), **_estimate(items, lines, e)} for e in ENGINES]
+    eng = choose_engine(engine, n_inline, available)
+    if eng is None:
+        return {"ok": False, "engines": engines, "errors": [
+            "no TTS key found: set GEMINI_API_KEY, or AZURE_SPEECH_KEY and AZURE_SPEECH_REGION, "
+            f"in the environment or the envFile named in {CONFIG_FILE}"]}
+    chosen = next(e for e in engines if e["id"] == eng)
+    voices = chosen["voices"]
     return {
-        "ok": True, "engine": eng,
-        "voice": AZURE_VOICE if eng == "azure" else (voice or None),
-        "voices": [AZURE_VOICE] if eng == "azure" else voices,
-        "characters": chars, "words": sum(len(plain(l.text).split()) for l in lines),
-        "inlineTerms": n_inline, "calls": n_calls, "answerPauses": pauses,
-        "estSeconds": round(seconds), "estCostUsd": round(cost, 3),
-        "title": plain(lines[0].text),
+        "ok": True, "engine": eng, "suggested": suggested, "engines": engines,
+        "ready": chosen["available"], "missing": chosen["missing"],
+        "voice": voice if voice in voices else (voices[0] if len(voices) == 1 else None),
+        "voices": voices, "note": chosen["note"],
+        "words": sum(len(plain(l.text).split()) for l in lines),
+        "inlineTerms": n_inline, "title": plain(lines[0].text),
+        **{k: chosen[k] for k in ("calls", "answerPauses", "characters", "estSeconds", "estCostUsd")},
     }
 
 
@@ -383,19 +439,16 @@ def synthesize(script: str, out: Path, engine: str = "auto", voice: str | None =
                progress: Callable[[str], None] | None = None) -> dict:
     """Script -> mono 64 kbps mp3 at `out`. Returns a summary; raises TTSError."""
     log = progress or (lambda _msg: None)
-    p = plan(script, engine)
+    ks = key_set if key_set is not None else keys()
+    if engine not in ("auto", *ENGINES):
+        raise TTSError(f"unknown engine {engine!r}")
+    p = plan(script, engine, voice, key_set=ks)
     if not p["ok"]:
         raise TTSError("script problems:\n  " + "\n  ".join(p["errors"]))
     eng = p["engine"]
-    if eng == "azure":
-        voice = AZURE_VOICE
-    else:
-        voice = voice or random.choice(p["voices"])
-    ks = key_set if key_set is not None else keys()
-    need = ["GEMINI_API_KEY"] if eng == "gemini" else ["AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION"]
-    missing = [n for n in need if not ks.get(n)]
-    if missing:
-        raise TTSError(f"missing {', '.join(missing)} (environment, or the envFile in {CONFIG_FILE})")
+    if p["missing"]:
+        raise TTSError(f"missing {', '.join(p['missing'])} (environment, or the envFile in {CONFIG_FILE})")
+    voice = voice if voice in p["voices"] else random.choice(p["voices"])
 
     calls = build_calls(parse(script), eng)
     total = sum(1 for c in calls if c[0] != "pause")

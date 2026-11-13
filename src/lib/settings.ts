@@ -84,6 +84,7 @@ import {
   logosBridgeEnabledId,
   logosAutoOpenId,
   mediaBridgeEnabledId,
+  readAloudTagId,
   enableFlashcardPrioritisationId,
   performanceModeId,
   alwaysUseLightModeOnMobileId,
@@ -193,6 +194,7 @@ export interface IESettings {
   [logosBridgeEnabledId]: boolean;
   [logosAutoOpenId]: boolean;
   [mediaBridgeEnabledId]: boolean;
+  [readAloudTagId]: string;
   [enableFlashcardPrioritisationId]: boolean;
   [performanceModeId]: PerformanceMode;
   [alwaysUseLightModeOnMobileId]: boolean;
@@ -295,6 +297,7 @@ export const IE_SETTINGS_DEFAULTS: IESettings = {
   [logosBridgeEnabledId]: false,
   [logosAutoOpenId]: false,
   [mediaBridgeEnabledId]: false,
+  [readAloudTagId]: '',
   [enableFlashcardPrioritisationId]: false,
   [performanceModeId]: 'light',
   [alwaysUseLightModeOnMobileId]: true,
@@ -1406,7 +1409,19 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
       'http://127.0.0.1:3460). Since RemNote 1.29 a file:// image written from outside is never ' +
       'uploaded; this does it, the same way as "Store linked images & audio in RemNote". The helper ' +
       'can also ask the plugin to move rems, remove tags, read out images and make rems Incremental. ' +
-      'Leave off unless you use the helper.',
+      'It also runs "Upscale image with ChatGPT" and "Read aloud", whose commands appear only while ' +
+      'this is on. Leave off unless you use the helper.',
+  },
+  [readAloudTagId]: {
+    kind: 'string',
+    group: 'integrations',
+    showWhen: { id: mediaBridgeEnabledId, equals: true },
+    helpPath: 'Local-Media-Bridge/',
+    placeholder: 'No tag',
+    title: 'Read Aloud: Tag for Audio Rems',
+    description:
+      'Name of a tag to put on every audio rem that "Read aloud" adds (created if it does not exist). ' +
+      'Leave empty for no tag.',
   },
 
   // --- Misc ---

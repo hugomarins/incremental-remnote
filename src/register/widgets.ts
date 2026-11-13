@@ -1,5 +1,5 @@
 import { QueueItemType, ReactRNPlugin, WidgetLocation } from '@remnote/plugin-sdk';
-import { pageRangeWidgetId, parentSelectorWidgetId, parentPickWidgetId, powerupCode, priorityGraphPowerupCode, incremNotesSidebarWidgetId, enableMasteryDrillId, pluginHubWidgetId, onboardingTipsWidgetId, cardVideoPowerupCode, mcScissorsWidgetId, mcAssertionsWidgetId, menuHubWidgetId } from '../lib/consts';
+import { pageRangeWidgetId, parentSelectorWidgetId, parentPickWidgetId, powerupCode, priorityGraphPowerupCode, incremNotesSidebarWidgetId, enableMasteryDrillId, pluginHubWidgetId, onboardingTipsWidgetId, cardVideoPowerupCode, mcScissorsWidgetId, mcAssertionsWidgetId, menuHubWidgetId, READ_ALOUD_POPUP } from '../lib/consts';
 import { getIESetting } from '../lib/settings';
 import { screenFittedHeight } from '../lib/utils';
 
@@ -657,6 +657,13 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
     dimensions: {
       width: 960,
       height: screenFittedHeight(640, 1100),
+    },
+  });
+  // Read aloud: editable script, the helper's estimate, Generate (lib/read_aloud.ts).
+  plugin.app.registerWidget(READ_ALOUD_POPUP, WidgetLocation.Popup, {
+    dimensions: {
+      width: 820,
+      height: screenFittedHeight(560, 900),
     },
   });
   plugin.app.registerWidget('image_size_feedback', WidgetLocation.FloatingWidget, {

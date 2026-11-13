@@ -22,6 +22,7 @@ import { registerPluginSettings } from '../register/settings';
 import { registerWidgets } from '../register/widgets';
 import { registerMenus } from '../register/menus';
 import { registerCommands } from '../register/commands';
+import { registerMediaBridgeCommands } from '../register/media_bridge_commands';
 import { registerCallbacks, resetSessionItemCounter } from '../register/callbacks';
 import { registerPrefetchTrackers } from '../lib/queue_prefetch';
 import {
@@ -249,6 +250,8 @@ async function onActivate(plugin: ReactRNPlugin) {
   await registerPinReferenceCSS(plugin);
 
   await registerCommands(plugin);
+  // Upscale image / Read aloud: registered only while the Local Media Bridge setting is on.
+  registerMediaBridgeCommands(plugin);
 
   // Remove Parent / Remove Grandparent commands are always available — they
   // wrap powerups that are always registered and don't conflict with anything.

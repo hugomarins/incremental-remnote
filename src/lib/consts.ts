@@ -797,6 +797,11 @@ export const mediaBridgeEnabledId = 'media-bridge-enabled';
 // /upscale endpoint, review, replace in place (lib/upscale_image.ts).
 export const upscaleImageCommandId = 'upscale-image-chatgpt';
 export const UPSCALE_IMAGE_POPUP = 'upscale_image_popup';
+// Read aloud: the focused rem and its descendants as a spoken script, synthesised by
+// the helper's /tts (Gemini or Azure TTS) and added as an audio rem (lib/read_aloud.ts).
+export const readAloudCommandId = 'read-aloud';
+export const READ_ALOUD_POPUP = 'read_aloud_popup';
+export const readAloudTagId = 'read-aloud-tag';
 
 // --- Cards on a scheduler other than the Global Default (lib/scheduler_cards.ts) ---
 // Synced and per KB: `<prefix>_<kbId>` is the manifest, `<prefix>_<kbId>_<n>` the shards.
