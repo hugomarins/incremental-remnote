@@ -800,6 +800,7 @@ export const UPSCALE_IMAGE_POPUP = 'upscale_image_popup';
 // Read aloud: the focused rem and its descendants as a spoken script, synthesised by
 // the helper's /tts (Gemini or Azure TTS) and added as an audio rem (lib/read_aloud.ts).
 export const readAloudCommandId = 'read-aloud';
+export const addPronunciationCommandId = 'add-pronunciation';
 export const READ_ALOUD_POPUP = 'read_aloud_popup';
 export const readAloudTagId = 'read-aloud-tag';
 

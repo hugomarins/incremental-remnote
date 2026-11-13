@@ -2,7 +2,9 @@
 
 **Read aloud** turns a document, or any Rem and everything under it, into a spoken audio file and puts it into the document as a playable audio Rem stored in RemNote. Listen to your notes on a walk, in the car, or before a review session.
 
-It reads the notes as they are (**Literal**), lightly reworked by AI so formulas and units can be heard (**Adapted**), or as a spoken **Summary** of the length you choose. The speech is made by a text-to-speech service with **your own API key**: Google's Gemini TTS, Microsoft Azure, or ElevenLabs. Nothing is paid for until you press **Generate**, and the popup shows the estimated cost first.
+A second command, [**Add pronunciation**](#pronunciation), does the same for a single card: it reads it aloud at once and keeps the audio as its Extra Card Detail.
+
+Read aloud reads the notes as they are (**Literal**), lightly reworked by AI so formulas and units can be heard (**Adapted**), or as a spoken **Summary** of the length you choose. The speech is made by a text-to-speech service with **your own API key**: Google's Gemini TTS, Microsoft Azure, or ElevenLabs. Nothing is paid for until you press **Generate**, and the popup shows the estimated cost first.
 
 **Desktop app only.** It runs through the [Local Media Bridge](Local-Media-Bridge.md) helper, and the command appears only while that setting is on. **Languages:** Portuguese and English, including English terms inside Portuguese notes and the reverse.
 
@@ -41,6 +43,22 @@ The target is the smaller of the two, and the popup shows it live (*≈ 351 word
 ### Drafts are kept { #drafts }
 
 Closing the popup loses nothing. Reopening it on the same Rem brings back the AI-written scripts and your edits to them, the summary options and the mode you used. A hand edit of the Literal script comes back only while the note is unchanged. When the note changed after an AI script was written, the popup says so: press **Rewrite with AI** to include the changes. Drafts are kept on this computer (the plugin's local storage, not synced), for the 30 Rems used most recently.
+
+## Add pronunciation { #pronunciation }
+
+**Add pronunciation (Extra Card Detail)** (`pron`) gives a flashcard its spoken version, with no popup:
+
+1. In the editor, put the cursor in the Rem or select several. **In the queue, it acts on the card on screen** (or on the Rem selected in the previewer).
+2. Run **Add pronunciation**. It reads only the Rem itself, front then back, **not its children**, with the same [reading rules](#reading-rules): a cloze is read whole, a reference by the text it shows, pins are skipped.
+3. A few seconds later the audio **plays**, and it is added as the Rem's first child, captioned 🔊, with the **Extra Card Detail** powerup. It shows when the answer is revealed and makes no card of its own.
+
+Pronunciations are kept apart from Read aloud's audios: they get the plugin's **Pronunciation** powerup (not the tag of *Read Aloud: Tag for Audio Rems*), whose pill shows a speaking-head icon instead of its name, and their bullet becomes that icon, in the editor and in the queue's *Extra details*. The helper keeps their copies in a folder of their own, `pronunciations` inside the audio folder.
+
+The engine is the one the popup would suggest (Gemini TTS when its key is set; Azure for text with 3 or more marked foreign terms), with a random voice. A card costs a fraction of a cent. With several Rems selected, each gets its audio, and none plays.
+
+**The language of a short card.** A single word gives no clue, so an undecided side takes the language of the other side, then of the Rem's parents. A side that is all in *italics* in a note of the other language is read in that other language: *fairway* on the front of a card in Portuguese notes is pronounced in English, and *hidrovia* on its back in Portuguese.
+
+**Playback.** The audio plays inside RemNote. If the app refuses to start it on its own, the helper plays it on the computer instead (with `ffplay`, which comes with ffmpeg, or `afplay` on macOS). The stored audio Rem plays like any other.
 
 ## Engines and costs { #engines }
 
@@ -93,7 +111,7 @@ Anything an engine would read out wrongly (markdown, LaTeX, links, page numbers,
 
 ## Setup { #setup }
 
-1. The [Local Media Bridge](Local-Media-Bridge.md#setup) setting on and its helper running, **version 10 or later** (`python3 media_bridge.py status`). After updating the plugin, restart the helper; the command says so when it is too old.
+1. The [Local Media Bridge](Local-Media-Bridge.md#setup) setting on and its helper running, **version 12 or later** (`python3 media_bridge.py status`). After updating the plugin, restart the helper; the command says so when it is too old.
 2. **ffmpeg** on the computer (`brew install ffmpeg` on macOS): the helper uses it to join the parts into one mp3.
 3. At least one engine's key, in a `.env` file the helper reads (one `NAME=value` per line). Either put it at `~/.remnote-media-bridge/.env`, or point the helper at an existing file with `~/.remnote-media-bridge/tts.json`:
 
@@ -115,6 +133,7 @@ Anything an engine would read out wrongly (markdown, LaTeX, links, page numbers,
 |---|---|---|
 | `envFile` | — | The `.env` file with the keys. |
 | `audioHome` | `~/.remnote-media-bridge/audio` | Where a copy of every script and mp3 is kept, as `<subject>_<remId>.txt` / `.mp3`. |
+| `pronunciationHome` | `<audioHome>/pronunciations` | Where the copies of [pronunciations](#pronunciation) go. |
 | `geminiVoices` | 14 voices | The Gemini voices offered (and drawn from, when the voice is left on *Random*). |
 | `geminiModel`, `vertexModel` | `gemini-3.8-flash-tts` | The Gemini TTS model. |
 | `azureVoices` | `["en-US-AndrewMultilingualNeural"]` | The Azure voices offered. |

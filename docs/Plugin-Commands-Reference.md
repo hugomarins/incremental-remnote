@@ -233,10 +233,14 @@ In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) opened from the queue's 
   📖 See [Local Media Bridge → Upscale an image with ChatGPT](Local-Media-Bridge.md#upscale).
 
 - <a id="read-aloud"></a>**Read aloud** — `quick: ra`
-  Turns the focused Rem (or document) and everything under it into a spoken audio file and adds it as the Rem's first child, stored in RemNote. A popup shows the script to be spoken, editable, with three modes (**Literal**, **Adapted** by AI, or an AI **Summary** of the length you set), the engine and voice (Gemini TTS, Azure or ElevenLabs, with your own key) and the estimated duration and cost; nothing is paid for until **Generate**. Needs the **Local Media Bridge** setting and its helper (version 10).
+  Turns the focused Rem (or document) and everything under it into a spoken audio file and adds it as the Rem's first child, stored in RemNote. A popup shows the script to be spoken, editable, with three modes (**Literal**, **Adapted** by AI, or an AI **Summary** of the length you set), the engine and voice (Gemini TTS, Azure or ElevenLabs, with your own key) and the estimated duration and cost; nothing is paid for until **Generate**. Needs the **Local Media Bridge** setting and its helper (version 12).
   📖 See [Read Aloud](Read-Aloud.md).
 
-  *Upscale image with ChatGPT* and *Read aloud* are registered only while the **Local Media Bridge** setting is on.
+- <a id="add-pronunciation"></a>**Add pronunciation (Extra Card Detail)** — `quick: pron`
+  Reads the focused or selected Rems aloud, front and back only (in the queue, the card on screen), plays the audio, and adds it as each Rem's first child, captioned 🔊, with the **Extra Card Detail** powerup and the plugin's **Pronunciation** powerup (a speaking-head icon). No popup; the suggested engine and a random voice. Needs the same setup as Read aloud.
+  📖 See [Read Aloud → Add pronunciation](Read-Aloud.md#pronunciation).
+
+  *Upscale image with ChatGPT*, *Read aloud* and *Add pronunciation* are registered only while the **Local Media Bridge** setting is on.
 
 - <a id="cycle-image-size"></a>**Cycle Image Size (Fit / Large / Medium / Small / Original)** (`Opt+Shift+G` / `Alt+Shift+G`) — `quick: cis`
   Resizes the images of a card or Rem, including imported ones the queue can show zoomed in and cut off. Each press moves them one step along **Fit → Large → Medium → Small → Original**, and a small bar shows the size set.

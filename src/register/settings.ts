@@ -9,6 +9,7 @@ import {
   showLinkedAudioIndicatorSettingId,
 } from '../lib/consts';
 import { PRIORITY_BAND_TAG_HIDE_CSS } from '../lib/priority_bands';
+import { PRONUNCIATION_CSS, PRONUNCIATION_CSS_ID } from '../lib/pronunciation_css';
 import {
   IE_SETTINGS_DEFAULTS,
   IE_SETTINGS_SCHEMA,
@@ -247,10 +248,7 @@ async function registerFromSchema(plugin: ReactRNPlugin, id: IESettingId, isLast
  *   once read, the IE Settings popup owns it and the panel entry would only
  *   confuse. The CSS below is registered regardless.
  */
-export async function registerPluginSettings(
-  plugin: ReactRNPlugin,
-  opts: { ids: IESettingId[] }
-) {
+export async function registerPluginSettings(plugin: ReactRNPlugin, opts: { ids: IESettingId[] }) {
   for (let i = 0; i < opts.ids.length; i++) {
     await registerFromSchema(plugin, opts.ids[i], i === opts.ids.length - 1);
   }
@@ -282,6 +280,10 @@ export async function registerPluginSettings(
   // Unconditional: the band tags are an implementation detail, so their tag-bar
   // chips stay hidden even when the badges themselves are switched off.
   await plugin.app.registerCSS('priority-band-tag-hide', PRIORITY_BAND_TAG_HIDE_CSS);
+
+  // Unconditional: the icon of pronunciation audio Rems, which may exist even while
+  // the Local Media Bridge setting is off.
+  await plugin.app.registerCSS(PRONUNCIATION_CSS_ID, PRONUNCIATION_CSS);
 
   // Unconditional: a fix to RemNote's own preview popup, not a plugin feature.
   await plugin.app.registerCSS('preview-breadcrumbs', PREVIEW_BREADCRUMBS_CSS);

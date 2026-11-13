@@ -52,12 +52,16 @@ Endpoints (127.0.0.1:3460, CORS open, for the plugin iframe):
                                (available = its keys are set, voices, note, estimate), the
                                suggested one, and for the planned engine: voices, calls,
                                characters, estSeconds, estCostUsd. No API call.
-  POST /tts {script, engine?, voice?, remId?, subject?} → {taskId}   (plugin → helper: the
+  POST /tts {script, engine?, voice?, remId?, subject?, purpose?} → {taskId}; purpose
+                               "pronunciation" keeps the copy in tts.py's pronunciationHome   (plugin → helper: the
                                "Read aloud" command; runs tts.py: Gemini or Azure TTS, mp3)
   POST /tts/write {mode: adapted|summary, source, lang, title?, targetWords?, instructions?}
                                → {taskId}: an LLM writes the spoken script from the plugin's
                                outline (spoken_script.py: `claude -p`, Anthropic API fallback);
                                result {script, errors, via, model, costUsd, fallbackReason?}
+  POST /tts/play {url}         plays one of the helper's served audio files on this computer
+                               (ffplay, or afplay on macOS): "Add pronunciation" when RemNote
+                               refuses to autoplay in the plugin
   GET  /tts/<id>               {status: running|done, stage, result?}; result.url serves the
                                mp3 for the `audio` op; a copy is kept in tts.py's audioHome
   GET  /next?wait=25&v=2       plugin long-poll → {id, op, remIds, …} or 204. A plugin
@@ -88,7 +92,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 10  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs
+VERSION = 12  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs, 11: /tts/play, 12: /tts purpose
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},
@@ -269,6 +273,21 @@ class Handler(BaseHTTPRequestHandler):
             _tasks[task["id"]] = task
             threading.Thread(target=_run_upscale, args=(task,), daemon=True).start()
             return self._json(200, {"taskId": task["id"]})
+        if url.path == "/tts/play":
+            path = urlparse(str(body.get("url") or "")).path
+            if not path.startswith("/files/"):
+                return self._json(400, {"error": "url must be one of this helper's /files/ addresses"})
+            name = Path(unquote(path[len("/files/"):])).name  # no folders: only the store
+            file = STORE / name
+            if not file.is_file():
+                return self._json(404, {"error": "no such file"})
+            player = shutil.which("ffplay", path=os.pathsep.join([os.environ.get("PATH", ""), "/opt/homebrew/bin", "/usr/local/bin"]))
+            cmd = ([player, "-nodisp", "-autoexit", "-loglevel", "quiet", str(file)] if player
+                   else ["afplay", str(file)] if shutil.which("afplay") else None)
+            if not cmd:
+                return self._json(501, {"error": "no audio player (install ffmpeg)"})
+            subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return self._json(200, {"ok": True})
         if url.path == "/tts/write":
             source = body.get("source")
             if not isinstance(source, str) or not source.strip():
@@ -310,6 +329,7 @@ class Handler(BaseHTTPRequestHandler):
             task = {
                 "id": uuid.uuid4().hex[:12], "remId": str(body.get("remId") or ""), "script": script,
                 "engine": engine, "voice": body.get("voice") or None, "subject": body.get("subject") or "",
+                "purpose": "pronunciation" if body.get("purpose") == "pronunciation" else "read-aloud",
                 "status": "running", "stage": "starting", "result": None, "createdAt": time.time(),
             }
             _tts_tasks[task["id"]] = task
@@ -468,7 +488,8 @@ def _run_tts(task: dict) -> None:
                                  progress=lambda msg: task.__setitem__("stage", msg))
         task["stage"] = "saving"
         subject = task["subject"] or res.get("title") or "audio"
-        kept = tts.keep_copy(task["script"], out, task["remId"] or "norem", subject)
+        folder = tts.pronunciation_home() if task.get("purpose") == "pronunciation" else None
+        kept = tts.keep_copy(task["script"], out, task["remId"] or "norem", subject, folder)
         name = f"{kept.stem}.mp3"
         shutil.copyfile(out, STORE / name)
         out.unlink(missing_ok=True)

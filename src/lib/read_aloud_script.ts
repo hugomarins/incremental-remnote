@@ -207,6 +207,20 @@ export function renderLine(spans: Span[], lang: Lang): string {
 
 const plainOf = (spans: Span[]) => spans.map((s) => s.text).join('');
 
+/**
+ * A rendered line as a script line. A line that is nothing but one marked foreign term
+ * (an italic *fairway* card in a Portuguese note) becomes a line in that term's
+ * language, so engines that drop inline marks still pronounce it right.
+ */
+function scriptLine(text: string, lang: Lang): string {
+  const whole = text.match(/^<(pt|en)>(.*)<\/\1>([.!?…:;]*)$/s);
+  if (whole) {
+    lang = whole[1] as Lang;
+    text = whole[2] + whole[3];
+  }
+  return lang === 'pt' ? `[pt] ${text}` : text;
+}
+
 // --- the tree -----------------------------------------------------------------------
 
 interface RawLine {
@@ -334,9 +348,55 @@ export async function buildReadAloudScript(
       text = front && back ? `${front.replace(/[.]$/, ':')} ${back}` : front || back;
     }
     if (!text) return;
-    lines.push(lineLang === 'pt' ? `[pt] ${text}` : text);
+    lines.push(scriptLine(text, lineLang));
   });
   stats.lines = lines.length;
   const title = raw.length ? renderLine(raw[0].front, guesses[0] ?? lang).replace(/[.:]$/, '') : '';
   return { script: lines.join('\n'), source: outlineOf(raw), lang, title, stats };
+}
+
+/**
+ * One Rem, for a pronunciation: its front and back (no descendants) as one or two
+ * script lines, each in its own language. A single word gives no language clue, so
+ * an undecided side takes the other side's language, then the language of the Rem's
+ * parents (up to three), then English.
+ */
+export async function buildRemScript(
+  plugin: RNPlugin,
+  rem: PluginRem
+): Promise<{ script: string; lang: Lang; title: string; stats: ReadAloudStats }> {
+  const stats: ReadAloudStats = { rems: 1, lines: 0, skipped: {}, truncated: false };
+  const front = await spansOf(plugin, rem.text, stats);
+  const back = await spansOf(plugin, rem.backText, stats);
+  let context: Lang | null = null;
+  const contextLang = async (): Promise<Lang> => {
+    if (context) return context;
+    let parent = await rem.getParentRem();
+    const texts: string[] = [];
+    for (let i = 0; parent && i < 3; i++) {
+      texts.push(await plugin.richText.toString(parent.text ?? []));
+      parent = await parent.getParentRem();
+    }
+    context = guessLang(texts.join(' ')) ?? 'en';
+    return context;
+  };
+  const frontGuess = guessLang(plainOf(front));
+  const backGuess = guessLang(plainOf(back));
+  const sides: { spans: Span[]; lang: Lang }[] = [];
+  if (plainOf(front).trim()) {
+    sides.push({ spans: front, lang: frontGuess ?? backGuess ?? (await contextLang()) });
+  }
+  if (plainOf(back).trim()) {
+    sides.push({ spans: back, lang: backGuess ?? frontGuess ?? (await contextLang()) });
+  }
+  const lines = sides
+    .map(({ spans, lang }) => {
+      const text = renderLine(spans, lang);
+      return text ? scriptLine(text, lang) : '';
+    })
+    .filter(Boolean);
+  stats.lines = lines.length;
+  const lang = sides[0]?.lang ?? 'en';
+  const title = sides.length ? renderLine(sides[0].spans, sides[0].lang).replace(/[.:]$/, '') : '';
+  return { script: lines.join('\n'), lang, title, stats };
 }

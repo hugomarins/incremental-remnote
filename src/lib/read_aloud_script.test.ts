@@ -6,7 +6,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildReadAloudScript, guessLang, renderLine } from './read_aloud_script';
+import { buildReadAloudScript, buildRemScript, guessLang, renderLine } from './read_aloud_script';
 
 type El = any;
 interface Fake {
@@ -16,6 +16,7 @@ interface Fake {
   children?: Fake[];
   property?: boolean;
   table?: boolean;
+  parent?: Fake;
 }
 
 const m = (text: string, f: Record<string, unknown> = {}) => ({ i: 'm', text, ...f });
@@ -33,6 +34,7 @@ function fakeRem(f: Fake): any {
     isCode: async () => false,
     getPortalDirectlyIncludedRem: async () => [],
     getChildrenRem: async () => (f.children ?? []).map(fakeRem),
+    getParentRem: async () => (f.parent ? fakeRem(f.parent) : undefined),
   };
 }
 
@@ -161,5 +163,49 @@ describe('language marks', () => {
       ),
       'Fonseca calls it <pt>poder de unhar</pt>.'
     );
+  });
+});
+
+describe('buildRemScript (pronunciation)', () => {
+  it('reads front and back only: cloze whole, reference by alias, pin skipped', async () => {
+    const out = await buildRemScript(
+      plugin,
+      fakeRem({
+        _id: 'CARD',
+        text: [
+          'O ',
+          m('canal de acesso', { cId: 'c1' }),
+          ' liga o porto ao mar, ver ',
+          {
+            i: 'q',
+            _id: 'TARGET',
+            aliasId: 'ALIAS',
+          },
+          { i: 'q', _id: 'H', pin: true },
+        ],
+        backText: ['Chamado em inglês de ', m('approach channel', { l: true })],
+        children: [{ _id: 'KID', text: ['não lido'] }],
+      })
+    );
+    assert.deepEqual(out.script.split('\n'), [
+      '[pt] O canal de acesso liga o porto ao mar, ver canal de navegação.',
+      '[pt] Chamado em inglês de <en>approach channel</en>.',
+    ]);
+    assert.equal(out.stats.skipped.pins, 1);
+  });
+  it('takes an undecided side from the other side, then from the parents', async () => {
+    const parent: Fake = { _id: 'P', text: ['Termos do canal de navegação do porto'] };
+    const one = await buildRemScript(plugin, fakeRem({ _id: 'W', text: ['fairway'], parent }));
+    assert.equal(one.script, '[pt] fairway.');
+    const italic = await buildRemScript(
+      plugin,
+      fakeRem({ _id: 'W3', text: [m('fairway', { l: true })], backText: ['hidrovia'], parent })
+    );
+    assert.deepEqual(italic.script.split('\n'), ['fairway.', '[pt] hidrovia.']);
+    const two = await buildRemScript(
+      plugin,
+      fakeRem({ _id: 'W2', text: ['heave'], backText: ['The vertical motion of the ship'], parent })
+    );
+    assert.deepEqual(two.script.split('\n'), ['heave.', 'The vertical motion of the ship.']);
   });
 });

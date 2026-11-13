@@ -1,6 +1,11 @@
 import { ReactRNPlugin } from '@remnote/plugin-sdk';
-import { mediaBridgeEnabledId, readAloudCommandId, upscaleImageCommandId } from '../lib/consts';
-import { openReadAloud } from '../lib/read_aloud';
+import {
+  addPronunciationCommandId,
+  mediaBridgeEnabledId,
+  readAloudCommandId,
+  upscaleImageCommandId,
+} from '../lib/consts';
+import { addPronunciation, openReadAloud } from '../lib/read_aloud';
 import { getIESetting } from '../lib/settings';
 import { openUpscaleImage } from '../lib/upscale_image';
 
@@ -8,7 +13,7 @@ let registered = false;
 
 /**
  * The commands that need the Local Media Bridge helper ("Upscale image with ChatGPT",
- * "Read aloud") exist only while its setting is on, so users without the helper never
+ * "Read aloud", "Add pronunciation") exist only while its setting is on, so users without the helper never
  * see them: registered at startup when the setting is on, or the moment it is turned
  * on. The SDK cannot unregister a command, so turning the setting off hides them from
  * the next reload on (until then they explain that the setting is off).
@@ -30,9 +35,17 @@ export function registerMediaBridgeCommands(plugin: ReactRNPlugin) {
       id: readAloudCommandId,
       name: 'Read aloud',
       description:
-        'Read the focused rem and its descendants aloud (Gemini or Azure TTS through the Local Media Bridge) and add the audio as its first child.',
+        'Read the focused rem and its descendants aloud (text-to-speech through the Local Media Bridge) and add the audio as its first child.',
       quickCode: 'ra',
       action: async () => openReadAloud(plugin),
+    });
+    await plugin.app.registerCommand({
+      id: addPronunciationCommandId,
+      name: 'Add pronunciation (Extra Card Detail)',
+      description:
+        "Read the focused or selected rems (in the queue, the card on screen) aloud, front and back, play it, and add the audio as each rem's first child, as Extra Card Detail.",
+      quickCode: 'pron',
+      action: async () => addPronunciation(plugin),
     });
   });
 }

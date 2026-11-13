@@ -36,7 +36,8 @@ from the .env file named by "envFile" in ~/.remnote-media-bridge/tts.json (or
 ~/.remnote-media-bridge/.env). They are never printed.
 
 tts.json (optional): {"envFile": "...", "audioHome": "...", "geminiVoices": [...],
-"geminiModel": "...", "azureVoices": [...], "elevenModel": "...", "elevenUsdPerMChars": N}
+"geminiModel": "...", "azureVoices": [...], "elevenModel": "...", "elevenUsdPerMChars": N,
+"pronunciationHome": "..." (default <audioHome>/pronunciations)}
 ("azureVoice": "..." is still read)
 
 CLI:
@@ -157,6 +158,12 @@ def keys() -> dict:
 
 def audio_home() -> Path:
     return Path(os.path.expanduser(config().get("audioHome") or BRIDGE_HOME / "audio"))
+
+
+def pronunciation_home() -> Path:
+    """Where "Add pronunciation" copies go: apart from the Read aloud audios."""
+    custom = config().get("pronunciationHome")
+    return Path(os.path.expanduser(custom)) if custom else audio_home() / "pronunciations"
 
 
 def _tool(name: str) -> str:

@@ -18,18 +18,26 @@
  * inline language marks (<en>…</en> in a Portuguese line, <pt>…</pt> in an English
  * one), which is also what sends a script to the multilingual voice.
  */
-import { ReactRNPlugin, RichTextInterface, RNPlugin, SelectionType } from '@remnote/plugin-sdk';
+import {
+  BuiltInPowerupCodes,
+  ReactRNPlugin,
+  RichTextInterface,
+  RNPlugin,
+  SelectionType,
+} from '@remnote/plugin-sdk';
 import { mediaBridgeEnabledId, READ_ALOUD_POPUP, readAloudTagId } from './consts';
 import { MEDIA_BRIDGE_URL } from './media_bridge';
 import { runAudio } from './media_bridge_ops';
 import { showMessageDialog } from './message_dialog';
-import { buildReadAloudScript, Lang, ReadAloudStats } from './read_aloud_script';
+import { resolvePriorityTargets } from './priority_targets';
+import { PRONUNCIATION_POWERUP_CODE } from './pronunciation_css';
+import { buildReadAloudScript, buildRemScript, Lang, ReadAloudStats } from './read_aloud_script';
 import { getIESetting } from './settings';
 
 export type { Lang, ReadAloudStats };
 
-/** The helper version with /tts/write (Adapted and Summary modes) and ElevenLabs. */
-const MIN_HELPER_VERSION = 10;
+/** The helper version with /tts/write (Adapted, Summary), ElevenLabs, /tts/play and the pronunciation folder. */
+const MIN_HELPER_VERSION = 12;
 export interface ReadAloudContext {
   remId: string;
   title: string;
@@ -162,7 +170,9 @@ export async function startTts(
   engine: string,
   voice: string | null,
   remId: string,
-  subject: string
+  subject: string,
+  /** 'pronunciation' keeps the helper's copy in its own folder. */
+  purpose: 'read-aloud' | 'pronunciation' = 'read-aloud'
 ): Promise<string> {
   const body = await postJSON<{ taskId?: string }>('/tts', {
     script,
@@ -170,6 +180,7 @@ export async function startTts(
     voice,
     remId,
     subject,
+    purpose,
   });
   if (!body.taskId) throw new Error('the helper started no task');
   return body.taskId;
@@ -216,18 +227,49 @@ export async function insertAudio(
   const word =
     mode === 'summary' ? (pt ? 'Resumo em Áudio' : 'Audio Summary') : pt ? 'Áudio' : 'Audio';
   const caption = `🔊 ${word} (${result.voiceLabel ?? result.voice ?? 'TTS'})`;
+  return placeAudio(plugin, context.remId, result.url, caption);
+}
+
+/**
+ * The audio rem: stored in RemNote, first child of `parentId`. A Read aloud audio gets
+ * the optional tag setting; a pronunciation instead gets the Extra Card Detail and
+ * Pronunciation powerups (its own mark, lib/pronunciation_css), kept apart.
+ */
+async function placeAudio(
+  plugin: RNPlugin,
+  parentId: string,
+  url: string,
+  caption: string,
+  pronunciation = false
+): Promise<{ remId?: string; warning?: string }> {
   // runAudio only uses RNPlugin calls; it is typed for the bridge's ReactRNPlugin.
   const placed = await runAudio(plugin as ReactRNPlugin, {
     id: `read-aloud-${Date.now()}`,
     op: 'audio',
-    remIds: [context.remId],
-    url: result.url,
+    remIds: [parentId],
+    url,
     caption,
     position: 'first',
   });
   const remId = typeof placed.remId === 'string' ? placed.remId : undefined;
   if (!placed.ok && !remId) throw new Error(placed.summary);
   let warning = placed.ok ? undefined : placed.summary;
+  const addWarning = (w: string) => (warning = warning ? `${warning}; ${w}` : w);
+
+  if (pronunciation) {
+    const audioRem = remId ? await plugin.rem.findOne(remId) : undefined;
+    for (const [code, label] of [
+      [BuiltInPowerupCodes.ExtraCardDetail, 'Extra Card Detail'],
+      [PRONUNCIATION_POWERUP_CODE, 'Pronunciation'],
+    ] as const) {
+      try {
+        await audioRem?.addPowerup(code);
+      } catch (err) {
+        addWarning(`${label} not set (${String(err)})`);
+      }
+    }
+    return { remId, warning };
+  }
 
   const tagName = String((await getIESetting(plugin, readAloudTagId)) ?? '').trim();
   if (tagName && remId) {
@@ -240,7 +282,7 @@ export async function insertAudio(
       const audioRem = await plugin.rem.findOne(remId);
       if (tag && audioRem) await audioRem.addTag(tag._id);
     } catch (err) {
-      warning = `${warning ? `${warning}; ` : ''}tag “${tagName}” not added (${String(err)})`;
+      addWarning(`tag “${tagName}” not added (${String(err)})`);
     }
   }
   return { remId, warning };
@@ -364,6 +406,129 @@ export async function saveDraft(
     .sort(([, a], [, b]) => b.savedAt - a.savedAt)
     .slice(0, MAX_DRAFTS);
   await plugin.storage.setLocal(DRAFTS_KEY, Object.fromEntries(kept));
+}
+
+// --- pronunciation (Extra Card Detail) -----------------------------------------------
+
+const PRONOUNCE_TIMEOUT_MS = 120_000;
+
+/** A finished /tts task, polled every second. */
+async function waitForTts(taskId: string): Promise<TtsResult> {
+  const until = Date.now() + PRONOUNCE_TIMEOUT_MS;
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const task = await getTtsTask(taskId);
+    if (task.status === 'done') return task.result ?? { ok: false, message: 'no result' };
+  }
+  return { ok: false, message: 'the helper took more than 2 minutes' };
+}
+
+/**
+ * Play the new audio at once: in the plugin (RemNote's own audio output), or, when
+ * the app refuses to autoplay, through the helper (ffplay / afplay on this computer).
+ */
+export async function playAudio(url: string): Promise<void> {
+  try {
+    await new Audio(url).play();
+    return;
+  } catch (err) {
+    console.info('[ReadAloud] in-app playback refused; asking the helper', err);
+  }
+  try {
+    await postJSON('/tts/play', { url });
+  } catch (err) {
+    console.warn('[ReadAloud] the helper could not play the audio', err);
+  }
+}
+
+/**
+ * "Add pronunciation": the focused or selected Rems (in the queue, the card on screen),
+ * front and back only, read aloud with the suggested engine, no popup; the audio goes
+ * in as the Rem's first child, captioned 🔊, as Extra Card Detail. A single Rem's audio
+ * plays as soon as it is ready.
+ */
+export async function addPronunciation(plugin: ReactRNPlugin) {
+  if (!(await getIESetting(plugin, mediaBridgeEnabledId))) {
+    await showMessageDialog(plugin, {
+      title: 'Add pronunciation needs the Local Media Bridge',
+      message:
+        'Turn on the setting "Local Media Bridge" in Incremental Everything. The speech is made by ' +
+        'its helper program on this computer, with your own text-to-speech key.',
+      tone: 'info',
+    });
+    return;
+  }
+  const { remIds } = await resolvePriorityTargets(plugin);
+  const rems = remIds.length ? ((await plugin.rem.findMany(remIds)) ?? []) : [];
+  if (!rems.length) {
+    await plugin.app.toast('No Rem to pronounce: place the cursor in a Rem, or select Rems.');
+    return;
+  }
+  const problem = await helperProblem();
+  if (problem) {
+    await showMessageDialog(plugin, {
+      title: 'Cannot add a pronunciation',
+      message: problem,
+      tone: 'error',
+    });
+    return;
+  }
+  await plugin.app.toast(
+    rems.length === 1 ? '🔊 Making the pronunciation…' : `🔊 Making ${rems.length} pronunciations…`
+  );
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  let done = 0;
+  let costUsd = 0;
+  for (const rem of rems) {
+    const built = await buildRemScript(plugin, rem);
+    const label = built.title.slice(0, 40) || rem._id;
+    if (!built.script.trim()) {
+      failures.push(`“${label}”: no text to read`);
+      continue;
+    }
+    try {
+      const plan = await planTts(built.script, 'auto');
+      if (!plan.ok || !plan.ready || !plan.engine) {
+        failures.push(`“${label}”: ${(plan.errors ?? plan.missing ?? ['no engine']).join('; ')}`);
+        continue;
+      }
+      const taskId = await startTts(
+        built.script,
+        plan.engine,
+        null,
+        rem._id,
+        built.title,
+        'pronunciation'
+      );
+      const result = await waitForTts(taskId);
+      if (!result.ok || !result.url) {
+        failures.push(`“${label}”: ${result.message ?? 'no audio'}`);
+        continue;
+      }
+      if (rems.length === 1) void playAudio(result.url);
+      const placed = await placeAudio(plugin, rem._id, result.url, '🔊', true);
+      if (placed.warning) warnings.push(placed.warning);
+      costUsd += result.costUsd ?? 0;
+      done++;
+    } catch (err) {
+      failures.push(`“${label}”: ${String(err)}`);
+    }
+  }
+  if (failures.length) {
+    await showMessageDialog(plugin, {
+      title: done
+        ? `Pronunciation added to ${done} of ${rems.length} Rems`
+        : 'No pronunciation added',
+      message: [...failures, ...warnings].join('\n'),
+      tone: 'error',
+    });
+    return;
+  }
+  await plugin.app.toast(
+    `🔊 Pronunciation added${done > 1 ? ` to ${done} Rems` : ''} (~US$${costUsd.toFixed(3)})` +
+      (warnings.length ? ` — ${warnings.join('; ')}` : '')
+  );
 }
 
 // --- the command --------------------------------------------------------------------
