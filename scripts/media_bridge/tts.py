@@ -14,6 +14,10 @@ Engines, chosen by ear on notes that mix English and Portuguese:
     like Gemini, one call per language block (no word-level language switch: the
     author's tests had it read Portuguese terms as English, or Portuguese as Spanish).
     Voices are the account's own (GET /v2/voices, cached), shown by first name.
+  - Gemini TTS on Google Cloud (Vertex AI generateContent, same model and voices), with
+    an API key: billed to a Google Cloud billing account (and its credits) instead of
+    the Gemini API's; preferred over the Gemini API when both keys are set. The language
+    is detected from the text (one call per language block, as with Gemini).
 Only engines whose keys are set are offered; "auto" suggests one of them, and any
 available engine may be picked instead. The script keeps its marks either way: Azure
 switches language on them, Gemini drops them and reads the term in the line's language.
@@ -26,7 +30,8 @@ Script format (plain text, one idea per line):
                                        max(5 s, 2 s + 0.5 s per word of that line)
   [pause N]                            N seconds
 
-Keys: GEMINI_API_KEY, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, ELEVENLABS_API_KEY, from the environment or
+Keys: GEMINI_API_KEY, GOOGLE_CLOUD_API_KEY (+ optional GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION),
+AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, ELEVENLABS_API_KEY, from the environment or
 from the .env file named by "envFile" in ~/.remnote-media-bridge/tts.json (or
 ~/.remnote-media-bridge/.env). They are never printed.
 
@@ -87,7 +92,7 @@ ATTEMPTS = 6
 # silence the helper adds, not billed): US$9 per million tokens through 2026-12-31,
 # US$18 from 2027-01-01 (ai.google.dev/gemini-api/docs/pricing; the 3.1 preview was
 # US$20). "geminiUsdPerMTokens" in tts.json overrides the schedule.
-WORDS_PER_MIN = {"gemini": 143.0, "azure": 126.0, "elevenlabs": 150.0}
+WORDS_PER_MIN = {"vertex": 143.0, "gemini": 143.0, "azure": 126.0, "elevenlabs": 150.0}
 AZURE_LINE_BREAK_S = 0.75  # the <break/> between lines inside one Azure call
 GEMINI_TOKENS_PER_S = 25.0
 GEMINI_PRICE_SCHEDULE = [("2027-01-01", 18.0), ("0000-00-00", 9.0)]  # (from date, US$ per M tokens), newest first
@@ -136,7 +141,8 @@ def _read_env_file(path: Path) -> dict:
 
 def keys() -> dict:
     """The TTS keys and ANTHROPIC_API_KEY (whatever is set)."""
-    names = ("GEMINI_API_KEY", "AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION", "ELEVENLABS_API_KEY",
+    names = ("GEMINI_API_KEY", "GOOGLE_CLOUD_API_KEY", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION",
+             "AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION", "ELEVENLABS_API_KEY",
              "ANTHROPIC_API_KEY")
     found = {}
     env_file = config().get("envFile")
@@ -249,13 +255,16 @@ def inline_count(items) -> int:
 
 
 ENGINES = {
+    "vertex": {"label": "Gemini TTS (Google Cloud)", "needs": ("GOOGLE_CLOUD_API_KEY",), "mixes": False},
     "gemini": {"label": "Gemini TTS", "needs": ("GEMINI_API_KEY",), "mixes": False},
     "azure": {"label": "Azure multilingual", "needs": ("AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION"),
               "mixes": True},
     "elevenlabs": {"label": "ElevenLabs", "needs": ("ELEVENLABS_API_KEY",), "mixes": False},
 }
 # Engines that make one call per language block (the line's language for every word).
-BLOCK_ENGINES = ("gemini", "elevenlabs")
+BLOCK_ENGINES = ("vertex", "gemini", "elevenlabs")
+# Engines billed per audio token (Gemini TTS); the others per character.
+TOKEN_ENGINES = ("vertex", "gemini")
 
 _eleven_voices: dict = {"at": 0.0, "voices": {}}
 
@@ -295,7 +304,8 @@ def missing_keys(engine: str, key_set: dict) -> list[str]:
 
 def suggest_engine(n_inline: int, available: list[str]) -> str | None:
     """Azure for many inline terms (only it switches mid-sentence), else Gemini; among the available."""
-    order = (["azure", "gemini"] if n_inline >= INLINE_LIMIT else ["gemini", "azure"]) + ["elevenlabs"]
+    order = (["azure", "vertex", "gemini"] if n_inline >= INLINE_LIMIT
+             else ["vertex", "gemini", "azure"]) + ["elevenlabs"]
     return next((e for e in order if e in available), None)
 
 
@@ -380,7 +390,7 @@ def _estimate(items, lines, engine: str) -> dict:
     if engine == "azure":
         seconds += AZURE_LINE_BREAK_S * max(0, len(lines) - n_calls)
     billed = azure_billed_chars(calls) if engine == "azure" else chars
-    cost = (speech * GEMINI_TOKENS_PER_S * gemini_usd_per_m_tokens() / 1e6 if engine == "gemini"
+    cost = (speech * GEMINI_TOKENS_PER_S * gemini_usd_per_m_tokens() / 1e6 if engine in TOKEN_ENGINES
             else billed * usd_per_m_chars(engine) / 1e6)
     return {"calls": n_calls, "answerPauses": pauses, "characters": chars, "billedCharacters": billed,
             "wordsPerMinute": WORDS_PER_MIN[engine],
@@ -465,7 +475,32 @@ def gemini(lang: str, text: str, dest: Path, key: str, voice: str, log) -> int:
     raw = _post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                 {"x-goog-api-key": key, "Content-Type": "application/json"},
                 json.dumps(body).encode(), log)
-    d = json.loads(raw)
+    return _gemini_audio(json.loads(raw), dest)
+
+
+def vertex(text: str, dest: Path, key: str, voice: str, log) -> int:
+    """Gemini TTS through Google Cloud (Vertex AI). The 3.8 models detect the language
+    themselves; each call holds one language block. Without GOOGLE_CLOUD_PROJECT the key's
+    own project is used (the short publisher path)."""
+    cfg, ks = config(), keys()
+    model = cfg.get("vertexModel") or cfg.get("geminiModel") or GEMINI_MODEL
+    project = ks.get("GOOGLE_CLOUD_PROJECT")
+    location = ks.get("GOOGLE_CLOUD_LOCATION") or "global"
+    host = ("https://aiplatform.googleapis.com" if location == "global"
+            else f"https://aiplatform.{location}.rep.googleapis.com")
+    path = (f"/v1/projects/{project}/locations/{location}/publishers/google/models/{model}"
+            if project else f"/v1/publishers/google/models/{model}")
+    body = {"contents": [{"role": "user", "parts": [{"text": text}]}],
+            "generationConfig": {"responseModalities": ["AUDIO"],
+                                 "speechConfig": {"voiceConfig": {"voice": voice}}}}
+    raw = _post(f"{host}{path}:generateContent",
+                {"x-goog-api-key": key, "Content-Type": "application/json"},
+                json.dumps(body).encode(), log)
+    return _gemini_audio(json.loads(raw), dest)
+
+
+def _gemini_audio(d: dict, dest: Path) -> int:
+    """A generateContent answer -> WAV at dest; returns the audio tokens billed."""
     try:
         data = d["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
     except (KeyError, IndexError):
@@ -572,7 +607,9 @@ def synthesize(script: str, out: Path, engine: str = "auto", voice: str | None =
             done += 1
             log(f"{ENGINES[eng]['label']} {done}/{total}")
             w = tmp / f"s_{i:03d}.wav"
-            if eng == "gemini":
+            if eng == "vertex":
+                tokens += vertex(c[2], w, ks["GOOGLE_CLOUD_API_KEY"], voice, log)
+            elif eng == "gemini":
                 tokens += gemini(c[1], c[2], w, ks["GEMINI_API_KEY"], voice, log)
             elif eng == "elevenlabs":
                 elevenlabs(c[1], c[2], w, ks["ELEVENLABS_API_KEY"], voice, log)
@@ -591,7 +628,7 @@ def synthesize(script: str, out: Path, engine: str = "auto", voice: str | None =
     summary = {"file": str(out), "engine": eng, "voice": voice, "voiceLabel": voice_label(voice),
                "seconds": secs, "characters": p["characters"], "inlineTerms": p["inlineTerms"],
                "answerPauses": len(p["answerPauses"]), "title": p["title"]}
-    if eng == "gemini":
+    if eng in TOKEN_ENGINES:
         summary["audioTokens"] = tokens
         summary["costUsd"] = round(tokens * gemini_usd_per_m_tokens() / 1e6, 3)
     else:

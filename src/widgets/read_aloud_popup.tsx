@@ -315,7 +315,7 @@ export function ReadAloudPopup() {
             return;
           }
           setPhase({ kind: 'inserting' });
-          const { remId, warning } = await insertAudio(plugin, context, result);
+          const { remId, warning } = await insertAudio(plugin, context, result, mode);
           let textWarning = '';
           if (mode === 'summary' && insertText && remId) {
             try {

@@ -208,10 +208,13 @@ export async function startWrite(
 export async function insertAudio(
   plugin: RNPlugin,
   context: ReadAloudContext,
-  result: TtsResult
+  result: TtsResult,
+  mode: ReadAloudMode = 'literal'
 ): Promise<{ remId?: string; warning?: string }> {
   if (!result.url) throw new Error('No audio file came back.');
-  const word = context.lang === 'pt' ? 'Áudio' : 'Audio';
+  const pt = context.lang === 'pt';
+  const word =
+    mode === 'summary' ? (pt ? 'Resumo em Áudio' : 'Audio Summary') : pt ? 'Áudio' : 'Audio';
   const caption = `🔊 ${word} (${result.voiceLabel ?? result.voice ?? 'TTS'})`;
   // runAudio only uses RNPlugin calls; it is typed for the bridge's ReactRNPlugin.
   const placed = await runAudio(plugin as ReactRNPlugin, {

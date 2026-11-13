@@ -7,7 +7,7 @@ rems and skips as the Literal script, but formulas kept as LaTeX, italics as *x*
     words, foreign terms marked, abbreviations expanded);
   - summary: a spoken summary of about a target number of words (the plugin sets it: a
     share of the note's length, capped by a maximum duration), plus the user's
-    additional instructions. A summary more than 15 % over the target gets one retry
+    additional instructions. A summary more than 25 % over the target gets one retry
     asking to shorten it.
 
 The answer is a script in tts.py's format, checked with tts.check(); one retry fixes
@@ -42,7 +42,7 @@ DEFAULT_MODEL = "claude-opus-5-5"
 CLI_TIMEOUT_S = 300
 MAX_TOKENS = 16000
 # A summary this much over its target gets one retry asking to shorten it.
-OVERSHOOT = 1.15
+OVERSHOOT = 1.25
 # US$ per million tokens (input, output), for the API fallback's cost line.
 PRICES = {"claude-opus-5": (4.0, 20.0), "claude-sonnet-5": (2.0, 10.0), "claude-haiku-5": (0.10, 0.50)}
 
