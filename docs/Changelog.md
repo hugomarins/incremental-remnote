@@ -12,7 +12,7 @@ This page documents the major changes and improvements for each version of the I
 
 ### ✨ Improved
 
-**Read Aloud**: **Generate** now makes the audio in the background, so the popup closes at once and you can keep working; a message says when the audio is in, with an **Open Rem** button that takes you to it.
+**Read Aloud**: **Generate** now makes the audio in the background, so the popup closes at once and you can keep working; a notice at the top right says when the audio is in, with an **Open Rem** button that takes you to it, and never closes the popup you are working in.
 
 📖 [Read Aloud → Using it](Read-Aloud.md#use)
 

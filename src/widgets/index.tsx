@@ -42,6 +42,7 @@ import { registerEditorReviewTimerHeadersCss } from '../lib/editor_review_timer_
 import { refreshKbPriorityQueueAtStartup } from '../lib/priority_review_document/queue_doc';
 import { bandVerboseLogsEnabled } from '../lib/priority_bands';
 import { registerIncrementalRemTracker } from '../register/tracker';
+import { registerNoticeHost } from '../lib/notice';
 import { registerLogosBridge } from '../lib/logos_bridge';
 import { registerMediaBridge } from '../lib/media_bridge';
 import { registerExternalPriorityBridge } from '../lib/external_priority_bridge';
@@ -125,6 +126,7 @@ async function onActivate(plugin: ReactRNPlugin) {
   registerEventListeners(plugin, resetSessionItemCounter);
 
   registerIncrementalRemTracker(plugin);
+  registerNoticeHost(plugin);
   // A full load was measured at 29s; the deadline only has to catch a load that died.
   const incRemSettled = startup.track(
     'incRemCache',

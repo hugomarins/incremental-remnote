@@ -14,7 +14,7 @@ Read aloud reads the notes as they are (**Literal**), lightly reworked by AI so 
 2. The popup shows the **script**, the text that will be spoken. Edit it freely.
 3. Pick a **mode** (below), an **engine** and a **voice**. The line under them shows the estimate: words, duration, cost.
 4. Press **Generate** (`⌘↵` / `Ctrl+Enter`). The popup closes and the audio is made **in the background**, so you can keep working in RemNote (a 5-minute audio takes about a minute).
-5. When the audio is in, a message says so, with the voice, duration and cost. **Open Rem** (`→` then `Enter`) opens the read Rem, with the new audio at its top; **OK** (`Enter`) just closes the message.
+5. When the audio is in, a notice appears at the top right, with the voice, duration and cost. **Open Rem** opens the read Rem, with the new audio at its top; **Dismiss** closes the notice. It never interrupts what you are doing: a popup you have open (another Read aloud, say) stays open, and the notice waits until you dismiss it.
 
 The audio is added as the **first child** of the read Rem, captioned `🔊 Audio (<voice>)` (`🔊 Audio Summary (<voice>)` for a summary; `Áudio` / `Resumo em Áudio` in a Portuguese note). It is stored in RemNote like an uploaded file, so it plays offline and syncs. Set **Read Aloud: Tag for Audio Rems** to tag every audio Rem, for example `AI audio`.
 
@@ -160,5 +160,5 @@ python3 spoken_script.py outline.md --mode summary --lang pt --words 350
 - **“The media-bridge helper … is version N”:** restart the helper (`curl -X POST localhost:3460/shutdown`, then `launchctl kickstart -k gui/$(id -u)/com.incrementalremnote.media-bridge` when it runs at login).
 - **Every engine shows “no key”:** the helper did not find the `.env`. Check `envFile` in `tts.json`, and the variable names above.
 - **Portuguese spoken with a Spanish or English accent:** the line is missing its `[pt]` mark, or the engine read a marked term in the line's language (choose Azure for many marked terms).
-- **The message never came:** the audio is made in the window where you pressed Generate, and reloading RemNote while it runs drops the job. The helper still keeps its copy of the mp3 in `audioHome` (see [Options](#options)), so you can add that file by hand instead of paying for it again.
+- **The notice never came:** the audio is made in the window where you pressed Generate, and reloading RemNote while it runs drops the job. The helper still keeps its copy of the mp3 in `audioHome` (see [Options](#options)), so you can add that file by hand instead of paying for it again.
 - **A summary is cut off or too long:** lower the slider or the maximum, or press **Rewrite with AI**.

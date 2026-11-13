@@ -808,6 +808,11 @@ export const readAloudTagId = 'read-aloud-tag';
 // it and reports with a message dialog, so the popup can close at once. A queue, so two
 // Generates in quick succession cannot overwrite each other. See lib/read_aloud.ts.
 export const pendingReadAloudJobsKey = 'pendingReadAloudJobs';
+// Notices (lib/notice.ts): reports of background work, shown in a floating card instead
+// of a popup so they never close the popup the user is working in. Any widget appends to
+// this list; the index opens the card while it is non-empty.
+export const noticesKey = 'notices';
+export const NOTICE_FLOAT = 'notice_float';
 
 // --- Cards on a scheduler other than the Global Default (lib/scheduler_cards.ts) ---
 // Synced and per KB: `<prefix>_<kbId>` is the manifest, `<prefix>_<kbId>_<n>` the shards.

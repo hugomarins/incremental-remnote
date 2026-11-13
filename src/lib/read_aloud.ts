@@ -34,6 +34,7 @@ import {
 import { MEDIA_BRIDGE_URL } from './media_bridge';
 import { runAudio } from './media_bridge_ops';
 import { showMessageDialog } from './message_dialog';
+import { showNotice } from './notice';
 import { resolvePriorityTargets } from './priority_targets';
 import { PRONUNCIATION_CAPTION_COLOR, PRONUNCIATION_POWERUP_CODE } from './pronunciation_css';
 import { buildReadAloudScript, buildRemScript, Lang, ReadAloudStats } from './read_aloud_script';
@@ -427,8 +428,10 @@ async function waitForJob(taskId: string): Promise<TtsResult> {
 /** Wait for the helper's audio, insert it (and the summary text), and say how it went. */
 export async function runReadAloudJob(plugin: RNPlugin, job: ReadAloudJob): Promise<void> {
   const name = job.target.title || 'Untitled rem';
+  // Notices, not message dialogs: the job ends at a moment the user did not choose,
+  // maybe while another Read Aloud popup is writing its script.
   const fail = (message: string) =>
-    showMessageDialog(plugin, {
+    showNotice(plugin, {
       title: 'Read aloud: no audio added',
       message: `“${name}”: ${message}`,
       tone: 'error',
@@ -449,7 +452,7 @@ export async function runReadAloudJob(plugin: RNPlugin, job: ReadAloudJob): Prom
       }
     }
     const cost = result.costUsd != null ? `, ~US$${result.costUsd.toFixed(2)}` : '';
-    await showMessageDialog(plugin, {
+    await showNotice(plugin, {
       title: job.mode === 'summary' ? 'Audio summary added' : 'Audio added',
       message:
         `“${name}”: ${result.voiceLabel ?? result.voice ?? 'TTS'}, ` +

@@ -13,7 +13,7 @@ import { runIncRemCreateTail, IncRemCreateTailJob } from '../lib/highlightAction
 import { shouldUseLightMode } from '../lib/mobileUtils';
 import { runReviewJob, ReviewJob, IncRemCacheChanges } from '../lib/incremental_rem/review_jobs';
 import { runIncRemTransferTail, IncRemTransferTailJob } from '../lib/incremental_rem/transfer';
-import { showMessageDialog } from '../lib/message_dialog';
+import { showNotice } from '../lib/notice';
 import { ReadAloudJob, runReadAloudJob } from '../lib/read_aloud';
 
 // Module-level flag to suppress IncRem cache reloads during batch writes.
@@ -691,7 +691,9 @@ export function registerIncrementalRemTracker(plugin: ReactRNPlugin) {
           } catch (err) {
             console.error(`[Tracker] reviewJob ${job.kind} failed:`, err);
             const isDismissal = job.kind === 'dismiss';
-            await showMessageDialog(plugin, {
+            // A notice, not a popup: the job runs after the surface moved on, and a
+            // popup would replace whatever the user has open by now.
+            await showNotice(plugin, {
               title: isDismissal ? 'Dismissal not saved' : 'Repetition not saved',
               message: isDismissal
                 ? `"${job.remName || job.remId}" could not be dismissed.`

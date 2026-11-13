@@ -440,6 +440,11 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
     dimensions: { height: 'auto', width: 'auto' },
   });
 
+  // Notices of background work (lib/notice.ts), opened and closed by the index.
+  plugin.app.registerWidget('notice_float', WidgetLocation.FloatingWidget, {
+    dimensions: { height: 'auto', width: 'auto' },
+  });
+
   // Shows that a window follows the queue, with its controls; opened by lib/follow_queue_sources.ts.
   plugin.app.registerWidget('follow_queue_bar', WidgetLocation.FloatingWidget, {
     dimensions: { height: 'auto', width: 'auto' },
