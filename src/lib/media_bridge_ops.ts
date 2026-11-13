@@ -3,7 +3,7 @@
  *
  * The RemNote MCP can write text, tags and documents, but cannot move a rem,
  * remove a tag, hand back an image, pin a source, set a card's type and direction,
- * or make a rem Incremental the way this
+ * add a playable audio file, or make a rem Incremental the way this
  * plugin does (its slots, history, cache and inheritance cascade). Outside tools
  * queue these as jobs on the media-bridge helper (scripts/media_bridge/
  * media_bridge.py), and lib/media_bridge.ts hands them here. Each returns the
@@ -24,7 +24,7 @@ import {
   setIncRemPriority,
   updateIncrementalRemCache,
 } from './incremental_rem';
-import { imageUrlsOf } from './localize_media';
+import { imageUrlsOf, isRemNoteHostedUrl, localizeMediaInRems } from './localize_media';
 import { isPin, pinFromSourceFinder, pinOneQuote, SourceView, sourceViews } from './pdf_source_pins';
 import { quoteCandidates } from './pdf_source_pins/quote';
 
@@ -697,6 +697,59 @@ export async function runCard(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<
   };
 }
 
+// --- audio -------------------------------------------------------------------
+
+/**
+ * Adds a child rem that plays an audio file, with an optional caption before
+ * the player. The file arrives as a helper URL (`media_bridge.py audio` stores
+ * it first); the rem is written with a RemNote audio element and then stored
+ * through the import door, so it ends up as a file RemNote keeps (`%LOCAL_FILE%…` or its own S3 host).
+ */
+export async function runAudio(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
+  const url = String(job.url ?? '').trim();
+  if (!url) throw new OpError('No audio URL given.');
+  const caption = typeof job.caption === 'string' ? job.caption.trim() : '';
+  const parentId = job.remIds[0];
+  const parent = parentId ? await plugin.rem.findOne(parentId) : undefined;
+  if (!parent) throw new OpError(`Parent not found: ${parentId || '(none given)'}`);
+
+  const rem = await plugin.rem.createRem();
+  if (!rem) throw new OpError('RemNote did not create the rem.');
+  const audio = { i: 'a', url, onlyAudio: true } as unknown as RichTextElementRemInterface;
+  await rem.setText([...(caption ? [`${caption} `] : []), audio] as RichTextInterface);
+  await rem.setParent(parent._id);
+
+  const placed = await runMove(plugin, {
+    id: job.id,
+    op: 'move',
+    remIds: [rem._id],
+    parentId: parent._id,
+    position: job.position ?? 'first',
+    ...(job.siblingId === undefined ? {} : { siblingId: job.siblingId }),
+    ...(job.index === undefined ? {} : { index: job.index }),
+  });
+
+  const fresh = await plugin.rem.findOne(rem._id);
+  const localized = fresh ? await localizeMediaInRems(plugin, [fresh]) : undefined;
+  const after = await plugin.rem.findOne(rem._id);
+  const element = (after?.text ?? []).find(
+    (el) => typeof el === 'object' && el !== null && (el as any).i === 'a'
+  ) as { url?: string } | undefined;
+  const storedUrl = element?.url;
+  const stored = typeof storedUrl === 'string' && isRemNoteHostedUrl(storedUrl);
+  return {
+    ok: stored && placed.ok,
+    summary: stored
+      ? `audio added${caption ? ` (“${caption}”)` : ''} and stored in RemNote`
+      : 'audio rem added, but the file was not stored in RemNote',
+    remId: rem._id,
+    parentId: parent._id,
+    storedUrl,
+    placed: placed.ok,
+    ...(localized?.failed?.length ? { failed: localized.failed } : {}),
+  };
+}
+
 // --- dispatch ----------------------------------------------------------------
 
 const OPS: Record<string, (plugin: ReactRNPlugin, job: BridgeOpJob) => Promise<BridgeOpResult>> = {
@@ -708,6 +761,7 @@ const OPS: Record<string, (plugin: ReactRNPlugin, job: BridgeOpJob) => Promise<B
   pin: runPin,
   'pin-quote': runPinQuote,
   card: runCard,
+  audio: runAudio,
 };
 
 /** Runs a non-localize job. Errors come back as `{ok: false, message}`, never thrown. */

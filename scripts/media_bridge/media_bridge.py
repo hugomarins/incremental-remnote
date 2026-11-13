@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local Media Bridge: get local images into RemNote's own storage from outside the app,
 and run a few rem operations the RemNote MCP lacks (move, tag, untag, get-image, incrementalize,
-pin, pin-quote, card).
+pin, pin-quote, card, audio).
 
 Why: since RemNote 1.29 the desktop window runs sandboxed (webSecurity on), so an
 image written into a rem as `![](file:///…)` — e.g. by the RemNote MCP — is never
@@ -30,6 +30,9 @@ plugin with its own code (src/lib/media_bridge_ops.ts):
                                     without --source: your source finder names each rem's book and PDF
                                     Pin Source Quote: find the rem's text in the source, pin its highlight
   card <rem>[,<rem>…] [--type concept|descriptor|default] [--direction forward|backward|both|none]
+  audio <parent> <file> [--caption TEXT] [--position first|last|N|before:<id>|after:<id>]
+                                    adds a child rem with a playable audio file (default: first child),
+                                    stored in RemNote like a localized image
 
 Each prints the plugin's JSON answer; exit 0 = done, 1 = failed (or partly), 2 = timeout.
 
@@ -73,13 +76,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 6  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag
+VERSION = 7  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},
     2: {"localize", "move", "untag", "get-image", "incrementalize"},
     3: {"localize", "move", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card"},
     4: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card"},
+    5: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card", "audio"},
 }
 KNOWN_OPS = OPS_BY_PLUGIN_VERSION[max(OPS_BY_PLUGIN_VERSION)]
 HOST = "127.0.0.1"
@@ -382,18 +386,23 @@ def ensure_running() -> dict:
     sys.exit(f"media bridge did not start; see {LOG_FILE}")
 
 
+def _store(path: str) -> str:
+    """Copy a file into the helper's store and return its http URL."""
+    src = Path(path).expanduser().resolve()
+    if not src.is_file():
+        sys.exit(f"not a file: {path}")
+    STORE.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha1(src.read_bytes()).hexdigest()[:10]
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", src.stem).strip("-") or "file"
+    name = f"{digest}-{stem}{src.suffix.lower()}"
+    shutil.copyfile(src, STORE / name)
+    return f"{BASE}/files/{quote(name)}"
+
+
 def put(paths: list[str]) -> None:
     ensure_running()
-    STORE.mkdir(parents=True, exist_ok=True)
     for p in paths:
-        src = Path(p).expanduser().resolve()
-        if not src.is_file():
-            sys.exit(f"not a file: {p}")
-        digest = hashlib.sha1(src.read_bytes()).hexdigest()[:10]
-        stem = re.sub(r"[^A-Za-z0-9._-]+", "-", src.stem).strip("-") or "file"
-        name = f"{digest}-{stem}{src.suffix.lower()}"
-        shutil.copyfile(src, STORE / name)
-        print(f"{BASE}/files/{quote(name)}")
+        print(_store(p))
 
 
 def run_job(op: str, rem_ids: list[str], args: dict, timeout: float) -> dict:
@@ -500,6 +509,15 @@ def card(rems: str, rem_type: str | None, direction: str | None, timeout: float)
         sys.exit("give --type and/or --direction")
     args = {k: v for k, v in (("remType", rem_type), ("direction", direction)) if v}
     result = run_job("card", split_ids(rems), args, timeout)
+    finish(result, bool(result.get("ok")))
+
+
+def audio(parent: str, path: str, caption: str | None, position: str | None, timeout: float) -> None:
+    ensure_running()
+    args = {"url": _store(path), **parse_position(position or "first")}
+    if caption:
+        args["caption"] = caption
+    result = run_job("audio", [parent], args, timeout)
     finish(result, bool(result.get("ok")))
 
 
@@ -644,6 +662,12 @@ def main() -> None:
     p_card.add_argument("--type", dest="rem_type", choices=["concept", "descriptor", "default"])
     p_card.add_argument("--direction", choices=["forward", "backward", "both", "none"])
     p_card.add_argument("--timeout", type=float, default=150)
+    p_au = sub.add_parser("audio", help="add a child rem that plays an audio file (stored in RemNote)")
+    p_au.add_argument("parent", help="rem to put the audio rem under")
+    p_au.add_argument("file", help="audio file (mp3, m4a, wav…)")
+    p_au.add_argument("--caption", help="text before the player, e.g. '🔊 Áudio'")
+    p_au.add_argument("--position", help="first (default), last, a 0-based index, before:<remId> or after:<remId>")
+    p_au.add_argument("--timeout", type=float, default=180)
     a = ap.parse_args()
     if a.cmd == "serve":
         serve()
@@ -674,6 +698,8 @@ def main() -> None:
         pin_quote(a.rems, a.source, a.view, a.quote, a.timeout)
     elif a.cmd == "card":
         card(a.rems, a.rem_type, a.direction, a.timeout)
+    elif a.cmd == "audio":
+        audio(a.parent, a.file, a.caption, a.position, a.timeout)
 
 
 if __name__ == "__main__":
