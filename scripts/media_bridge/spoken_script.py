@@ -5,8 +5,10 @@ Two modes, both starting from the outline the plugin builds from the rem tree (s
 rems and skips as the Literal script, but formulas kept as LaTeX, italics as *x*):
   - adapted: the whole note, content unchanged, made listenable (formulas and units in
     words, foreign terms marked, abbreviations expanded);
-  - summary: a spoken summary within a word budget (maximum minutes), plus the user's
-    additional instructions.
+  - summary: a spoken summary of about a target number of words (the plugin sets it: a
+    share of the note's length, capped by a maximum duration), plus the user's
+    additional instructions. A summary more than 15 % over the target gets one retry
+    asking to shorten it.
 
 The answer is a script in tts.py's format, checked with tts.check(); one retry fixes
 what the check finds. The LLM is the user's `claude` CLI (`claude -p`, their
@@ -19,7 +21,7 @@ claude-opus-5-5, for both the CLI and the API). A file
 ~/.remnote-media-bridge/read-aloud-adapted.md or read-aloud-summary.md replaces that
 mode's task instructions (the script-format rules are always added).
 
-CLI (for testing): spoken_script.py outline.md --mode summary --lang pt [--minutes 5]
+CLI (for testing): spoken_script.py outline.md --mode summary --lang pt [--words 350]
 """
 from __future__ import annotations
 
@@ -39,10 +41,8 @@ MODES = ("adapted", "summary")
 DEFAULT_MODEL = "claude-opus-5-5"
 CLI_TIMEOUT_S = 300
 MAX_TOKENS = 16000
-# A budget in words for a duration: tts.py's calibration (13 characters per second)
-# over ~6.6 characters per spoken word (space included) ≈ 118 words a minute;
-# 110 leaves room, since models overshoot a word limit.
-WORDS_PER_MIN = 110
+# A summary this much over its target gets one retry asking to shorten it.
+OVERSHOOT = 1.15
 # US$ per million tokens (input, output), for the API fallback's cost line.
 PRICES = {"claude-opus-5": (4.0, 20.0), "claude-sonnet-5": (2.0, 10.0), "claude-haiku-5": (0.10, 0.50)}
 
@@ -77,7 +77,11 @@ acronyms or units.
 no LaTeX or $, no links, no page numbers, no square brackets except [pt], [en] and \
 [pause], no emoji or arrows, no "[…]".
 - Formulas are said in words, the way a teacher reads them aloud ("F equals m times a"; \
-"a força é igual à massa vezes a aceleração"). Units are spelled out (kN: quilonewtons / \
+"a força é igual à massa vezes a aceleração"). A subscript is read with "sub" in English and "índice" in Portuguese \
+(never just the two letters, which sound like a product): V_A is "V sub A" / "V índice \
+A", C_{Th} is "C sub T h" / "C índice T h", r_0 is "r sub zero" / "r índice zero", \
+V_{corr} is "V sub corr" / "V índice corr", V_\\infty is "V sub infinity" / "V índice \
+infinito". Units are spelled out (kN: quilonewtons / \
 kilonewtons). Abbreviations a listener would not understand are expanded the first time.
 - To quiz the listener: the question on one line, "[pause]" alone on the next line, then \
 the answer on its own line. The pause is the time to answer, so a question for the \
@@ -109,16 +113,17 @@ def task_text(mode: str) -> str:
 
 
 def build_prompt(mode: str, source: str, lang: str, title: str,
-                 max_minutes: float | None = None, instructions: str = "") -> tuple[str, str]:
+                 target_words: int | None = None, instructions: str = "") -> tuple[str, str]:
     """(system, user) for one run."""
     language = LANG_NAME.get(lang, "the note's language")
     system = (f"You write scripts that are turned into speech.\n\n{SCRIPT_RULES}\n\n"
               f"Write in {language}, the note's language; a line the note writes in the other "
               "language keeps that language and its prefix.")
     parts = [task_text(mode)]
-    if mode == "summary" and max_minutes:
-        words = int(max_minutes * WORDS_PER_MIN)
-        parts.append(f"Length: at most {words} words (about {max_minutes:g} minutes of speech).")
+    if mode == "summary" and target_words:
+        parts.append(f"Length: about {target_words} words, never more. Any questions and answers "
+                     "asked for below count within it. Leave out the less important details to "
+                     "fit; do not just shorten every sentence.")
     if mode == "summary" and instructions.strip():
         parts.append("Additional instructions from the student:\n" + instructions.strip())
     parts.append(f"The note{f' ({title})' if title else ''}, as an outline (indentation = "
@@ -200,8 +205,13 @@ def run_api(system: str, user: str, model: str, key: str) -> dict:
 
 # --- the whole run -------------------------------------------------------------------------
 
+def word_count(script: str) -> int:
+    tts = _tts()
+    return sum(len(tts.plain(i.text).split()) for i in tts.parse(script) if isinstance(i, tts.Line))
+
+
 def write(mode: str, source: str, lang: str = "pt", title: str = "",
-          max_minutes: float | None = None, instructions: str = "",
+          target_words: int | None = None, instructions: str = "",
           key_set: dict | None = None,
           progress: Callable[[str], None] | None = None) -> dict:
     """Outline -> {script, errors, via, model, costUsd, fallbackReason?, seconds}.
@@ -214,7 +224,7 @@ def write(mode: str, source: str, lang: str = "pt", title: str = "",
     tts = _tts()
     model = tts.config().get("llmModel") or DEFAULT_MODEL
     key = (tts.keys() if key_set is None else key_set).get("ANTHROPIC_API_KEY")
-    system, user = build_prompt(mode, source, lang, title, max_minutes, instructions)
+    system, user = build_prompt(mode, source, lang, title, target_words, instructions)
     started = time.time()
     cost, fallback = 0.0, None
 
@@ -246,7 +256,20 @@ def write(mode: str, source: str, lang: str = "pt", title: str = "",
                 script, errors = fixed, tts.check(fixed)
         except LLMError:
             pass  # keep the first answer; the popup shows what is left to fix
-    out = {"script": script, "errors": errors, "via": res["via"], "model": res["model"],
+    words = word_count(script)
+    if mode == "summary" and target_words and words > target_words * OVERSHOOT:
+        log(f"shortening ({words} words for a target of {target_words})")
+        retry = (f"{user}\n\nYour script:\n<script>\n{script}\n</script>\n\nIt has {words} words. "
+                 f"Shorten it to about {target_words} words: drop the less important points, keep "
+                 "the format and any questions asked for. Answer with the whole script only.")
+        try:
+            shorter = clean(call(retry, use_api)["text"])
+            n = word_count(shorter)
+            if n < words and len(tts.check(shorter)) <= len(errors):
+                script, words, errors = shorter, n, tts.check(shorter)
+        except LLMError:
+            pass
+    out = {"script": script, "errors": errors, "words": words, "targetWords": target_words, "via": res["via"], "model": res["model"],
            "costUsd": round(cost, 3), "seconds": round(time.time() - started)}
     if fallback:
         out["fallbackReason"] = fallback
@@ -260,17 +283,17 @@ def main() -> None:
     ap.add_argument("outline", type=Path)
     ap.add_argument("--mode", choices=MODES, default="summary")
     ap.add_argument("--lang", choices=["pt", "en"], default="pt")
-    ap.add_argument("--minutes", type=float)
+    ap.add_argument("--words", type=int, help="summary target in words")
     ap.add_argument("--instructions", default="")
     ap.add_argument("--prompt", action="store_true", help="print the prompt; no call")
     a = ap.parse_args()
     source = a.outline.read_text(encoding="utf-8")
     if a.prompt:
-        system, user = build_prompt(a.mode, source, a.lang, "", a.minutes, a.instructions)
+        system, user = build_prompt(a.mode, source, a.lang, "", a.words, a.instructions)
         print(system, "\n\n---\n\n", user)
         return
     try:
-        res = write(a.mode, source, a.lang, "", a.minutes, a.instructions,
+        res = write(a.mode, source, a.lang, "", a.words, a.instructions,
                     progress=lambda m: print(f"  {m}", file=sys.stderr, flush=True))
     except LLMError as e:
         raise SystemExit(str(e))

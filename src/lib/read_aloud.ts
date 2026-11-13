@@ -54,6 +54,8 @@ export interface WriteResult {
   costUsd?: number;
   fallbackReason?: string;
   seconds?: number;
+  words?: number;
+  targetWords?: number | null;
   /** Added by the popup: when, and from which version of the note (sourceHash). */
   writtenAt?: number;
   sourceHash?: string;
@@ -70,6 +72,8 @@ export interface TtsEngine {
   note: string;
   estSeconds: number;
   estCostUsd: number;
+  /** Measured speech rate of this engine, pauses excluded. */
+  wordsPerMinute?: number;
 }
 
 export interface TtsPlan {
@@ -182,7 +186,7 @@ export async function getTtsTask<R = TtsResult>(taskId: string): Promise<TtsTask
 export async function startWrite(
   context: ReadAloudContext,
   mode: 'adapted' | 'summary',
-  maxMinutes: number | null,
+  targetWords: number | null,
   instructions: string
 ): Promise<string> {
   const body = await postJSON<{ taskId?: string }>('/tts/write', {
@@ -191,7 +195,7 @@ export async function startWrite(
     lang: context.lang,
     title: context.title,
     remId: context.remId,
-    maxMinutes,
+    targetWords,
     instructions,
   });
   if (!body.taskId) throw new Error('the helper started no task');
@@ -286,6 +290,16 @@ export async function insertSummaryText(
   }
 }
 
+/** Words a script will speak: language prefixes, marks and [pause] lines left out. */
+export function scriptWords(script: string): number {
+  return script
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/^\[(pause|pausa)(\s+[\d.,]+)?\]$/i.test(l))
+    .map((l) => l.replace(/^\[(pt|en)\]\s*/, '').replace(/<\/?(pt|en)>/g, ''))
+    .reduce((n, l) => n + l.split(/\s+/).filter(Boolean).length, 0);
+}
+
 // --- drafts (per rem, this device) -------------------------------------------------
 
 /**
@@ -304,6 +318,8 @@ export interface ReadAloudDraft {
   summary?: string;
   written?: Partial<Record<ReadAloudMode, WriteResult>>;
   maxMinutes?: string;
+  /** Summary length as a share of the note, in percent. */
+  share?: number;
   instructions?: string;
   insertText?: boolean;
 }

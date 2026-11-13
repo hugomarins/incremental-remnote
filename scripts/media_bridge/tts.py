@@ -78,11 +78,19 @@ RATE = 24000              # Hz, what both engines return
 TIMEOUT_S = 180
 ATTEMPTS = 6
 
-# Estimates, measured on a 9-minute Gemini script (2026-11-13): ~13 characters and
-# ~23 audio tokens per second of speech. Prices are third-party list prices: check them.
-CHARS_PER_S = 13.0
-GEMINI_TOKENS_PER_S = 23.0
-GEMINI_USD_PER_M_TOKENS = 20.0
+# Estimates. Speech rate in WORDS per minute of speech (pauses and gaps excluded), which
+# holds across languages where characters per second do not (Portuguese words are longer:
+# 6.6 characters against 5.6). Measured 2026-11-13: Gemini 144 (Portuguese note, 65 s)
+# and 142 (mixed 9-minute script); Azure Andrew ~126 (one 25 s mixed clip); ElevenLabs
+# ~159 (one 6 s clip, rounded down). Prices are list prices, checked 2026-11-13: check them again.
+# Gemini 3.8 Flash TTS bills audio output at 25 tokens per second of speech (pauses are
+# silence the helper adds, not billed): US$9 per million tokens through 2026-12-31,
+# US$18 from 2027-01-01 (ai.google.dev/gemini-api/docs/pricing; the 3.1 preview was
+# US$20). "geminiUsdPerMTokens" in tts.json overrides the schedule.
+WORDS_PER_MIN = {"gemini": 143.0, "azure": 126.0, "elevenlabs": 150.0}
+AZURE_LINE_BREAK_S = 0.75  # the <break/> between lines inside one Azure call
+GEMINI_TOKENS_PER_S = 25.0
+GEMINI_PRICE_SCHEDULE = [("2027-01-01", 18.0), ("0000-00-00", 9.0)]  # (from date, US$ per M tokens), newest first
 AZURE_USD_PER_M_CHARS = 15.0
 ELEVEN_MODEL = "eleven_multilingual_v2"
 # ElevenLabs bills credits (1 per character on multilingual v2, 0.5 on flash/turbo) from a
@@ -332,6 +340,14 @@ def build_calls(items, engine: str) -> list:
     return calls
 
 
+def gemini_usd_per_m_tokens() -> float:
+    override = config().get("geminiUsdPerMTokens")
+    if override:
+        return float(override)
+    today = time.strftime("%Y-%m-%d")
+    return next(price for start, price in GEMINI_PRICE_SCHEDULE if today >= start)
+
+
 def usd_per_m_chars(engine: str) -> float:
     if engine == "elevenlabs":
         return float(config().get("elevenUsdPerMChars") or ELEVEN_USD_PER_M_CHARS)
@@ -344,15 +360,30 @@ def voice_label(voice: str) -> str:
     return m.group(1) if m else voice
 
 
+_UNBILLED_TAGS = re.compile(r"</?(?:speak|voice)\b[^>]*>")
+
+
+def azure_billed_chars(calls) -> int:
+    """Azure bills every SSML character except the <speak> and <voice> tags, so the
+    <lang> and <break> marks around each run count (learn.microsoft.com, Speech quotas)."""
+    return sum(len(_UNBILLED_TAGS.sub("", ssml(c[1], AZURE_VOICE))) for c in calls if c[0] == "azure")
+
+
 def _estimate(items, lines, engine: str) -> dict:
     calls = build_calls(items, engine)
     n_calls = sum(1 for c in calls if c[0] != "pause")
     pauses = [c[1] for c in calls if c[0] == "pause"]
     chars = sum(len(plain(l.text)) for l in lines)
-    seconds = chars / CHARS_PER_S + sum(pauses) + GAP_S * max(0, n_calls - 1)
-    cost = (seconds * GEMINI_TOKENS_PER_S * GEMINI_USD_PER_M_TOKENS / 1e6 if engine == "gemini"
-            else chars * usd_per_m_chars(engine) / 1e6)
-    return {"calls": n_calls, "answerPauses": pauses, "characters": chars,
+    words = sum(len(plain(l.text).split()) for l in lines)
+    speech = words / WORDS_PER_MIN[engine] * 60
+    seconds = speech + sum(pauses) + GAP_S * max(0, n_calls - 1)
+    if engine == "azure":
+        seconds += AZURE_LINE_BREAK_S * max(0, len(lines) - n_calls)
+    billed = azure_billed_chars(calls) if engine == "azure" else chars
+    cost = (speech * GEMINI_TOKENS_PER_S * gemini_usd_per_m_tokens() / 1e6 if engine == "gemini"
+            else billed * usd_per_m_chars(engine) / 1e6)
+    return {"calls": n_calls, "answerPauses": pauses, "characters": chars, "billedCharacters": billed,
+            "wordsPerMinute": WORDS_PER_MIN[engine],
             "estSeconds": round(seconds), "estCostUsd": round(cost, 3)}
 
 
@@ -389,7 +420,8 @@ def plan(script: str, engine: str = "auto", voice: str | None = None,
         "voices": voices, "note": chosen["note"],
         "words": sum(len(plain(l.text).split()) for l in lines),
         "inlineTerms": n_inline, "title": plain(lines[0].text),
-        **{k: chosen[k] for k in ("calls", "answerPauses", "characters", "estSeconds", "estCostUsd")},
+        **{k: chosen[k] for k in ("calls", "answerPauses", "characters", "billedCharacters",
+                                  "wordsPerMinute", "estSeconds", "estCostUsd")},
     }
 
 
@@ -448,13 +480,25 @@ def gemini(lang: str, text: str, dest: Path, key: str, voice: str, log) -> int:
     return int(d.get("usageMetadata", {}).get("candidatesTokenCount", 0))
 
 
+LINE_BREAK = "<break/>"  # strength medium = 750 ms; 8 billed characters (a timed one is 21)
+
+
 def ssml(lines: list[Line], voice: str) -> str:
-    parts = []
+    """One <voice> per language run (inside a single <voice>, word-level <lang> is
+    ignored), but consecutive lines in one language share their run, and lines are
+    separated by a bare <break/>: Azure bills the <lang> and <break> markup."""
+    merged: list[list[str]] = []
     for ln in lines:
         rs = runs(ln.lang, ln.text)
         for i, (g, t) in enumerate(rs):
-            gap = f'<break time="{int(GAP_S * 1000)}ms"/>' if i == len(rs) - 1 else ""
-            parts.append(f'<voice name="{voice}"><lang xml:lang="{LOCALE[g]}">{escape(t)}</lang>{gap}</voice>')
+            piece = escape(t) + (LINE_BREAK if i == len(rs) - 1 else "")
+            if merged and merged[-1][0] == g:
+                merged[-1][1] += piece
+            else:
+                merged.append([g, piece])
+    if merged and merged[-1][1].endswith(LINE_BREAK):  # the gap between calls follows
+        merged[-1][1] = merged[-1][1][: -len(LINE_BREAK)]
+    parts = [f'<voice name="{voice}"><lang xml:lang="{LOCALE[g]}">{t}</lang></voice>' for g, t in merged]
     return ('<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">'
             + "".join(parts) + "</speak>")
 
@@ -549,9 +593,9 @@ def synthesize(script: str, out: Path, engine: str = "auto", voice: str | None =
                "answerPauses": len(p["answerPauses"]), "title": p["title"]}
     if eng == "gemini":
         summary["audioTokens"] = tokens
-        summary["costUsd"] = round(tokens * GEMINI_USD_PER_M_TOKENS / 1e6, 3)
+        summary["costUsd"] = round(tokens * gemini_usd_per_m_tokens() / 1e6, 3)
     else:
-        summary["costUsd"] = round(p["characters"] * usd_per_m_chars(eng) / 1e6, 3)
+        summary["costUsd"] = round(p["billedCharacters"] * usd_per_m_chars(eng) / 1e6, 3)
     return summary
 
 

@@ -14,6 +14,7 @@ import {
   ReadAloudDraft,
   ReadAloudMode,
   saveDraft,
+  scriptWords,
   sourceHash,
   startTts,
   startWrite,
@@ -47,6 +48,9 @@ const MODES: [ReadAloudMode, string, string][] = [
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const SAVE_DEBOUNCE_MS = 800;
+const DEFAULT_SHARE = 50;
+/** Words per minute when the helper has not said yet (Gemini measures ~143). */
+const FALLBACK_WPM = 140;
 
 function writtenInfo(w: WriteResult | undefined, currentHash: string | undefined): string {
   if (!w) {
@@ -64,7 +68,8 @@ function writtenInfo(w: WriteResult | undefined, currentHash: string | undefined
       ? ' The note has changed since: rewrite to include the changes.'
       : '';
   return (
-    `Written by ${w.model ?? 'Claude'} ${how}${when}.` +
+    `Written by ${w.model ?? 'Claude'} ${how}${when}` +
+    (w.targetWords ? ` (${w.words ?? '?'} words for a target of ${w.targetWords}).` : '.') +
     (w.fallbackReason ? ` claude -p failed: ${w.fallbackReason}.` : '') +
     stale
   );
@@ -151,6 +156,7 @@ export function ReadAloudPopup() {
   const setScript = (text: string) => setScripts((all) => ({ ...all, [mode]: text }));
   const [written, setWritten] = useState<Partial<Record<ReadAloudMode, WriteResult>>>({});
   const [maxMinutes, setMaxMinutes] = useState('5');
+  const [share, setShare] = useState(DEFAULT_SHARE);
   const [instructions, setInstructions] = useState('');
   const [insertText, setInsertText] = useState(true);
   const [engine, setEngine] = useState('auto');
@@ -180,6 +186,7 @@ export function ReadAloudPopup() {
       if (draft) {
         setWritten(draft.written ?? {});
         if (draft.maxMinutes) setMaxMinutes(draft.maxMinutes);
+        if (draft.share) setShare(draft.share);
         if (draft.instructions) setInstructions(draft.instructions);
         if (draft.insertText !== undefined) setInsertText(draft.insertText);
         if (draft.mode && (draft.mode === 'literal' || draft[draft.mode])) setMode(draft.mode);
@@ -204,6 +211,7 @@ export function ReadAloudPopup() {
         ...(scripts.summary ? { summary: scripts.summary } : {}),
         written,
         maxMinutes,
+        share,
         instructions,
         insertText,
       };
@@ -212,7 +220,16 @@ export function ReadAloudPopup() {
       saveDraft(plugin, context.remId, worthKeeping ? draft : undefined).catch(() => {});
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [restored, context, scripts, written, maxMinutes, instructions, insertText, mode]);
+  }, [restored, context, scripts, written, maxMinutes, share, instructions, insertText, mode]);
+
+  // Summary length: a share of the note (its Literal script), capped by the maximum length.
+  const literalWords = scriptWords(scripts.literal);
+  const wpm = engines.find((e) => e.id === lastPlanned)?.wordsPerMinute ?? FALLBACK_WPM;
+  const capMinutes = parseFloat(maxMinutes.replace(',', '.'));
+  const capWords = capMinutes > 0 ? Math.round(capMinutes * wpm) : Infinity;
+  const shareWords = Math.round((literalWords * share) / 100);
+  const targetWords = Math.max(20, Math.min(shareWords, capWords));
+  const capped = capWords < shareWords;
 
   // The helper's estimate, refreshed as the script or engine changes.
   useEffect(() => {
@@ -241,11 +258,10 @@ export function ReadAloudPopup() {
     const mine = ++run.current;
     setPhase({ kind: 'writing', stage: 'starting', elapsed: 0 });
     try {
-      const mins = parseFloat(maxMinutes.replace(',', '.'));
       const taskId = await startWrite(
         context,
         target,
-        target === 'summary' && mins > 0 ? mins : null,
+        target === 'summary' ? targetWords : null,
         target === 'summary' ? instructions : ''
       );
       for (;;) {
@@ -396,8 +412,22 @@ export function ReadAloudPopup() {
       {mode === 'summary' && (
         <div className="flex flex-col gap-2 text-xs" style={{ flexShrink: 0 }}>
           <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2">
+              Length
+              <input
+                type="range"
+                min={20}
+                max={80}
+                step={5}
+                value={share}
+                onChange={(e) => setShare(Number(e.target.value))}
+                disabled={busy}
+                style={{ width: 140 }}
+              />
+              {share}% of the note
+            </label>
             <label className="flex items-center gap-1">
-              Maximum length
+              at most
               <input
                 type="number"
                 min={1}
@@ -410,6 +440,10 @@ export function ReadAloudPopup() {
               />
               min
             </label>
+            <span style={muted}>
+              ≈ {targetWords} words · about {minutes((targetWords / wpm) * 60)}
+              {capped ? ` (capped: ${share}% would be ${shareWords} words)` : ''}
+            </span>
             <label className="flex items-center gap-1">
               <input
                 type="checkbox"

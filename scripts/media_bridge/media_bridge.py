@@ -54,7 +54,7 @@ Endpoints (127.0.0.1:3460, CORS open, for the plugin iframe):
                                characters, estSeconds, estCostUsd. No API call.
   POST /tts {script, engine?, voice?, remId?, subject?} → {taskId}   (plugin → helper: the
                                "Read aloud" command; runs tts.py: Gemini or Azure TTS, mp3)
-  POST /tts/write {mode: adapted|summary, source, lang, title?, maxMinutes?, instructions?}
+  POST /tts/write {mode: adapted|summary, source, lang, title?, targetWords?, instructions?}
                                → {taskId}: an LLM writes the spoken script from the plugin's
                                outline (spoken_script.py: `claude -p`, Anthropic API fallback);
                                result {script, errors, via, model, costUsd, fallbackReason?}
@@ -277,9 +277,9 @@ class Handler(BaseHTTPRequestHandler):
             if mode not in ("adapted", "summary"):
                 return self._json(400, {"error": f"unknown mode {mode!r}"})
             try:
-                minutes = float(body["maxMinutes"]) if body.get("maxMinutes") else None
+                target = int(body["targetWords"]) if body.get("targetWords") else None
             except (TypeError, ValueError):
-                return self._json(400, {"error": "maxMinutes must be a number"})
+                return self._json(400, {"error": "targetWords must be a number"})
             try:
                 _spoken_module()
             except Exception as err:
@@ -287,7 +287,7 @@ class Handler(BaseHTTPRequestHandler):
             task = {
                 "id": uuid.uuid4().hex[:12], "remId": str(body.get("remId") or ""), "mode": mode,
                 "source": source, "lang": body.get("lang") if body.get("lang") in ("pt", "en") else "en",
-                "title": str(body.get("title") or ""), "maxMinutes": minutes,
+                "title": str(body.get("title") or ""), "targetWords": target,
                 "instructions": str(body.get("instructions") or ""),
                 "status": "running", "stage": "starting", "result": None, "createdAt": time.time(),
             }
@@ -443,7 +443,7 @@ def _run_write(task: dict) -> None:
     try:
         spoken = _spoken_module()
         res = spoken.write(task["mode"], task["source"], task["lang"], task["title"],
-                           task["maxMinutes"], task["instructions"],
+                           task["targetWords"], task["instructions"],
                            progress=lambda msg: task.__setitem__("stage", msg))
         task["result"] = {"ok": True, **res}
     except Exception as err:  # reported to the plugin, which shows it
