@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.229 - November 13th, 2026
+
+### ✨ New
+
+**Bridge for Other Plugins**: other plugins can now store audio in RemNote through Incremental RemNote and the Local Media Bridge helper, so it plays on the iPhone too, and the helper's new `restore-audio` command repairs audio that was stored as an image, which played only on the desktop.
+
+📖 [Priority Bridge for Other Plugins → Storing audio](Priority-Bridge-for-Other-Plugins.md#store-media)
+
 ## v1.0.228 - November 13th, 2026
 
 ### ✨ New

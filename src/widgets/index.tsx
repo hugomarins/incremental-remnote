@@ -46,6 +46,7 @@ import { registerLogosBridge } from '../lib/logos_bridge';
 import { registerMediaBridge } from '../lib/media_bridge';
 import { registerExternalPriorityBridge } from '../lib/external_priority_bridge';
 import { registerExternalCardVideoBridge } from '../lib/external_card_video_bridge';
+import { registerExternalMediaBridge } from '../lib/external_media_bridge';
 import { registerWindowSourcesPresence } from '../lib/window_sources';
 import { registerOpenInWindowListener } from '../lib/open_in_window';
 import { registerFollowQueueSources, startFollowingQueueSources } from '../lib/follow_queue_sources';
@@ -155,6 +156,7 @@ async function onActivate(plugin: ReactRNPlugin) {
   // (docs/Priority-Bridge-for-Other-Plugins.md). Card videos first: the
   // priority bridge announces `ready`, on which clients resend both.
   registerExternalCardVideoBridge(plugin);
+  registerExternalMediaBridge(plugin);
   registerExternalPriorityBridge(plugin);
   // Publishes this window's open PDFs/articles so a command run in another
   // RemNote window can find them.

@@ -29,10 +29,12 @@ import { collectExternalMedia, localizeMediaInRems } from './localize_media';
 import { runBridgeOp } from './media_bridge_ops';
 import { getIESetting } from './settings';
 
-export const MEDIA_BRIDGE_URL = 'http://127.0.0.1:3460';
+import { MEDIA_BRIDGE_URL } from './media_bridge_url';
+
+export { MEDIA_BRIDGE_URL };
 const POLL_WAIT_S = 25;
 /** The bridge protocol this build speaks; see OPS_BY_PLUGIN_VERSION in media_bridge.py. */
-const PROTOCOL_VERSION = 5;
+const PROTOCOL_VERSION = 6;
 const RETRY_MS = 30_000;
 /**
  * A rem written through the MCP reaches this client by sync, a moment after the

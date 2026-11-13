@@ -33,6 +33,9 @@ plugin with its own code (src/lib/media_bridge_ops.ts):
   audio <parent> <file> [--caption TEXT] [--position first|last|N|before:<id>|after:<id>]
                                     adds a child rem with a playable audio file (default: first child),
                                     stored in RemNote like a localized image
+  restore-audio <rem>[,<rem>…]      stores again, under its real audio type, every audio of these rems
+                                    that was stored as an image (no file extension, served as image/…,
+                                    which iOS refuses to play), and points the player at the new copy
 
 Each prints the plugin's JSON answer; exit 0 = done, 1 = failed (or partly), 2 = timeout.
 
@@ -42,6 +45,12 @@ Standard library only. Files older than 30 days are removed from the store.
 Endpoints (127.0.0.1:3460, CORS open, for the plugin iframe):
   GET  /health                 {ok, version, pluginSeenSecondsAgo}
   GET  /files/<name>           a stored file
+  POST /files[?name=…]         raw bytes → {url, type, bytes}: kept in the store under their real
+                               type (sniffed from the bytes), served at url. With a JSON body
+                               {url, kbId?} for a file RemNote already stores (%LOCAL_FILE%… or its
+                               S3 address): read from this computer's copy, else downloaded. Used by
+                               restore-audio, and by other plugins (through Incremental RemNote's
+                               store-media bridge) to get audio stored with its real type.
   POST /jobs {op?, remIds, …}  → {jobId}   (op defaults to "localize")
   GET  /jobs/<id>              {status: queued|taken|done, result?}
   POST /upscale {remId, url, kbId?, extra?} → {taskId}   (plugin → helper: the
@@ -92,7 +101,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 12  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs, 11: /tts/play, 12: /tts purpose
+VERSION = 13  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs, 11: /tts/play, 12: /tts purpose, 13: POST /files, restore-audio
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},
@@ -100,6 +109,8 @@ OPS_BY_PLUGIN_VERSION = {
     3: {"localize", "move", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card"},
     4: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card"},
     5: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card", "audio"},
+    6: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card", "audio",
+        "restore-audio"},
 }
 KNOWN_OPS = OPS_BY_PLUGIN_VERSION[max(OPS_BY_PLUGIN_VERSION)]
 HOST = "127.0.0.1"
@@ -111,6 +122,13 @@ LOG_FILE = HOME / "bridge.log"
 OUT_DIR = HOME / "out"
 REMNOTE_DATA = Path(os.environ.get("REMNOTE_DATA_DIR", Path.home() / "remnote"))
 MAX_AGE_S = 30 * 24 * 3600
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+REMNOTE_FILE_HOST = "https://remnote-user-data.s3.amazonaws.com/"
+# Served types where mimetypes' table is missing or differs by platform.
+CTYPE_BY_EXT = {
+    ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav", ".ogg": "audio/ogg",
+    ".webm": "audio/webm", ".flac": "audio/flac",
+}
 REDELIVER_AFTER_S = 120  # a localize job taken but never answered goes back to the queue
 # Only localize is safe to run twice. Any other job taken and never answered (the
 # plugin reloaded mid-job) is marked lost instead, so it cannot run later, after
@@ -195,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
             path = (STORE / name).resolve()
             if path.parent != STORE.resolve() or not path.is_file():
                 return self._json(404, {"error": "not found"})
-            ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            ctype = CTYPE_BY_EXT.get(path.suffix.lower()) or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
             return self._send(200, path.read_bytes(), ctype)
         if url.path.startswith("/upscale/"):
             task = _tasks.get(url.path[len("/upscale/"):])
@@ -236,8 +254,30 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {**job["args"], "id": job["id"], "op": job["op"], "remIds": job["remIds"]})
         self._json(404, {"error": "unknown path"})
 
+    def _post_file(self, query: dict) -> None:
+        n = int(self.headers.get("Content-Length") or 0)
+        if n > MAX_UPLOAD_BYTES:
+            return self._json(413, {"error": "file too large"})
+        raw = self.rfile.read(n)
+        declared = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        try:
+            if declared == "application/json":
+                req = json.loads(raw or b"{}")
+                data = _fetch_stored(str(req.get("url") or ""), req.get("kbId"))
+                stem = "restored"
+            else:
+                data, stem = raw, query.get("name", ["upload"])[0]
+            url = _store_bytes(data, stem, declared)
+        except (ValueError, FileNotFoundError, OSError, urllib.error.URLError) as err:
+            return self._json(400, {"error": str(err)})
+        name = unquote(urlparse(url).path.rsplit("/", 1)[-1])
+        ctype = CTYPE_BY_EXT.get(Path(name).suffix) or mimetypes.guess_type(name)[0]
+        return self._json(200, {"url": url, "type": ctype, "bytes": len(data)})
+
     def do_POST(self):
         url = urlparse(self.path)
+        if url.path == "/files":  # a binary body: read before _body() parses it as JSON
+            return self._post_file(parse_qs(url.query))
         body = self._body()
         if url.path == "/jobs":
             op = body.pop("op", None) or "localize"
@@ -571,6 +611,81 @@ def _store(path: str) -> str:
     return f"{BASE}/files/{quote(name)}"
 
 
+def _sniff_ext(data: bytes) -> str | None:
+    """The file's real extension from its first bytes, whatever it was labelled."""
+    head = data[:16]
+    if head[:3] == b"ID3" or (len(head) > 1 and head[0] == 0xFF and head[1] & 0xE0 == 0xE0 and head[1] & 0x06):
+        return ".mp3"  # ID3 tag, or an MPEG audio frame (layer bits set; ADTS AAC has them clear)
+    if head[4:8] == b"ftyp":
+        return ".m4a" if head[8:12] in (b"M4A ", b"M4B ") else ".mp4"
+    if head[:4] == b"RIFF" and head[8:12] == b"WAVE":
+        return ".wav"
+    if head[:4] == b"OggS":
+        return ".ogg"
+    if head[:4] == b"fLaC":
+        return ".flac"
+    if head[:4] == b"\x1a\x45\xdf\xa3":
+        return ".webm"
+    if head[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if head[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if head[:4] == b"GIF8":
+        return ".gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def _store_bytes(data: bytes, stem: str, declared: str = "") -> str:
+    """Keep bytes in the store under their real type; returns the http URL that serves them."""
+    if not data:
+        raise ValueError("empty file")
+    ext = _sniff_ext(data) or (mimetypes.guess_extension(declared) if declared else None)
+    if not ext:
+        raise ValueError(f"unknown file type (declared {declared or 'nothing'})")
+    STORE.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha1(data).hexdigest()[:10]
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(stem).stem).strip("-") or "file"
+    name = f"{digest}-{stem}{ext}"
+    path = STORE / name
+    if not path.is_file():
+        tmp = path.with_name(path.name + ".part")
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    return f"{BASE}/files/{quote(name)}"
+
+
+def _tls_context():
+    """The python.org build has no CA certificates of its own: certifi's, else macOS's."""
+    import ssl
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        cafile = "/etc/ssl/cert.pem"
+        return ssl.create_default_context(cafile=cafile) if os.path.exists(cafile) else ssl.create_default_context()
+
+
+def _fetch_stored(url: str, kb_id: str | None) -> bytes:
+    """A file RemNote stores: this computer's copy, else RemNote's S3. Nothing else is fetched."""
+    if url.startswith("%LOCAL_FILE%"):
+        name = url[len("%LOCAL_FILE%"):]
+    elif url.startswith(REMNOTE_FILE_HOST):
+        name = urlparse(url).path.lstrip("/")
+    else:
+        raise ValueError("only files stored by RemNote (%LOCAL_FILE%… or its S3 address)")
+    local = _local_file(name, kb_id)
+    if local:
+        return local.read_bytes()
+    req = urllib.request.Request(REMNOTE_FILE_HOST + quote(unquote(name)), headers={"User-Agent": "remnote-media-bridge"})
+    with urllib.request.urlopen(req, timeout=120, context=_tls_context()) as res:
+        data = res.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ValueError("file too large")
+    return data
+
+
 def put(paths: list[str]) -> None:
     ensure_running()
     for p in paths:
@@ -691,6 +806,28 @@ def audio(parent: str, path: str, caption: str | None, position: str | None, tim
         args["caption"] = caption
     result = run_job("audio", [parent], args, timeout)
     finish(result, bool(result.get("ok")))
+
+
+def restore_audio(rems: str, chunk: int, timeout: float) -> None:
+    """Runs in small jobs: a job taken and unanswered for REDELIVER_AFTER_S counts as lost."""
+    ids = split_ids(rems)
+    total: dict = {"ok": True, "fixed": [], "failed": [], "untouched": [], "files": 0}
+    for start in range(0, len(ids), chunk):
+        part = ids[start:start + chunk]
+        result = run_job("restore-audio", part, {}, timeout)
+        print(f"{min(start + chunk, len(ids))}/{len(ids)}: {result.get('summary')}", file=sys.stderr, flush=True)
+        if not result.get("ok"):
+            total["ok"] = False
+        for key in ("fixed", "failed", "untouched"):
+            total[key] += result.get(key) or []
+        total["files"] += result.get("files") or 0
+        if result.get("error") or result.get("message"):
+            total.setdefault("errors", []).append(result.get("error") or result.get("message"))
+    total["summary"] = (
+        f"{len(total['fixed'])} rem(s) fixed ({total['files']} file(s)), {len(total['failed'])} failed, "
+        f"{len(total['untouched'])} without audio to restore"
+    )
+    finish(total, bool(total["ok"]) and not total["failed"])
 
 
 def incrementalize(rems: str, priority: int | None, timeout: float) -> None:
@@ -840,6 +977,10 @@ def main() -> None:
     p_au.add_argument("--caption", help="text before the player, e.g. '🔊 Áudio'")
     p_au.add_argument("--position", help="first (default), last, a 0-based index, before:<remId> or after:<remId>")
     p_au.add_argument("--timeout", type=float, default=180)
+    p_ra = sub.add_parser("restore-audio", help="store again, as audio, the audio of these rems that RemNote stored as an image")
+    p_ra.add_argument("rems", help="rem id(s), comma-separated")
+    p_ra.add_argument("--chunk", type=int, default=5, help="rems per plugin job (default 5)")
+    p_ra.add_argument("--timeout", type=float, default=600, help="seconds to wait for each job")
     a = ap.parse_args()
     if a.cmd == "serve":
         serve()
@@ -872,6 +1013,8 @@ def main() -> None:
         card(a.rems, a.rem_type, a.direction, a.timeout)
     elif a.cmd == "audio":
         audio(a.parent, a.file, a.caption, a.position, a.timeout)
+    elif a.cmd == "restore-audio":
+        restore_audio(a.rems, max(1, a.chunk), a.timeout)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ import {
   updateIncrementalRemCache,
 } from './incremental_rem';
 import { imageUrlsOf, isRemNoteHostedUrl, localizeMediaInRems } from './localize_media';
+import { restoreMislabelledAudio } from './audio_restore';
 import { isPin, pinFromSourceFinder, pinOneQuote, SourceView, sourceViews } from './pdf_source_pins';
 import { quoteCandidates } from './pdf_source_pins/quote';
 
@@ -750,6 +751,26 @@ export async function runAudio(plugin: ReactRNPlugin, job: BridgeOpJob): Promise
   };
 }
 
+// --- restore-audio -----------------------------------------------------------
+
+/** Audio RemNote stored as an image (no extension, served as image/…): stored again as audio. */
+export async function runRestoreAudio(plugin: ReactRNPlugin, job: BridgeOpJob): Promise<BridgeOpResult> {
+  const rems: PluginRem[] = [];
+  const missing: string[] = [];
+  for (const id of job.remIds) {
+    const rem = await plugin.rem.findOne(id);
+    if (rem) rems.push(rem);
+    else missing.push(id);
+  }
+  const result = await restoreMislabelledAudio(plugin, rems);
+  return {
+    ...result,
+    ok: result.ok && missing.length === 0,
+    failed: [...result.failed, ...missing],
+    summary: missing.length ? `${result.summary}; ${missing.length} not found` : result.summary,
+  };
+}
+
 // --- dispatch ----------------------------------------------------------------
 
 const OPS: Record<string, (plugin: ReactRNPlugin, job: BridgeOpJob) => Promise<BridgeOpResult>> = {
@@ -762,6 +783,7 @@ const OPS: Record<string, (plugin: ReactRNPlugin, job: BridgeOpJob) => Promise<B
   'pin-quote': runPinQuote,
   card: runCard,
   audio: runAudio,
+  'restore-audio': runRestoreAudio,
 };
 
 /** Runs a non-localize job. Errors come back as `{ok: false, message}`, never thrown. */
