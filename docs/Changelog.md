@@ -2,6 +2,16 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.227 - November 13th, 2026
+
+### ✨ Improved
+
+**Read Points**: an IncRem opened as a page now shows its read point in the counter bar below the title, with the path to it and a **Go to Read Point** button.
+
+<iframe src="../demos/increm-counter.html?view=read-point" title="Read Point row demo" loading="lazy" style="width:100%;height:430px;border:0;display:block"></iframe>
+
+📖 [Jumping to the Read Point](Reviewing-Items-in-the-Editor.md#jumping-to-the-read-point)
+
 ## v1.0.226 - November 12th, 2026
 
 ### ✨ Improved
