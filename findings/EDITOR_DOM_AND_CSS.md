@@ -52,6 +52,8 @@ The queue lists a card's Extra Card Detail Rems under **Extra details**, each in
 
 So `.extra-card-detail__item:has(> #hierarchy-editor > #hierarchy-editor-inner > [data-rem-container-tags~="slug"]) > .rem-bullet__container` reaches a tagged Rem's bullet there; the child combinators keep it off tagged children of that Rem. `src/lib/extra_details_css.ts` builds it; the pronunciation and True/False bullet rules use it (and the sierra-remnote and Context for Cloze plugins copy it). The Compact queue's markup was not saved.
 
+**A single Extra Card Detail Rem is drawn bare** (saved DOM, 2026-11-13): `.extra-card-detail__item` holds only the `.RichTextViewer`, with **no bullet and no nested editor**, so nothing names the Rem or its tags. Tag-keyed CSS cannot find it. The pronunciation rule recognises it by content instead: its 🔊 caption is written in a text colour (invisible on an emoji), which RemNote renders as a class (`text-color--<colour>`, on the item's inner span; renderer read from the bundle), followed by an audio item. Remember that `:has()` may not be nested inside another `:has()` (the browser drops the rule): combine two `:has()` side by side instead.
+
 ## The tag bar collapses past one tag
 
 Individual `.hierarchy-editor__tag-bar__tag` pills render only while a Rem has a **single** tag. With a second one, the bar collapses into a "2 tags" chip, taking any icon painted on a pill with it. A marker that must always show belongs on the row border or the bullet, not a pill. `SHOW_LEFT_BORDER_CSS` in `src/register/settings.ts` is an example.

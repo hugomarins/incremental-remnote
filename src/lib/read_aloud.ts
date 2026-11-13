@@ -30,7 +30,7 @@ import { MEDIA_BRIDGE_URL } from './media_bridge';
 import { runAudio } from './media_bridge_ops';
 import { showMessageDialog } from './message_dialog';
 import { resolvePriorityTargets } from './priority_targets';
-import { PRONUNCIATION_POWERUP_CODE } from './pronunciation_css';
+import { PRONUNCIATION_CAPTION_COLOR, PRONUNCIATION_POWERUP_CODE } from './pronunciation_css';
 import { buildReadAloudScript, buildRemScript, Lang, ReadAloudStats } from './read_aloud_script';
 import { getIESetting } from './settings';
 
@@ -267,6 +267,19 @@ async function placeAudio(
       } catch (err) {
         addWarning(`${label} not set (${String(err)})`);
       }
+    }
+    // The 🔊 caption in a text colour (invisible on an emoji): a lone Extra details item
+    // in the queue carries no tags, so the CSS finds a pronunciation by it.
+    try {
+      const text = audioRem?.text ?? [];
+      if (typeof text[0] === 'string') {
+        await audioRem?.setText([
+          { i: 'm', text: text[0], tc: PRONUNCIATION_CAPTION_COLOR },
+          ...text.slice(1),
+        ] as RichTextInterface);
+      }
+    } catch (err) {
+      addWarning(`caption colour not set (${String(err)})`);
     }
     return { remId, warning };
   }

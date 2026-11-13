@@ -22,6 +22,15 @@ import { extraDetailsItem } from './extra_details_css';
 export const PRONUNCIATION_POWERUP_NAME = 'Pronunciation';
 export const PRONUNCIATION_POWERUP_CODE = 'pronunciation';
 export const PRONUNCIATION_CSS_ID = 'pronunciation-mark';
+/**
+ * The 🔊 caption's text colour (RemColor.Brown), which RemNote renders as the class
+ * `text-color--brown` and which does not change how an emoji looks. With a single
+ * Extra Card Detail Rem, the queue draws the item bare: no bullet, no nested editor,
+ * no tags (saved DOM, 2026-11-13), so the coloured caption followed by an audio is
+ * how CSS recognises a pronunciation there.
+ */
+export const PRONUNCIATION_CAPTION_COLOR = 8;
+const CAPTION_CLASS = 'text-color--brown';
 
 const SLUG = 'pronunciation';
 
@@ -47,6 +56,22 @@ const PILLS = [
 const pills = (prefix = '', suffix = '') => PILLS.map((p) => `${prefix}${p}${suffix}`).join(',\n');
 const EDITOR_BULLET = `.rn-editor__rem__body[data-rem-tags~="${SLUG}"] .rem-bullet__container .rem-bullet`;
 const EXTRA_DETAILS_BULLET = `${extraDetailsItem(SLUG)} > .rem-bullet__container .rem-bullet`;
+/**
+ * A lone Extra details item: no bullet of its own, so the mark is drawn in the gutter
+ * where the bullet would be. Recognised by its caption (the first rich-text item, in the
+ * caption colour) followed by an audio. RemNote puts formatting classes on the item's
+ * inner span (empty `class=""` without formatting; renderer read 2026-11-13); the outer
+ * span is covered too. No `:has()` inside another `:has()`: CSS forbids it, and the
+ * browser would drop the whole rule.
+ */
+const LONE = `.extra-card-detail__item:not(:has(> .rem-bullet__container))`;
+const CAPTION = `.RichTextViewer > [data-linear-editor-item-type="m"]:first-child`;
+const LONE_EXTRA_DETAILS = [
+  `${LONE}:has(${CAPTION} > .${CAPTION_CLASS}):has(${CAPTION} + [data-linear-editor-item-type="a"])`,
+  `${LONE}:has(${CAPTION}.${CAPTION_CLASS} + [data-linear-editor-item-type="a"])`,
+];
+const lone = (prefix = '', suffix = '') =>
+  LONE_EXTRA_DETAILS.map((l) => `${prefix}${l}${suffix}`).join(',\n');
 /** Both bullets, each with `prefix` and `suffix` added. */
 const bullets = (prefix = '', suffix = '') =>
   [EDITOR_BULLET, EXTRA_DETAILS_BULLET].map((b) => `${prefix}${b}${suffix}`).join(',\n');
@@ -89,6 +114,22 @@ ${bullets('', ':after')} {
   background: center / contain no-repeat ${LIGHT};
 }
 ${bullets('.dark ', ':after')} {
+  background-image: ${DARK};
+}
+
+/* A lone Extra details item (the card has one Extra Card Detail): no bullet is drawn,
+   so the mark goes in the gutter where the bullet would be. */
+${lone('', ':before')} {
+  content: "";
+  position: absolute;
+  left: -22px;
+  top: 6px;
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
+  background: center / contain no-repeat ${LIGHT};
+}
+.dark ${lone('', ':before')} {
   background-image: ${DARK};
 }
 `;
