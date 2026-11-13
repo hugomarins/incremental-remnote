@@ -232,6 +232,12 @@ In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) opened from the queue's 
   Regenerates the focused Rem's image (each image in turn, front and back) at a higher resolution with ChatGPT's image model, then shows the original beside the result with an automatic check for changes. **Replace image** swaps the new image into the Rem in place; nothing changes until you press it. Keep the popup open while it works (about 45 seconds per image). Needs the **Local Media Bridge** setting, its helper and the Codex CLI signed in with a paid ChatGPT plan.
   📖 See [Local Media Bridge → Upscale an image with ChatGPT](Local-Media-Bridge.md#upscale).
 
+- <a id="read-aloud"></a>**Read aloud** — `quick: ra`
+  Turns the focused Rem (or document) and everything under it into a spoken audio file and adds it as the Rem's first child, stored in RemNote. A popup shows the script to be spoken, editable, with three modes (**Literal**, **Adapted** by AI, or an AI **Summary** of the length you set), the engine and voice (Gemini TTS, Azure or ElevenLabs, with your own key) and the estimated duration and cost; nothing is paid for until **Generate**. Needs the **Local Media Bridge** setting and its helper (version 10).
+  📖 See [Read Aloud](Read-Aloud.md).
+
+  *Upscale image with ChatGPT* and *Read aloud* are registered only while the **Local Media Bridge** setting is on.
+
 - <a id="cycle-image-size"></a>**Cycle Image Size (Fit / Large / Medium / Small / Original)** (`Opt+Shift+G` / `Alt+Shift+G`) — `quick: cis`
   Resizes the images of a card or Rem, including imported ones the queue can show zoomed in and cut off. Each press moves them one step along **Fit → Large → Medium → Small → Original**, and a small bar shows the size set.
   Acts on the current queue card (or the Rem selected in the previewer), or on the focused or selected Rems in the editor, and three levels below. It asks first before changing images you have sized, or more than 5 images. Image Occlusions and highlight images are left alone.

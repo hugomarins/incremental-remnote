@@ -2,6 +2,20 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.228 - November 13th, 2026
+
+### ✨ New
+
+**Read Aloud**: a new command, **Read aloud** (`ra`), turns a document or any Rem tree into a spoken audio file, stored in RemNote as the first child of the Rem. Read the notes as written (**Literal**), made listenable by AI (**Adapted**: formulas and units in words), or as an AI **Summary** of the length you choose, with your own instructions, its text inserted under the audio. Speech by Gemini TTS (Gemini API or Google Cloud), Azure or ElevenLabs with your own key; the popup shows the editable script, every engine with its estimated duration and cost, and keeps your drafts. Runs through the Local Media Bridge helper (version 10).
+
+📖 [Read Aloud](Read-Aloud.md)
+
+### ♻️ Changed
+
+**Local Media Bridge**: **Upscale image with ChatGPT** and **Read aloud** now appear only while the Local Media Bridge setting is on, since both need its helper.
+
+📖 [Local Media Bridge](Local-Media-Bridge.md)
+
 ## v1.0.227 - November 13th, 2026
 
 ### ✨ Improved
