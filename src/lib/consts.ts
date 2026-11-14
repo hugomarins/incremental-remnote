@@ -897,7 +897,10 @@ export const menuHubActiveIdKey = 'menu-hub-active-id';
 export const menuHubAnchorPosition = { top: 1, left: 1 };
 
 // Search & Browse (plans/SEARCH_ENGINE_PLAN.md phase 4; lib/search_browse.ts).
-export const searchBrowseWidgetId = 'search_browse_popup';
+export const searchBrowseWidgetId = 'search_browse_floating';
+export const searchBrowseFloatIdKey = 'search-browse-float-id'; // session: the open browser's floating widget id
+export const searchBrowseRequestKey = 'search-browse-request'; // session: {action: 'expand', at} from the `sb` command
+export const searchBrowseAckKey = 'search-browse-ack'; // session: the `at` the browser last acted on
 export const savedSearchesKey = 'search-browse-saved'; // synced: SavedSearch[]
 export const searchHistoryKey = 'search-browse-history'; // local (per device): last searches, newest first
 export const searchQueuesParentName = 'Search Queues';

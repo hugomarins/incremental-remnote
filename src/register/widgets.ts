@@ -1,7 +1,7 @@
 import { QueueItemType, ReactRNPlugin, WidgetLocation } from '@remnote/plugin-sdk';
 import { pageRangeWidgetId, parentSelectorWidgetId, parentPickWidgetId, powerupCode, priorityGraphPowerupCode, incremNotesSidebarWidgetId, enableMasteryDrillId, pluginHubWidgetId, onboardingTipsWidgetId, cardVideoPowerupCode, mcScissorsWidgetId, mcAssertionsWidgetId, menuHubWidgetId, READ_ALOUD_POPUP } from '../lib/consts';
 import { getIESetting } from '../lib/settings';
-import { screenFittedHeight, screenFittedWidth } from '../lib/utils';
+import { screenFittedHeight } from '../lib/utils';
 
 /* Shows each queue badge/timer widget in one queue variant only. RemNote wraps
    each location widget as
@@ -600,14 +600,15 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
     },
   });
 
-  // Search & Browse (components/SearchBrowseView.tsx): a table over the AI helper's
-  // Search Engine, wide enough for its columns.
-  plugin.app.registerWidget('search_browse_popup', WidgetLocation.Popup, {
+  // Search & Browse (components/SearchBrowseView.tsx): a floating panel over the
+  // AI helper's Search Engine. Floating, not a popup, so it can collapse to a small
+  // bar while you work in the editor and come back with its search and scroll
+  // intact. Width follows RemNote's window ('90vw'); the height (a number, by the
+  // type) is fitted to the display, and the panel trims itself to the window.
+  plugin.app.registerWidget('search_browse_floating', WidgetLocation.FloatingWidget, {
     dimensions: {
-      // As wide and tall as the display allows (90%): the Rem column takes the extra
-      // width, the table more rows.
-      width: screenFittedWidth(1100, 2400),
-      height: screenFittedHeight(640, 1300),
+      width: '90vw',
+      height: screenFittedHeight(640, 1300, 0.86),
     },
   });
 

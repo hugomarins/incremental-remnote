@@ -202,6 +202,12 @@ import {
 } from '../lib/priority_bands';
 import { CARD_PRIORITY_CODE } from '../lib/card_priority/types';
 import { batchPriorityTargetRemIdsKey, titleCaseAcronymsId } from '../lib/consts';
+import {
+  searchBrowseAckKey,
+  searchBrowseFloatIdKey,
+  searchBrowseRequestKey,
+  searchBrowseWidgetId,
+} from '../lib/consts';
 import { getIESetting } from '../lib/settings';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { collectRemIdChoices, copyRemIdPopupWidgetId } from '../lib/copy_rem_id';
@@ -3366,7 +3372,19 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     name: 'Search & Browse',
     quickCode: 'sb',
     action: async () => {
-      await plugin.widget.openPopup('search_browse_popup');
+      // A browser already open (perhaps collapsed to its bar) is asked to expand;
+      // only when it doesn't answer is a new one opened.
+      const openId = await plugin.storage.getSession<string>(searchBrowseFloatIdKey);
+      if (openId) {
+        const at = Date.now();
+        await plugin.storage.setSession(searchBrowseRequestKey, { action: 'expand', at });
+        for (let i = 0; i < 10; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+          if ((await plugin.storage.getSession<number>(searchBrowseAckKey)) === at) return;
+        }
+      }
+      const id = await plugin.window.openFloatingWidget(searchBrowseWidgetId, { top: 0, left: 0 }, undefined, false);
+      await plugin.storage.setSession(searchBrowseFloatIdKey, id);
     },
   });
 

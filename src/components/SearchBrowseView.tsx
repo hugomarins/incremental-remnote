@@ -1,5 +1,10 @@
 /**
- * Search & Browse — an Anki-Browser-like table over the Search Engine
+ * Search & Browse — an Anki-Browser-like table over the Search Engine, in a floating
+ * panel that collapses to a small bar at the window's bottom right while you work in
+ * the editor (opening a Rem collapses it; Esc too), and comes back with its search,
+ * rows and scroll intact (the `sb` command, or the bar). Collapsing moves the panel so
+ * only its top-left corner shows; RemNote clips the rest at the window's edge, and
+ * moving a floating widget doesn't remount it.
  * (plans/SEARCH_ENGINE_PLAN.md, phase 4). Every row and column comes from the AI
  * helper in one call per page (scripts/rem_browse.py); this view renders them, sorts
  * by asking again, and runs the bulk actions in lib/search_browse.ts.
@@ -9,7 +14,7 @@
  * table; in the table ↑/↓ move, Space selects, Enter opens the Rem, Shift+Enter opens
  * it in a new pane, / or Shift+Tab returns to the box; Esc closes.
  */
-import { usePlugin } from '@remnote/plugin-sdk';
+import { usePlugin, useRunAsync, useSessionStorageState, WidgetLocation } from '@remnote/plugin-sdk';
 import React from 'react';
 import {
   BrowseMode,
@@ -29,7 +34,18 @@ import {
   setCardPriorityForRems,
 } from '../lib/search_browse';
 import { openRemInNewPane } from '../lib/remHelpers';
-import { searchHistoryKey } from '../lib/consts';
+import {
+  searchBrowseAckKey,
+  searchBrowseFloatIdKey,
+  searchBrowseRequestKey,
+  searchHistoryKey,
+} from '../lib/consts';
+
+/** The collapsed bar: the part of the panel left on screen at the bottom right. */
+const BAR_W = 270;
+const BAR_H = 44;
+/** Keys taken from the editor while the panel is expanded, and given back collapsed. */
+const STOLEN_KEYS = ['Enter', 'ArrowUp', 'ArrowDown', 'Escape', 'Tab'];
 
 const PAGE = 100;
 /** Searches remembered for ↑/↓ in the box. */
@@ -135,6 +151,14 @@ const rowKey = (r: BrowseRow) => r.cardId ?? r.remId;
 
 export function SearchBrowse() {
   const plugin = usePlugin();
+  const ctx = useRunAsync(async () => await plugin.widget.getWidgetContext<WidgetLocation.FloatingWidget>(), []);
+  const floatId = ctx?.floatingWidgetId as string | undefined;
+  const instanceId = (ctx as any)?.widgetInstanceId;
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [measuring, setMeasuring] = React.useState(true);
+  /** Visible panel height: the frame's, trimmed to RemNote's window. */
+  const [panelH, setPanelH] = React.useState<number | null>(null);
+  const frameRef = React.useRef<{ w: number; h: number } | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const reqRef = React.useRef(0);
@@ -166,13 +190,99 @@ export function SearchBrowse() {
       .getLocal<string[]>(searchHistoryKey)
       .then((h) => setHistory(Array.isArray(h) ? h.filter((x) => typeof x === 'string') : []))
       .catch(() => {});
+  }, [plugin]);
+
+  const focusBox = React.useCallback(() => {
     let tries = 0;
     const grab = () => {
       inputRef.current?.focus();
       if (document.activeElement !== inputRef.current && ++tries < 8) setTimeout(grab, 50);
     };
     grab();
-  }, [plugin]);
+  }, []);
+
+  /**
+   * Centre the panel in RemNote's window. The window's size can't be read from the
+   * iframe, so it is measured as Find Rem does: anchor our right and bottom edges to
+   * the window, read our rect back (its right/bottom are the window's width/height),
+   * then place. Re-measured on every expand, so a resized window is followed.
+   */
+  const expand = React.useCallback(async () => {
+    if (!floatId) return;
+    setMeasuring(true);
+    try {
+      await plugin.window.setFloatingWidgetPosition(floatId, { right: 0, bottom: 0 });
+      await new Promise((r) => setTimeout(r, 30));
+      const id = Number(instanceId);
+      const rect = await plugin.widget.getDimensions((Number.isFinite(id) ? id : instanceId) as number);
+      const W = rect.right;
+      const H = rect.bottom;
+      const w = rect.width || window.innerWidth;
+      const h = rect.height || window.innerHeight;
+      frameRef.current = { w, h };
+      const visible = Math.max(320, Math.min(h, H - 24));
+      setPanelH(visible);
+      await plugin.window.setFloatingWidgetPosition(floatId, {
+        top: Math.max(12, Math.round((H - visible) / 2)),
+        left: Math.max(0, Math.round((W - w) / 2)),
+      });
+    } catch (e) {
+      console.warn('[search-browse] measuring the window failed; placing at the top left', e);
+      await plugin.window.setFloatingWidgetPosition(floatId, { top: 40, left: 40 }).catch(() => {});
+    }
+    await plugin.window.stealKeys(floatId, STOLEN_KEYS).catch(() => {});
+    setCollapsed(false);
+    setMeasuring(false);
+    focusBox();
+  }, [plugin, floatId, instanceId, focusBox]);
+
+  /** Down to the bar: only the panel's top-left corner stays on screen, at the window's
+   *  bottom right. Keys go back to the editor. */
+  const collapse = React.useCallback(async () => {
+    if (!floatId) return;
+    const frame = frameRef.current ?? { w: window.innerWidth, h: window.innerHeight };
+    setCollapsed(true);
+    (document.activeElement as HTMLElement | null)?.blur?.(); // typing goes back to the editor
+    await plugin.window.releaseKeys(floatId, STOLEN_KEYS).catch(() => {});
+    await plugin.window.setFloatingWidgetPosition(floatId, {
+      right: -(frame.w - BAR_W - 12),
+      bottom: -(frame.h - BAR_H - 12),
+    });
+  }, [plugin, floatId]);
+
+  const close = React.useCallback(async () => {
+    if (!floatId) return;
+    await plugin.storage.setSession(searchBrowseFloatIdKey, undefined);
+    await plugin.window.closeFloatingWidget(floatId);
+  }, [plugin, floatId]);
+
+  // A floating widget is mounted on a container with RemNote's square, themed
+  // background, which would show around the rounded panel and around the collapsed
+  // bar. Everything but our panel goes transparent (as in Find Rem).
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      html, body { background: transparent !important; margin: 0 !important; padding: 0 !important; color-scheme: light dark; }
+      body *:not([data-sb-panel]):not([data-sb-panel] *) { background-color: transparent !important; }
+    `;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+
+  // Open expanded.
+  React.useEffect(() => {
+    if (floatId) expand();
+  }, [floatId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The `sb` command asks an open browser to expand instead of opening another one.
+  const [request] = useSessionStorageState<{ action: string; at: number } | undefined>(searchBrowseRequestKey, undefined);
+  const handledRef = React.useRef<number>(0);
+  React.useEffect(() => {
+    if (!request || request.at === handledRef.current || !floatId) return;
+    handledRef.current = request.at;
+    plugin.storage.setSession(searchBrowseAckKey, request.at);
+    if (request.action === 'expand') expand();
+  }, [request, floatId, expand, plugin]);
 
   const run = React.useCallback(
     async (opts?: { append?: boolean; q?: string; m?: BrowseMode; s?: BrowseSort; d?: boolean }) => {
@@ -246,14 +356,16 @@ export function SearchBrowse() {
     setSelected(next);
   };
 
+  /** Open the Rem, then collapse: opening first, as the panel's calls must finish
+   *  while it is in front (the popup version closed first and the open never ran). */
   const openRow = async (r: BrowseRow | undefined, newPane: boolean) => {
     if (!r) return;
-    await plugin.widget.closePopup();
     if (newPane) await openRemInNewPane(plugin, r.remId);
     else {
       const rem = await plugin.rem.findOne(r.remId);
       if (rem) await plugin.window.openRem(rem);
     }
+    await collapse();
   };
 
   const loadSaved = (id: string) => {
@@ -286,8 +398,8 @@ export function SearchBrowse() {
       await plugin.app.toast(
         `${count} Rem(s) in “🔎 ${s.name}”` + (all > count ? ` (the first ${SEARCH_QUEUE_LIMIT} of ${all})` : '') + '. Opening practice…'
       );
-      await plugin.widget.closePopup();
       await practiceDocument(plugin, doc);
+      await collapse();
     } catch (e: any) {
       setMessage({ text: e?.message || String(e), tone: 'error' });
     } finally {
@@ -330,12 +442,12 @@ export function SearchBrowse() {
   const onKeyDown = (e: React.KeyboardEvent) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'BUTTON' || (target.tagName === 'INPUT' && target !== inputRef.current) || target.tagName === 'SELECT') {
-      if (e.key === 'Escape') plugin.widget.closePopup();
+      if (e.key === 'Escape') collapse();
       return;
     }
     if (e.key === 'Escape') {
       e.preventDefault();
-      plugin.widget.closePopup();
+      collapse();
       return;
     }
     if (focus < 0) {
@@ -400,21 +512,68 @@ export function SearchBrowse() {
   return (
     <div
       ref={containerRef}
+      data-sb-panel=""
       tabIndex={-1}
       onKeyDown={onKeyDown}
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
+        height: panelH ? `${panelH}px` : '100%',
         boxSizing: 'border-box',
         padding: '14px 16px',
         gap: '10px',
         background: 'var(--rn-clr-background-primary)',
         color: 'var(--rn-clr-content-primary)',
+        border: '2px solid var(--rn-clr-border-opaque, #9ca3af)',
+        borderRadius: '10px',
+        boxShadow: '0 10px 32px rgba(0,0,0,0.28)',
         fontSize: '13px',
         outline: 'none',
+        // Kept rendered while collapsed or measuring, so rows and scroll survive.
+        visibility: collapsed || measuring ? 'hidden' : 'visible',
       }}
     >
+      {collapsed && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: `${BAR_W}px`,
+            height: `${BAR_H}px`,
+            boxSizing: 'border-box',
+            visibility: 'visible',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '0 8px 0 12px',
+            background: 'var(--rn-clr-background-primary)',
+            color: 'var(--rn-clr-content-primary)',
+            border: '2px solid var(--rn-clr-border-opaque, #9ca3af)',
+            borderRadius: '10px',
+            boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+            fontSize: '12px',
+          }}
+        >
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => expand()}
+            style={{ flex: 1, textAlign: 'left', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}
+            title={ran ? `Back to the search: ${ran}` : 'Back to Search & Browse'}
+          >
+            ⤢ <strong>Browse</strong>
+            {ran ? ` · ${total.toLocaleString()} ${mode === 'rems' ? 'Rems' : 'cards'}` : ''}
+          </button>
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => close()}
+            style={{ background: 'none', border: 'none', color: 'var(--rn-clr-content-secondary)', cursor: 'pointer', fontSize: '14px' }}
+            title="Close Search & Browse"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <div style={{ fontWeight: 700, fontSize: '15px' }}>Search &amp; Browse</div>
         <div style={{ display: 'flex', gap: '4px' }}>
@@ -456,6 +615,12 @@ export function SearchBrowse() {
             Delete
           </button>
         )}
+        <button onMouseDown={noSteal} onClick={() => collapse()} style={btn} title="Collapse to a bar at the bottom right (Esc); the search stays">
+          –
+        </button>
+        <button onMouseDown={noSteal} onClick={() => close()} style={btn} title="Close Search & Browse">
+          ✕
+        </button>
       </div>
 
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -645,7 +810,7 @@ export function SearchBrowse() {
         </button>
       </div>
       <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)' }}>
-        In the box: Enter search · ↑↓ last searches · Tab to the table — In the table: ↑↓ move · Space select · Enter open · Shift+Enter open in new pane · / or Shift+Tab back to the box — Esc close · Ctrl/Cmd+click select
+        In the box: Enter search · ↑↓ last searches · Tab to the table — In the table: ↑↓ move · Space select · Enter open · Shift+Enter open in new pane · / or Shift+Tab back to the box — Esc collapse (sb or the bar brings it back) · Ctrl/Cmd+click select
       </div>
     </div>
   );

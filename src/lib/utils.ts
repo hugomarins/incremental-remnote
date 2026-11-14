@@ -469,10 +469,10 @@ export function getRetrievabilityColor(r: number): string {
  * Read once, when widgets are registered. Moving the window to another display
  * will not resize a popup until the plugin reloads.
  */
-export function screenFittedHeight(min: number, max = 1500): number {
+export function screenFittedHeight(min: number, max = 1500, share = 0.9): number {
   const available = typeof window !== 'undefined' ? window.screen?.availHeight : undefined;
   if (typeof available !== 'number' || !Number.isFinite(available)) return min;
-  return Math.min(Math.max(Math.round(available * 0.9), min), max);
+  return Math.min(Math.max(Math.round(available * share), min), max);
 }
 
 /**
