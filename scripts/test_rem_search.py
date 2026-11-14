@@ -90,6 +90,32 @@ DOCS = {
 }
 
 
+# Cards: (card id, Rem, type, next time, last, history [(days ago, score)], extra fields)
+C_DUE, C_NEW, C_CLOZE, C_OFF, C_GONE, C_PAUSED = (ids(f'C{i}') for i in range(6))
+
+
+def hist(*entries):
+    return [{'date': NOW - days * DAY, 'score': score} for days, score in entries]
+
+
+CARDS = {
+    C_DUE: dict(rId=BOW, c='f', a=NOW - 2 * DAY, l=NOW - 12 * DAY, ml='Growing',
+                h=hist((40, 0), (30, 1), (12, 0), (0.1, 1.5))),
+    C_NEW: dict(rId=BOW, c='b', a=NOW + 5 * DAY, l=None, ml='New', h=[]),
+    C_CLOZE: dict(rId=FLARE, c='29128728391275505', a=NOW - DAY, l=NOW - 20 * DAY, ml='Retaining',
+                  h=hist((60, 0), (50, 3), (20, 1))),  # a Reset clears the earlier Forgot
+    C_OFF: dict(rId=OTHER, c='f', a=None, l=NOW - 99 * DAY, ml='Retaining', h=hist((99, 1)), ny=True),
+    C_GONE: dict(rId=OTHER, c='123', a=None, l=None, ml='New', h=hist((5, 1)), b=True),
+    C_PAUSED: dict(rId=DUP2, c='f', a=NOW - DAY, l=NOW - 9 * DAY, ml='Growing', h=hist((9, 1))),
+}
+# ARCHIVE is a paused deck: DUP2 (under it) is paused.
+DOCS[ARCHIVE] = {'key': ['Archive'], 'createdAt': 1, 'ps': {'de_s': slot('Paused', 1)}, 'apu': {'de': {'v': True}}}
+
+
+def put_card(db, cid, card, y):
+    db.execute('INSERT OR REPLACE INTO cards VALUES (?, ?, ?)', (cid, json.dumps({'_id': cid, 'y': y, **card}), 0))
+
+
 def put_doc(db, rid, doc, y):
     db.execute('INSERT OR REPLACE INTO quanta VALUES (?, ?, ?)', (rid, json.dumps({'_id': rid, 'y': y, **doc}), 0))
 
@@ -98,6 +124,7 @@ def make_db(path):
     db = sqlite3.connect(path)
     db.executescript('''
         CREATE TABLE quanta (_id TEXT NOT NULL PRIMARY KEY, doc TEXT, x INTEGER);
+        CREATE TABLE cards (_id TEXT NOT NULL PRIMARY KEY, doc TEXT, x INTEGER);
         CREATE VIRTUAL TABLE remsContents USING FTS5(data, tokenize = 'unicode61', prefix = '1 2 3');
         CREATE TABLE remsSearchInfos(ftsRowId INTEGER PRIMARY KEY AUTOINCREMENT, aliasId TEXT NOT NULL,
             id TEXT NOT NULL, doc TEXT NOT NULL, freqCounter REAL NOT NULL, freqTime REAL NOT NULL,
@@ -114,6 +141,8 @@ def make_db(path):
         db.execute('INSERT INTO remsSearchRanks VALUES (?, ?)', (n, n * 10))
     for rid, doc in DOCS.items():
         put_doc(db, rid, doc, NOW - 60_000)
+    for cid, card in CARDS.items():
+        put_card(db, cid, card, NOW - 60_000)
     db.commit()
     db.close()
 
@@ -151,7 +180,9 @@ class ParserTest(unittest.TestCase):
         cases = {
             '': 'empty', 'bow (': 'unclosed-group', 'bow )': 'unopened-group', '()': 'empty-group',
             '"bow': 'unclosed-quote', 'or bow': 'misplaced-or', 'bow and': 'misplaced-and',
-            '- bow': 'lone-minus', 'is:due': 'not-yet', 'rated:7': 'not-yet', 'is:bogus': 'unknown-value',
+            '- bow': 'lone-minus', 'sort:due': 'not-yet', 'card:list': 'unknown-value', 'is:bogus': 'unknown-value',
+            'ml:old': 'unknown-value', 'rated:0': 'bad-number', 'rated:7:great': 'unknown-value',
+            'introduced:7:good': 'unknown-value', 'cid:x': 'bad-id',
             'prop:bogus<3': 'unknown-value', 'has:nothing': 'unknown-value', 'id:short': 'bad-id',
             'added:0': 'bad-number', 'in:': 'missing-value', '...': 'no-words', 'bow\\': 'unknown-escape',
         }
@@ -358,6 +389,49 @@ class IndexSearchTest(unittest.TestCase):
             self.assertEqual(ri.rems_with_source(db, BOW), [])
         finally:
             db.close()
+
+    def test_card_states(self):
+        self.assertEqual(self.rems('is:due'), {BOW, FLARE})  # DUP2's card is due but paused
+        self.assertEqual(self.rems('is:paused'), {ARCHIVE, DUP2})
+        self.assertEqual(self.rems('is:new'), {BOW})
+        self.assertEqual(self.rems('is:review'), {BOW, FLARE, OTHER, DUP2})
+        self.assertEqual(self.rems('is:disabled'), {OTHER})
+        self.assertEqual(self.rems('is:suspended'), {OTHER})
+        self.assertEqual(self.rems('is:not-generated'), {OTHER})
+        self.assertEqual(self.rems('is:learn-new'), {OTHER})
+        self.assertEqual(self.rems('card:cloze'), {FLARE, OTHER})
+        self.assertEqual(self.rems('ml:growing'), {BOW, DUP2})
+
+    def test_card_terms_hold_for_one_card(self):
+        # BOW has a due forward card and a new backward card: no card is both.
+        self.assertEqual(self.rems('is:due card:backward'), set())
+        self.assertEqual(self.rems('is:due card:forward'), {BOW})
+        self.assertEqual(self.rems('is:new card:backward bow'), {BOW})
+        self.assertEqual(self.rems('-is:due card:forward'), {OTHER, DUP2})
+
+    def test_card_numbers_and_history(self):
+        self.assertEqual(self.rems('prop:lapses>=2'), {BOW})
+        self.assertEqual(self.rems('prop:lapses=0 card:cloze'), {FLARE, OTHER})  # Reset cleared FLARE's
+        self.assertEqual(self.rems('prop:reps>=4'), {BOW})
+        self.assertEqual(self.rems('prop:due<=-2'), {BOW})
+        self.assertEqual(self.rems('prop:due>0'), {BOW})  # the new card
+        self.assertEqual(self.rems('prop:ivl>=19'), {FLARE})
+        self.assertEqual(self.rems('rated:1'), {BOW})
+        self.assertEqual(self.rems('rated:1:easy'), {BOW})
+        self.assertEqual(self.rems('rated:1:4'), {BOW})
+        self.assertEqual(self.rems('rated:15:forgot'), {BOW})
+        self.assertEqual(self.rems('rated:7'), {BOW, OTHER})
+        self.assertEqual(self.rems('introduced:10'), {OTHER, DUP2})
+        self.assertEqual(self.rems(f'cid:{C_CLOZE}'), {FLARE})
+
+    def test_card_refresh(self):
+        self.assertEqual(self.rems('is:disabled'), {OTHER})
+        db = sqlite3.connect(self.db)
+        put_card(db, C_OFF, dict(CARDS[C_OFF], a=NOW - DAY), NOW)
+        db.commit()
+        db.close()
+        self.assertEqual(self.rems('is:disabled'), set())
+        self.assertIn(OTHER, self.rems('is:due'))
 
     def test_helper_never_waits_for_a_build(self):
         with self.assertRaises(SearchError) as ctx:

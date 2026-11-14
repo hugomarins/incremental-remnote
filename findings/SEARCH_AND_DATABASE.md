@@ -60,8 +60,15 @@ for a while; RemNote's own search has the same delay.
   time, `h` history (`date`, `score`, …), `ml` mastery level (New, Acquiring, Growing,
   Solidifying, Retaining, NotYetLearned), `l` last repetition, `t` times wrong in a row,
   `e` created, `b` no longer generated, `ny` Learn New.
-- **Rating scores in `h`:** 1 (211,677), 0.5 (20,544), 1.5 (17,500), 0 (16,511), 0.01
-  (1,804), 2–5 (583). 0/0.5/1/1.5 = Forgot/Hard/Good/Easy; 0.01 and 2–5 not yet named.
+- **Rating scores in `h`** (bundle enum `QueueInteractionScore`): 0.01 TOO_EARLY (a
+  skip), 0 AGAIN, 0.5 HARD, 1 GOOD, 1.5 EASY, 2 VIEWED_AS_LEECH, 3 RESET, 4 MANUAL_DATE,
+  5 MANUAL_EASE. Counts in the main KB: 1 (211,677), 0.5 (20,544), 1.5 (17,500), 0 (16,511),
+  0.01 (1,804), 2–5 (583).
+- **Card type `c`:** `f` forward, `b` backward; anything else is a cloze id, in several
+  shapes (long digits, `c1`, short digits, random letters).
+- **Paused decks:** the Deck powerup (`de`) slot `s` = "Paused" (7 decks in the main KB).
+  Their cards keep a real `a`, so a due count must leave them out; the nearest deck above
+  a Rem decides (see CARD_STATE_REFERENCE.md).
 
 ### Finding what changed: `y`
 

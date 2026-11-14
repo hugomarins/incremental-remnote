@@ -27,6 +27,12 @@ What it records, per Rem (field names from RemNote 1.30.2-beta's bundle):
                  rem_search keeps only the most recently written (`at`).
     refs         references in the key and back text ('text'), in the Sources slot
                  (`os_os`: 'source'), and in other slot and property values ('value')
+    cards        one row per card (`cards` table): its Rem, kind (forward, backward,
+                 cloze), next due time (`a`, null when RemNote won't show it), last
+                 review, mastery level, Learn New (`ny`), no longer generated (`b`),
+                 and the answers since the last Reset (reps, Forgots), as RemNote's
+                 own FSRS counts them (src/lib/fsrs.ts)
+    reps         every history entry (card, date, score) for rated:
     names        the name of every Rem used as a tag, property or powerup, and of
                  every Rem referenced in text or listed as a Source (so source:*x* and
                  refs:*x* match names in ms instead of scanning every Rem)
@@ -51,7 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import history_archive  # noqa: E402  (KB paths, read-only open)
 
 INDEX_DIR = Path.home() / '.incremental-remnote' / 'search'
-SCHEMA_VERSION = '6'
+SCHEMA_VERSION = '7'
 # Re-read Rems written up to this long before the last stamp seen: commits and
 # clocks need not arrive in stamp order. Re-reading is idempotent.
 OVERLAP_MS = 10_000
@@ -92,6 +98,15 @@ CREATE INDEX IF NOT EXISTS props_src ON props(src);
 CREATE TABLE IF NOT EXISTS refs (rem TEXT NOT NULL, src TEXT NOT NULL, target TEXT NOT NULL, kind TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS refs_target ON refs(target, kind);
 CREATE INDEX IF NOT EXISTS refs_src ON refs(src);
+CREATE TABLE IF NOT EXISTS cards (
+    id TEXT PRIMARY KEY, rem TEXT, kind TEXT, next INTEGER, next_day INTEGER, last INTEGER,
+    ivl INTEGER, ml TEXT, ny INTEGER, nogen INTEGER, created INTEGER, reps INTEGER,
+    lapses INTEGER, first_rep INTEGER);
+CREATE INDEX IF NOT EXISTS cards_rem ON cards(rem);
+CREATE INDEX IF NOT EXISTS cards_next ON cards(next);
+CREATE TABLE IF NOT EXISTS reps (card TEXT NOT NULL, rem TEXT, date INTEGER, score REAL);
+CREATE INDEX IF NOT EXISTS reps_date ON reps(date);
+CREATE INDEX IF NOT EXISTS reps_card ON reps(card);
 CREATE TABLE IF NOT EXISTS names (id TEXT PRIMARY KEY, name TEXT);
 CREATE INDEX IF NOT EXISTS names_name ON names(name);
 """
@@ -368,6 +383,62 @@ def _write(db, reader, docs, fresh=False):
 
 BUILD_BATCH = 5000
 
+# RemNote's QueueInteractionScore (bundle enum, 1.30.2-beta).
+ANSWERS = {0: 'forgot', 0.5: 'hard', 1: 'good', 1.5: 'easy'}
+RESET = 3
+DAY_MS = 86_400_000
+
+
+def counts_for_main_card(rep):
+    """As src/lib/fsrs.ts: a partial list/set rep doesn't count for the main card."""
+    if rep.get('score') == RESET:
+        return True
+    if rep.get('isFullMultiLineRep') is not None:
+        return bool(rep['isFullMultiLineRep'])
+    return not rep.get('subCardScores')
+
+
+def card_rows(cid, d):
+    """(card row, [rep rows]) for one card document."""
+    history = sorted((r for r in (d.get('h') or []) if isinstance(r, dict) and isinstance(r.get('date'), (int, float))),
+                     key=lambda r: r['date'])
+    reps = lapses = 0
+    first = None
+    for r in history:
+        score = r.get('score')
+        if score == RESET:
+            reps = lapses = 0
+            continue
+        if score in ANSWERS and counts_for_main_card(r):
+            reps += 1
+            lapses += score == 0
+            first = r['date'] if first is None else first
+    c = d.get('c')
+    kind = 'forward' if c == 'f' else 'backward' if c == 'b' else 'cloze'
+    nxt = d.get('a') if isinstance(d.get('a'), (int, float)) else None
+    last = d.get('l') if isinstance(d.get('l'), (int, float)) else None
+    ivl = round((nxt - last) / DAY_MS) if nxt is not None and last is not None else None
+    row = (cid, d.get('rId'), kind, nxt, day_of_ms(nxt) if nxt is not None else None, last, ivl, d.get('ml'),
+           int(bool(d.get('ny'))), int(bool(d.get('b'))), d.get('e'), reps, lapses, first)
+    rep_rows = [(cid, d.get('rId'), r['date'], r.get('score')) for r in history]
+    return row, rep_rows
+
+
+def _write_cards(db, docs, fresh=False):
+    if not fresh:
+        ids = [cid for cid, _ in docs]
+        for chunk in range(0, len(ids), 500):
+            part = ids[chunk:chunk + 500]
+            marks = ','.join('?' * len(part))
+            db.execute(f'DELETE FROM cards WHERE id IN ({marks})', part)
+            db.execute(f'DELETE FROM reps WHERE card IN ({marks})', part)
+    for cid, d in docs:
+        if not d:
+            continue
+        row, rep_rows = card_rows(cid, d)
+        db.execute('INSERT OR REPLACE INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', row)
+        db.executemany('INSERT INTO reps VALUES (?,?,?,?)', rep_rows)
+
 
 def build(kb_id, db_path=None, index_file=None):
     """Rebuild the index from scratch, in one read transaction, into a new file that
@@ -400,6 +471,17 @@ def build(kb_id, db_path=None, index_file=None):
                     batch = []
             _write(db, reader, batch, fresh=True)
             total += len(batch)
+            card_high, cards = 0, []
+            for cid, doc, y in src.execute("SELECT _id, doc, json_extract(doc, '$.y') FROM cards"):
+                if doc:
+                    cards.append((cid, json.loads(doc)))
+                    if isinstance(y, (int, float)):
+                        card_high = max(card_high, y)
+                if len(cards) >= BUILD_BATCH:
+                    _write_cards(db, cards, fresh=True)
+                    cards = []
+            _write_cards(db, cards, fresh=True)
+            set_meta(db, 'card_watermark', int(card_high))
             for rid, code in reader.powerup_of.items():
                 db.execute('INSERT OR REPLACE INTO powerups VALUES (?, ?, ?)', (code, rid, fold(reader.name(rid))))
             set_meta(db, 'schema', SCHEMA_VERSION)
@@ -431,18 +513,35 @@ def refresh(db, kb_id, src):
         changed = src.execute(
             "SELECT _id, doc, json_extract(doc, '$.y') FROM quanta WHERE json_extract(doc, '$.y') > ?",
             (mark - OVERLAP_MS,)).fetchall()
+        card_mark = int(meta(db, 'card_watermark', '0') or 0)
+        changed_cards = src.execute(
+            "SELECT _id, doc, json_extract(doc, '$.y') FROM cards WHERE json_extract(doc, '$.y') > ?",
+            (card_mark - OVERLAP_MS,)).fetchall()
+        if changed_cards:
+            docs, high = [], card_mark
+            for cid, doc, y in changed_cards:
+                docs.append((cid, json.loads(doc) if doc else None))
+                if isinstance(y, (int, float)):
+                    high = max(high, int(y))
+            db.execute('BEGIN')
+            _write_cards(db, docs)
+            set_meta(db, 'card_watermark', high)
+            db.execute('COMMIT')
         swept = 0
         if time.time() - _last_sweep.get(kb_id, 0) > DELETION_SWEEP_S:
             live = {r[0] for r in src.execute('SELECT _id FROM quanta')}
             gone = [r[0] for r in db.execute('SELECT id FROM rems') if r[0] not in live]
-            if gone:
+            live_cards = {r[0] for r in src.execute('SELECT _id FROM cards')}
+            gone_cards = [r[0] for r in db.execute('SELECT id FROM cards') if r[0] not in live_cards]
+            if gone or gone_cards:
                 db.execute('BEGIN')
                 _forget(db, gone)
+                _write_cards(db, [(cid, None) for cid in gone_cards])
                 db.execute('COMMIT')
-            swept = len(gone)
+            swept = len(gone) + len(gone_cards)
             _last_sweep[kb_id] = time.time()
         if not changed:
-            return {'changed': 0, 'deleted': swept}
+            return {'changed': len(changed_cards), 'deleted': swept}
         reader = Reader(src, {rid: code for code, rid in db.execute('SELECT code, rem FROM powerups')})
         docs, high = [], mark
         for rid, doc, y in changed:
@@ -456,7 +555,7 @@ def refresh(db, kb_id, src):
             db.execute('INSERT OR REPLACE INTO powerups VALUES (?, ?, ?)', (code, rid, fold(reader.name(rid))))
         set_meta(db, 'watermark', high)
         db.execute('COMMIT')
-        return {'changed': len(docs), 'deleted': swept}
+        return {'changed': len(docs) + len(changed_cards), 'deleted': swept}
 
 
 _building = set()
@@ -547,7 +646,7 @@ def status(kb_id, index_file=None):
     db = open_index(kb_id, path)
     try:
         counts = {t: db.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]
-                  for t in ('rems', 'rem_tags', 'rem_powerups', 'props', 'refs', 'names')}
+                  for t in ('rems', 'rem_tags', 'rem_powerups', 'props', 'refs', 'names', 'cards', 'reps')}
         return {'built': True, 'builtAt': int(meta(db, 'built_at', 0)), 'watermark': int(meta(db, 'watermark', 0)),
                 'bytes': path.stat().st_size, **counts}
     finally:

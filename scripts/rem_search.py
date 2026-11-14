@@ -42,9 +42,19 @@ Terms (plans/SEARCH_ENGINE_PLAN.md §4):
     owner.name<5    numeric (<, <=, >, >=, =, !=); a date value compares in days from
                     today (`incremental.nextrepdate<=0` = due)
     prop:priority<20, prop:incpriority, prop:incdue  shortcuts for the plugin's slots
-Card keys (card:, rated:, is:due…) belong to phase 3 and are refused with a clear
-error. Any other `x:y` is plain text, so "3:30" or a pasted "Note: …" still search as
-words.
+  cards (a Rem matches when one of its cards does; card terms ANDed together must
+  hold for the same card, so `is:due card:cloze` is a due cloze card):
+    card:forward|backward|cloze
+    is:due (next time passed, not in a paused deck), is:new (no answer since the
+       last Reset), is:review, is:learn-new, is:disabled (= is:suspended: RemNote
+       won't show it), is:not-generated (its cloze or back is gone, history kept)
+    is:paused       under a paused deck (the nearest deck above decides)
+    ml:new|acquiring|growing|solidifying|retaining|notyetlearned
+    prop:due<=-7    days from today to the next time; prop:ivl, prop:reps, prop:lapses
+    rated:7, rated:7:forgot|hard|good|easy (or 1-4, Anki's buttons), rated:7:skip
+    introduced:30   first answered in the last 30 days
+    cid:a,b         these cards
+Any other `x:y` is plain text, so "3:30" or a pasted "Note: …" still search as words.
 
 The text index (remsContents) is RemNote's own: lower-case, accents and clozes removed,
 references appended at the END of a Rem's text, and one row per alias.
@@ -69,17 +79,31 @@ MAX_LIMIT = 2000
 REM_ID_RE = re.compile(r'^[A-Za-z0-9]{17}$')
 
 # Keys that belong to a later phase: a clear error rather than a silent text search.
-LATER_KEYS = {'card', 'ml', 'rated', 'introduced', 'cid', 'sort'}
+LATER_KEYS = {'sort'}
 NAME_KEYS = {'in', 'parent'}
-INDEX_KEYS = {'tag', 'is', 'has', 'source', 'refs', 'id', 'added', 'edited', 'field'}
+INDEX_KEYS = {'tag', 'is', 'has', 'source', 'refs', 'id', 'added', 'edited', 'field', 'card'}
 
 # is: values. Read from RemNote's search record (s.doc), the Rem's type, or a powerup.
 IS_DOC_FLAGS = {'document': 'i', 'folder': 'l', 'flashcard': 'fl', 'image': 'g', 'pdf': 'd', 'website': 'w'}
 IS_TYPES = {'concept': 1, 'descriptor': 2, 'portal': 6}
 IS_POWERUPS = {'incremental': ['incremental'], 'dismissed': ['dismissed'], 'pdf-highlight': ['n'],
                'html-highlight': ['hh', 'vh'], 'web-highlight': ['p']}
-IS_LATER = {'due', 'new', 'learn-new', 'learn', 'review', 'disabled', 'not-generated', 'paused', 'suspended'}
-IS_ALL = sorted([*IS_DOC_FLAGS, *IS_TYPES, *IS_POWERUPS])
+# is: values about cards: (SQL over the card `c`, whether due cards in paused decks are left out)
+IS_CARD = {
+    'due': ('c.next IS NOT NULL AND c.next <= :now', True),
+    'new': ('c.reps = 0 AND c.nogen = 0', False),
+    'review': ('c.reps > 0 AND c.nogen = 0', False),
+    'learn-new': ('c.ny = 1', False),
+    'disabled': ('c.next IS NULL AND c.nogen = 0', False),
+    'suspended': ('c.next IS NULL AND c.nogen = 0', False),
+    'not-generated': ('c.nogen = 1', False),
+}
+IS_ALL = sorted([*IS_DOC_FLAGS, *IS_TYPES, *IS_POWERUPS, *IS_CARD, 'paused'])
+CARD_KINDS = {'forward', 'backward', 'cloze'}
+MASTERY = {'new', 'acquiring', 'growing', 'solidifying', 'retaining', 'notyetlearned'}
+CARD_PROPS = {'due': 'c.next_day - :today', 'ivl': 'c.ivl', 'reps': 'c.reps', 'lapses': 'c.lapses'}
+RATINGS = {'forgot': 0, 'again': 0, '1': 0, 'hard': 0.5, '2': 0.5, 'good': 1, '3': 1, 'easy': 1.5, '4': 1.5,
+           'skip': 0.01}
 
 # prop: shortcuts → (owner, name) in the index's squashed form.
 PROP_ALIASES = {'priority': ('cardpriority', 'priority'), 'incpriority': ('incremental', 'priority'),
@@ -347,11 +371,34 @@ class Parser:
             return Term('tag', value.strip(), at=at)
         if k == 'is':
             v = value.strip().lower()
-            if v in IS_LATER:
-                self.fail('not-yet', f'"is:{v}" is about cards, which come in a later phase.', at)
-            if v not in IS_DOC_FLAGS and v not in IS_TYPES and v not in IS_POWERUPS:
+            if v in IS_CARD:
+                return Term('card', v, at=at, name='is')
+            if v not in IS_DOC_FLAGS and v not in IS_TYPES and v not in IS_POWERUPS and v != 'paused':
                 self.fail('unknown-value', f'"is:{value}" is not known. Try is:{", is:".join(IS_ALL)}.', at)
             return Term('is', v, at=at)
+        if k == 'card':
+            v = value.strip().lower()
+            if v not in CARD_KINDS:
+                self.fail('unknown-value', 'Try card:forward, card:backward or card:cloze.', at)
+            return Term('card', v, at=at, name='kind')
+        if k == 'ml':
+            v = value.strip().lower().replace(' ', '').replace('-', '')
+            if v not in MASTERY:
+                self.fail('unknown-value', f'Try ml:{", ml:".join(sorted(MASTERY))}.', at)
+            return Term('card', v, at=at, name='ml')
+        if k in ('rated', 'introduced'):
+            days, _, rating = value.strip().partition(':')
+            if not re.fullmatch(r'\d{1,5}', days) or int(days) < 1:
+                self.fail('bad-number', f'{k}: takes a number of days, 1 for today, as in {k}:7.', at)
+            if rating and (k == 'introduced' or rating.lower() not in RATINGS):
+                self.fail('unknown-value', 'Try rated:7:forgot, rated:7:hard, rated:7:good, rated:7:easy '
+                          '(or 1 to 4, as Anki\'s buttons) or rated:7:skip.', at)
+            return Term('card', rating.lower(), at=at, name=k, num=float(days))
+        if k == 'cid':
+            ids = [i for i in re.split(r'[,\s]+', value.strip()) if i]
+            if not ids or not all(REM_ID_RE.match(i) for i in ids):
+                self.fail('bad-id', 'cid: takes card ids separated by commas.', at)
+            return Term('card', ','.join(ids), at=at, name='cid')
         if k == 'has':
             v = value.strip()
             if v.lower() in ('alias', 'source', 'tag'):
@@ -374,14 +421,18 @@ class Parser:
             return Term(k, value.strip(), at=at, num=float(value))
         if k == 'prop':
             compare = COMPARE_RE.match(value.strip())
+            if compare and compare.group(1).strip().lower() in CARD_PROPS:
+                return Term('card', compare.group(1).strip().lower(), at=at, name='prop', op=compare.group(2),
+                            num=float(compare.group(3)))
             alias = PROP_ALIASES.get((compare.group(1) if compare else value.split(':')[0]).strip().lower())
             if not compare or not alias:
-                self.fail('unknown-value', 'Try prop:priority<20, prop:incpriority<=10 or prop:incdue<=0; '
+                self.fail('unknown-value', 'Try prop:due, prop:ivl, prop:reps, prop:lapses (cards), prop:priority, '
+                          'prop:incpriority or prop:incdue (the plugin\'s slots), as in prop:due<=0; '
                           'for any other slot or property, write owner.name<5 or owner.name:text.', at)
             return Term('field', value, at=at, owner=alias[0], name=alias[1], op=compare.group(2),
                         num=float(compare.group(3)))
         if k in LATER_KEYS:
-            self.fail('not-yet', f'"{key}:" is about cards, which come in a later phase.', at)
+            self.fail('not-yet', f'"{key}:" is planned but not available yet.', at)
         if '.' in k:
             owner, _, name = key.rpartition('.')
             if not owner or not rem_index.squash(name):
@@ -523,6 +574,17 @@ class Compiler:
         return self.leaf(node, negated)
 
     def compile_and(self, nodes, negated):
+        # Card terms ANDed together must hold for the same card: one subquery.
+        cards = [n for n in nodes if isinstance(n, Term) and n.kind == 'card']
+        if len(cards) > 1:
+            others = [n for n in nodes if not (isinstance(n, Term) and n.kind == 'card')]
+            card_sql = self.card_terms(cards)
+            if not others:
+                return card_sql
+            nodes = others
+            parts_prefix = [card_sql]
+        else:
+            parts_prefix = []
         # Plain text terms ANDed together become ONE MATCH: FTS intersects them itself,
         # much faster than one IN (…) per word.
         merged = [n for n in nodes if isinstance(n, Term) and n.kind == 'text' and not n.alias_only]
@@ -537,7 +599,7 @@ class Compiler:
         else:
             rest = nodes
         parts += [self.compile(n, negated) for n in rest]
-        return '(' + ' AND '.join(parts) + ')'
+        return '(' + ' AND '.join(parts_prefix + parts) + ')'
 
     def leaf(self, term, negated):
         if term.kind == 'text':
@@ -574,8 +636,97 @@ class Compiler:
 
     # --- terms answered by the helper's index (rem_index.py) -------------------
 
+    def card_terms(self, terms):
+        """Rems with one card meeting every term, minus paused decks for is:due."""
+        conds, skip_paused = [], False
+        for t in terms:
+            cond, args, paused = self.card_cond(t)
+            conds.append(cond)
+            self.args += args
+            skip_paused = skip_paused or paused
+        sql = f"s.id IN (SELECT c.rem FROM cards c WHERE {' AND '.join(conds)})"
+        if skip_paused:
+            sql = f'({sql} AND NOT {self.paused_sql()})'
+        return sql
+
+    def card_cond(self, t):
+        """(SQL over the card `c`, its arguments, whether paused decks are left out)."""
+        named = {':now': int(time.time() * 1000), ':today': today_day()}
+
+        def bind(sql):
+            args = []
+            for name in re.findall(r':now|:today', sql):
+                args.append(named[name])
+            return re.sub(r':now|:today', '?', sql), args
+
+        if t.name == 'is':
+            sql, paused = IS_CARD[t.value]
+            sql, args = bind(sql)
+            return f'({sql})', args, paused
+        if t.name == 'kind':
+            return 'c.kind = ?', [t.value], False
+        if t.name == 'ml':
+            return "replace(lower(c.ml), ' ', '') = ?", [t.value], False
+        if t.name == 'prop':
+            expr, args = bind(CARD_PROPS[t.value])
+            return f'({expr}) {t.op} ?', [*args, t.num], False
+        if t.name == 'rated':
+            start = days_ago_ms(int(t.num))
+            if t.value:
+                return ('c.id IN (SELECT card FROM reps WHERE date >= ? AND score = ?)',
+                        [start, RATINGS[t.value]], False)
+            return ('c.id IN (SELECT card FROM reps WHERE date >= ? AND score IN (0, 0.5, 1, 1.5))',
+                    [start], False)
+        if t.name == 'introduced':
+            return 'c.first_rep >= ?', [days_ago_ms(int(t.num))], False
+        if t.name == 'cid':
+            ids = t.value.split(',')
+            return f'c.id IN ({",".join("?" * len(ids))})', ids, False
+        raise SearchError('parse', f'Unknown card term {t.name}.')
+
+    def paused_sql(self):
+        """Rems whose nearest deck is paused (findings/CARD_STATE_REFERENCE.md): inside a
+        paused deck's subtree, minus the subtrees of decks that aren't paused and sit
+        directly below it."""
+        if getattr(self, '_paused', None) is None:
+            decks = {}  # deck id → (paused?, ancestor_ids)
+            for rid in [r[0] for r in self.db.execute("SELECT rem FROM rem_powerups WHERE code = 'de'")]:
+                row = self.db.execute('SELECT ancestor_ids FROM remsSearchInfos WHERE id = ? LIMIT 1',
+                                      (rid,)).fetchone()
+                decks[rid] = [False, (row[0] if row else '') or '']
+            for (rid,) in self.db.execute(
+                    """SELECT p.rem FROM props p WHERE p.owner = 'de' AND p.name = 's' AND p.text = 'paused'
+                       AND NOT EXISTS (SELECT 1 FROM props q WHERE q.rem = p.rem AND q.owner = p.owner
+                                       AND q.name = p.name AND q.at > p.at)"""):
+                if rid in decks:
+                    decks[rid][0] = True
+            clauses, args = [], []
+            for pid, (paused, anc) in decks.items():
+                if not paused:
+                    continue
+                prefix = f'{anc} {pid}'
+                holes = []
+                for aid, (a_paused, a_anc) in decks.items():
+                    if a_paused or pid not in a_anc.split():
+                        continue
+                    nearest = next((x for x in reversed(a_anc.split()) if x in decks), None)
+                    if nearest == pid:
+                        holes.append(f'{a_anc} {aid}')
+                clause = '((s.id = ? OR (s.ancestor_ids >= ? AND s.ancestor_ids < ?))'
+                args += [pid, prefix, prefix + '~']
+                for h in holes:
+                    clause += ' AND NOT (s.ancestor_ids >= ? AND s.ancestor_ids < ?) AND s.id <> ?'
+                    args += [h, h + '~', h.split()[-1]]
+                clauses.append(clause + ')')
+            self._paused = ('(' + ' OR '.join(clauses) + ')' if clauses else '(0)', args)
+        sql, args = self._paused
+        self.args += args
+        return sql
+
     def index_leaf(self, term):
         k = term.kind
+        if k == 'card':
+            return self.card_terms([term])
         if k == 'tag':
             if term.value.lower() == 'none':
                 return 's.id NOT IN (SELECT rem FROM rem_tags)'
@@ -586,6 +737,8 @@ class Compiler:
                     f' (SELECT code FROM powerups WHERE name {cmp} OR lower(code) {cmp})))')
         if k == 'is':
             v = term.value
+            if v == 'paused':
+                return self.paused_sql()
             if v in IS_DOC_FLAGS:
                 return f"json_extract(s.doc, '$.{IS_DOC_FLAGS[v]}') = 1"
             if v in IS_TYPES:
