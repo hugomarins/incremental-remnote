@@ -1,11 +1,11 @@
 # Search Engine
 
-On the desktop, the plugin can search your knowledge base with a query language modelled on [Anki's](https://docs.ankiweb.net/searching.html): every word must match, and you can combine words with `or` and `-`, search under a document, or filter by tag, Rem type, Source, slot or property value, card state and review history. [Find Rem](Utilities-Finding-and-Navigating.md#find-rem-reference-or-open) uses it: a ⚡ in the search box means the search engine answered.
+On the desktop, the plugin can search your knowledge base with a query language modelled on [Anki's](https://docs.ankiweb.net/searching.html): every word must match, and you can combine words with `or` and `-`, search under a document, or filter by tag, Rem type, Source, slot or property value, card state and review history. Two tools use it: [Find Rem](Utilities-Finding-and-Navigating.md#find-rem-reference-or-open), where a ⚡ in the search box means the search engine answered, and [Search & Browse](#browse), a table of everything a search finds.
 
 The engine runs in the [AI helper](Desktop-Helpers.md#search) on your computer, reading RemNote's own database without changing it. On the iPhone, on the web, or with the helper off, Find Rem uses RemNote's search as before, and the keys on this page are read as ordinary words.
 
 !!! info "Setting it up"
-    1. Run the [AI helper](Desktop-Helpers.md#setup), version 1.0.231 or later, with `rem_search.py` and `rem_index.py` next to it.
+    1. Run the [AI helper](Desktop-Helpers.md#setup), version 1.0.231 or later, with `rem_search.py`, `rem_index.py` and `rem_browse.py` next to it.
     2. Print its pairing token with `python3 ~/.incremental-remnote/ai_ocr_helper.py --pairing-token` and paste it in the plugin settings, **AI Helper Pairing Token** ([why a token](Desktop-Helpers.md#search)).
 
     The first time you use a key such as `tag:` or `is:`, the helper indexes the knowledge base, which takes about 20 seconds; Find Rem says so and searches the words meanwhile.
@@ -267,6 +267,25 @@ Each card gets one cause, the first that applies in this order. `is:disabled` (o
 `suppressed:rem in:"PSCPP"`
 :   Rems under *PSCPP* switched off on purpose: the ones worth a look.
 
+## Search & Browse { #browse }
+
+**Search & Browse** (quick code `sb`) lists everything a search finds in a table, as Anki's Browser does, and lets you act on it.
+
+- **Rems or Cards.** *Rems* lists each Rem once. *Cards* lists the cards the search matched: `is:due card:cloze` lists the due cloze cards, not every card of those Rems.
+- **Columns:** the Rem (front → back, with its path), the card type, its kind (document, concept, IncRem…), tags, card priority, IncRem priority and next date, due date, interval, reps, lapses, mastery level, and why its cards are hidden. Click a column title to sort by it, again to reverse; the whole result is sorted, not only the rows on screen. **Load more** adds 100 rows at a time.
+- **Opening a Rem** (Enter, Shift+Enter for a new pane, or a double-click) opens it in the editor and **collapses** the browser to a bar at the bottom right of the window: **⤢ Browse** brings it back with the same search, rows, selection and scroll; **✕** closes it. Running `sb` again also brings it back. **Esc** and the **–** button collapse it too.
+- **Selecting:** Space or Ctrl/Cmd+click selects a row, the box in the header selects every loaded row. **Set card priority**, **Switch cards on** and **Copy ids** act on the selection, or on the highlighted row when nothing is selected. Setting a priority works as the batch tools do, inheritance included.
+- **Keyboard:** in the search box, Enter searches, ↑/↓ go through your last 50 searches (as in Anki), Tab moves into the table. In the table, ↑/↓ move, / or Shift+Tab returns to the box.
+
+### Saved searches and practice { #saved }
+
+**Save…** names the current search, its mode and its order; the drop-down brings a saved search back, **Delete** forgets it. Saved searches are kept with your account, so every computer has them.
+
+**▶ Practise** turns a saved search into a document you can practise: it fills **🔎 *name*** under a **Search Queues** document with references to up to 500 of the search's Rems, in the search's order, then opens its queue. RemNote serves exactly the cards of a document of references, as with the [Priority Queue](Priority-Review-Document.md). Each Practise refreshes the document from the search as it stands.
+
+`is:due card:cloze in:"PSCPP" prop:lapses>=3`, saved as *Leeches PSCPP*
+:   a practice session of your most-forgotten due cloze cards under *PSCPP*, refreshed each time you press ▶ Practise.
+
 ## Wildcards { #wildcards }
 
 | Key | `*` | `_` |
@@ -311,4 +330,4 @@ The helper reads two things, never writing to either:
 
 A Rem created a moment ago can be missing until RemNote has written it to its database, and its words until RemNote has indexed them; RemNote's own search has the same delay.
 
-The plugin also uses the helper's index to find which Rems have a PDF or web page as their Source, for the PDF reader and the parent picker, instead of checking every IncRem in turn; and the [Suppressed Cards](Prioritization-&-Sorting.md#suppressed-cards) tab reads each card's cause from it.
+The plugin also uses the helper's index to find which Rems have a PDF or web page as their Source, for the PDF reader and the parent picker, instead of checking every IncRem in turn; and the [Suppressed Cards](Prioritization-&-Sorting.md#suppressed-cards) tab reads each card's cause from it. [Search & Browse](#browse) gets each page of its table from the helper in one request, every column included.

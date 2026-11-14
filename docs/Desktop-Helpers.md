@@ -6,7 +6,7 @@ A RemNote plugin runs sandboxed: it cannot start programs, open files on your co
 
 | Helper | What it is for | Program | Address | Set up in |
 |---|---|---|---|---|
-| **AI helper** | [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md), [Pin Source Quote](Source-Pins.md), [Incremental Video](Incremental-Video.md#setup) screenshots and transcripts, the [review history of deleted Rems](#history-archive), and the [Search Engine](Search-Engine.md) | `ai_ocr_helper.py` + `history_archive.py` + `rem_search.py` + `rem_index.py` (Python) | `127.0.0.1:3457` | [this page](#setup) |
+| **AI helper** | [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md), [Pin Source Quote](Source-Pins.md), [Incremental Video](Incremental-Video.md#setup) screenshots and transcripts, the [review history of deleted Rems](#history-archive), and the [Search Engine](Search-Engine.md) | `ai_ocr_helper.py` + `history_archive.py` + `rem_search.py` + `rem_index.py` + `rem_browse.py` (Python) | `127.0.0.1:3457` | [this page](#setup) |
 | **Local Media Bridge** | Scripts and AI assistants writing through the RemNote MCP: local images, Rem operations, [Upscale image with ChatGPT](Local-Media-Bridge.md#upscale), [Read aloud and Add pronunciation](Read-Aloud.md) | `media_bridge.py` (Python) | `127.0.0.1:3460` | [Local Media Bridge](Local-Media-Bridge.md#setup) |
 | **Logos bridge** | Reading [Logos Bible Software](Logos-Bible-Software-Integration.md) books incrementally (macOS) | `LogosBridge.app`, built by `build.sh` | `127.0.0.1:3458` | [Logos integration](Logos-Bible-Software-Integration.md#setup) |
 | **Source finder** (yours) | Telling [Pin Source Quote](Source-Pins.md#no-source-open) which book a quote comes from when no PDF is open | Any program you write, run by the AI helper | — | [Source Pins](Source-Pins.md#source-finder-setup) |
@@ -60,9 +60,11 @@ The plugin's messages call it the **AI helper**, although most of what it does i
       https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/rem_search.py
     curl -o ~/.incremental-remnote/rem_index.py \
       https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/rem_index.py
+    curl -o ~/.incremental-remnote/rem_browse.py \
+      https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/rem_browse.py
     ```
 
-    The second file keeps the [review history of deleted Rems](#history-archive). The last two, which need the second, run the [Search Engine](Search-Engine.md). Without them, everything else works.
+    The second file keeps the [review history of deleted Rems](#history-archive). The last three, which need the second, run the [Search Engine](Search-Engine.md) and [Search & Browse](Search-Engine.md#browse). Without them, everything else works.
 
 3. **Start it:**
 

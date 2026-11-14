@@ -34,6 +34,7 @@ import {
   setCardPriorityForRems,
 } from '../lib/search_browse';
 import { openRemInNewPane } from '../lib/remHelpers';
+import { copyTextFromGesture } from '../lib/clipboard';
 import {
   searchBrowseAckKey,
   searchBrowseFloatIdKey,
@@ -51,6 +52,10 @@ const PAGE = 100;
 /** Searches remembered for ↑/↓ in the box. */
 const HISTORY_MAX = 50;
 const RING = '2px solid var(--rn-clr-border-accent, #3B82F6)';
+const FRAME = 'var(--rn-clr-border-accent, #3B82F6)';
+/** A selected row: a light tint of the accent over the panel, so its text keeps the
+ *  normal colours (the saturated accent made dark text unreadable). */
+const SELECTED_BG = 'color-mix(in srgb, var(--rn-clr-border-accent, #3B82F6) 16%, var(--rn-clr-background-primary, #fff))';
 
 const CAUSE_LABEL: Record<string, string> = {
   paused: 'paused deck',
@@ -130,7 +135,7 @@ const COLUMNS: Column[] = [
     label: 'IncRem',
     sort: 'incpriority',
     width: '96px',
-    render: (r) => (r.incPriority !== null || r.incDue !== null ? `${num(r.incPriority)} · ${days(r.incDue)}` : ''),
+    render: (r) => [num(r.incPriority), days(r.incDue)].filter(Boolean).join(' · '),
     title: 'IncRem priority · next date',
   },
   { key: 'due', label: 'Due', sort: 'due', width: '80px', render: (r) => days(r.due), title: 'Next review (rem mode: its earliest card)' },
@@ -348,6 +353,15 @@ export function SearchBrowse() {
     return Array.from(new Set(pool.map((r) => r.remId)));
   }, [selectedRows, rows, focus]);
 
+  const allBoxRef = React.useRef<HTMLInputElement>(null);
+  const someSelected = rows.some((r) => selected.has(rowKey(r)));
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(rowKey(r)));
+  React.useEffect(() => {
+    if (allBoxRef.current) allBoxRef.current.indeterminate = someSelected && !allSelected;
+  }, [someSelected, allSelected]);
+  /** The header box: every loaded row, or none. */
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(rows.map(rowKey)));
+
   const toggle = (r: BrowseRow) => {
     const next = new Set(selected);
     const k = rowKey(r);
@@ -428,15 +442,14 @@ export function SearchBrowse() {
     run();
   };
 
-  const doCopy = async () => {
+  /** Copy the selected ids. Plugin frames have no clipboard permission, so this goes
+   *  through lib/clipboard.ts, called synchronously in the click so the click counts as
+   *  the gesture execCommand('copy') needs (bridge, then a copy popup, as fallbacks). */
+  const doCopy = () => {
     const ids = selectedRows.length ? selectedRows.map((r) => r.cardId ?? r.remId) : targetRemIds;
-    const text = ids.join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-      await plugin.app.toast(`Copied ${ids.length} id(s)`);
-    } catch {
-      setMessage({ text: `Copy failed; the ids: ${text.slice(0, 400)}`, tone: 'info' });
-    }
+    if (!ids.length) return;
+    const kind = selectedRows.some((r) => r.cardId) ? 'card' : 'Rem';
+    void copyTextFromGesture(plugin, ids.join('\n'), ids.length === 1 ? `${kind} ID` : `${ids.length} ${kind} IDs`);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -524,9 +537,11 @@ export function SearchBrowse() {
         gap: '10px',
         background: 'var(--rn-clr-background-primary)',
         color: 'var(--rn-clr-content-primary)',
-        border: '2px solid var(--rn-clr-border-opaque, #9ca3af)',
-        borderRadius: '10px',
-        boxShadow: '0 10px 32px rgba(0,0,0,0.28)',
+        // An accent frame and a deep shadow, so the panel stands out from the
+        // document under it (a floating widget gets no frame or backdrop of its own).
+        border: `3px solid ${FRAME}`,
+        borderRadius: '12px',
+        boxShadow: '0 0 0 1px rgba(0,0,0,0.25), 0 24px 64px rgba(0,0,0,0.45)',
         fontSize: '13px',
         outline: 'none',
         // Kept rendered while collapsed or measuring, so rows and scroll survive.
@@ -549,9 +564,9 @@ export function SearchBrowse() {
             padding: '0 8px 0 12px',
             background: 'var(--rn-clr-background-primary)',
             color: 'var(--rn-clr-content-primary)',
-            border: '2px solid var(--rn-clr-border-opaque, #9ca3af)',
+            border: `3px solid ${FRAME}`,
             borderRadius: '10px',
-            boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+            boxShadow: '0 0 0 1px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.4)',
             fontSize: '12px',
           }}
         >
@@ -720,7 +735,16 @@ export function SearchBrowse() {
             color: 'var(--rn-clr-content-secondary)',
           }}
         >
-          <span />
+          <input
+            type="checkbox"
+            ref={allBoxRef}
+            checked={rows.length > 0 && rows.every((r) => selected.has(rowKey(r)))}
+            onChange={toggleAll}
+            disabled={!rows.length}
+            tabIndex={-1}
+            title={`Select or unselect all ${rows.length} loaded rows`}
+            style={{ margin: 0 }}
+          />
           {columns.map((c) => (
             <span
               key={c.key}
@@ -758,7 +782,8 @@ export function SearchBrowse() {
                   padding: '5px 10px',
                   alignItems: 'center',
                   borderTop: '1px solid var(--rn-clr-background-tertiary)',
-                  background: isSel ? 'var(--rn-clr-background-accent, rgba(59,130,246,0.12))' : undefined,
+                  background: isSel ? SELECTED_BG : undefined,
+                  boxShadow: isSel ? `inset 3px 0 0 ${FRAME}` : undefined,
                   outline: focus === i ? RING : 'none',
                   outlineOffset: '-2px',
                   cursor: 'default',

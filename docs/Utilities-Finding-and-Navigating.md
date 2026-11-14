@@ -54,7 +54,7 @@ On the desktop, with the [AI helper](Desktop-Helpers.md#search) running and pair
 - `source:*M23*`, `refs:"Service power margin"`: by Source, or backlinks;
 - `is:due card:cloze`, `rated:7:forgot`, `suppressed:rem`: by card state, review history, or why a card is hidden.
 
-The [Search Engine](Search-Engine.md) page lists every key, with examples. If a query can't be read, a line under the box says why and Find Rem searches the words instead. Without the helper (on the iPhone, on the web, or with the helper off), Find Rem works as described above and treats these keys as ordinary words.
+The [Search Engine](Search-Engine.md) page lists every key, with examples. To see everything a search finds in a sortable table, with bulk actions and saved searches, use [Search & Browse](Search-Engine.md#browse) (`sb`). If a query can't be read, a line under the box says why and Find Rem searches the words instead. Without the helper (on the iPhone, on the web, or with the helper off), Find Rem works as described above and treats these keys as ordinary words.
 
 ### Find by alias
 
