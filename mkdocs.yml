@@ -56,6 +56,7 @@ extra:
 
 markdown_extensions:
   - attr_list
+  - def_list
   - md_in_html
   - admonition
   - pymdownx.details
@@ -111,6 +112,7 @@ nav:
       - Text & Lists: Utilities-Text-and-Lists.md
       - Outline & Headings: Utilities-Outline-and-Headings.md
       - Finding & Navigating: Utilities-Finding-and-Navigating.md
+      - Search Engine: Search-Engine.md
       - Queue Display: Utilities-Queue-Display.md
       - True or False Cards: Utilities-True-or-False-Cards.md
       - Multiple-Choice Cards: Utilities-Multiple-Choice-Cards.md

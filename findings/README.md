@@ -16,6 +16,7 @@ A finding earns a file here when getting it wrong costs real time: a silent fail
 | [MEDIA_AND_FILE_STORAGE.md](MEDIA_AND_FILE_STORAGE.md) | Linked vs stored images and audio (`%LOCAL_FILE%`), the two importer calls through which a plugin can upload, and why audio relabelled as an image will not play on iOS |
 | [VIDEO_PLAYBACK.md](VIDEO_PLAYBACK.md) | Why YouTube embeds die in the plugin sandbox, the Embed Website + postMessage escape, RemNote video Rems (`vi` URL, `ip` LastWatchedTime), local video files, transcripts (dead ANDROID proxy, RemNote's server RPC, yt-dlp works) |
 | [PLUGIN_BRIDGE_AND_SDK.md](PLUGIN_BRIDGE_AND_SDK.md) | Plugin bridge and SDK traps: storage limits, built-in powerup membership, retired slots, lazy children, shortcuts, filtered document widgets that don't follow a zoom, `setType(DEFAULT_TYPE)` rejected by the bridge, PDF readers inside floating widgets, theme variables in iframes, build pitfalls |
+| [SEARCH_AND_DATABASE.md](SEARCH_AND_DATABASE.md) | Why a plugin's search can't AND (RemNote ORs and cuts to 1,000 by a query-blind rank), the search tables and their fields (references indexed at the end), Rem and card document fields, finding changed Rems through the indexed `y` stamp, index traps, slot values kept in two places (property children vs a stale `ps` copy), bulk edit times |
 | [support-reports/](support-reports/) | Reports sent to RemNote support, with their follow-ups |
 
 ## How findings are established

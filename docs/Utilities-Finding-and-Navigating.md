@@ -46,24 +46,14 @@ It also asks for the **whole query as a phrase**, which is the one thing that pu
 
 ### Search with the AI helper { #search-with-the-ai-helper }
 
-On the desktop, with the [AI helper](Desktop-Helpers.md#search) running and paired, Find Rem searches through the helper, and a ⚡ shows in the box. Every word you type must then be in the Rem, so `bow weather wave` finds the one note that has all three words even when each word alone is in thousands of Rems. You can also write:
+On the desktop, with the [AI helper](Desktop-Helpers.md#search) running and paired, Find Rem searches through the plugin's [Search Engine](Search-Engine.md), and a ⚡ shows in the box. Every word you type must then be in the Rem, so `bow weather wave` finds the one note that has all three words even when each word alone is in thousands of Rems. You can also narrow the search, Anki style:
 
-| Type | To find |
-|---|---|
-| `bow weather` | Rems with both words (each matched from its start: `bow` also finds *bowsprit*) |
-| `bow or bowsprit` | either word |
-| `bow -tug` | `bow` but not `tug` |
-| `bow (wave or sea)` | `bow` with `wave`, or `bow` with `sea` |
-| `"bow flare"` | the words side by side |
-| `w:bow` | the whole word only |
-| `alias:"sea margin"` | Rems found through one of their aliases |
-| `in:"Wärtsilä Encyclopedia"` | the document and everything under it (or `in:` and a Rem id) |
-| `parent:"Bow flare"` | only that Rem's direct children |
-| `path:pscpp` | Rems with that word in the name of a Rem above them |
+- `bow (wave or sea) -tug`: or, exclusions, groups, `"phrases"`;
+- `in:"Wärtsilä Encyclopedia" squat`, `in:*miguens* radar`: under a document;
+- `tag:anki* squat`, `is:concept`, `is:incremental prop:incdue<=0`: by tag, kind or slot value;
+- `source:*M23*`, `refs:"Service power margin"`: by Source, or backlinks.
 
-Accents and capitals never matter. The syntax is [Anki's](https://docs.ankiweb.net/searching.html), so its manual applies to these parts. If a query can't be read (an unclosed bracket or quote, a name that several Rems share), a line under the box says why and Find Rem searches the words instead.
-
-Without the helper (on the iPhone, on the web, or with the helper off), Find Rem works as described above and treats `or`, `-` and the rest as ordinary words.
+The [Search Engine](Search-Engine.md) page lists every key, with examples. If a query can't be read, a line under the box says why and Find Rem searches the words instead. Without the helper (on the iPhone, on the web, or with the helper off), Find Rem works as described above and treats these keys as ordinary words.
 
 ### Find by alias
 

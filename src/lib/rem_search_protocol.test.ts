@@ -1,7 +1,7 @@
 /** The AI helper's search answer and query syntax (rem_search_protocol.ts). Run with `npm test`. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSearchResponse, usesQuerySyntax } from './rem_search_protocol';
+import { parseRemIdsResponse, parseSearchResponse, usesQuerySyntax } from './rem_search_protocol';
 
 describe('parseSearchResponse', () => {
   it('reads hits, keeping the alias a Rem matched through', () => {
@@ -42,5 +42,15 @@ describe('usesQuerySyntax', () => {
     for (const q of ['bow weather wave', 'under-keel clearance', 'navegação interior', 'fig. 6.4', 'order', 'android', 'fig. 6.4: squat', 'e.g. squat', '3:30']) {
       assert.equal(usesQuerySyntax(q), false, q);
     }
+  });
+});
+
+describe('parseRemIdsResponse', () => {
+  it('reads the ids, and gives null for anything that is not an answer', () => {
+    assert.deepEqual(parseRemIdsResponse({ ok: true, remIds: ['go7LdXuu9hpAZH12G', '', 3] }), ['go7LdXuu9hpAZH12G']);
+    assert.deepEqual(parseRemIdsResponse({ ok: true, remIds: [] }), []);
+    assert.equal(parseRemIdsResponse({ ok: true, queryError: { kind: 'index-building' } }), null);
+    assert.equal(parseRemIdsResponse({ ok: false, error: 'boom' }), null);
+    assert.equal(parseRemIdsResponse(null), null);
   });
 });

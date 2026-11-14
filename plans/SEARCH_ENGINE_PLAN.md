@@ -1,7 +1,7 @@
 # Search engine — design proposal
 
 Maintainer notes, not published (the docs site is built from `docs/` only).
-**Status:** approved 2026-11-14 (all four decisions in §9 as proposed); phase 1 shipped in v1.0.231; phase 2 in progress.
+**Status:** approved 2026-11-14 (all four decisions in §9 as proposed); phases 1 and 2 shipped in v1.0.231; phase 3 (cards) in progress.
 
 **Goal:** an Anki-style query language over the knowledge base, run by the local helper against
 `remnote.db`, returning Rem (or card) ids. First user: Find Rem (`fir`). Later: a browser widget,
@@ -215,7 +215,7 @@ independently of this plan.
       `alias:`), `in:`/`parent:`/`path:`, `/search` with the pairing token, the plugin client, Find
       Rem integration with the ⚡ marker and parse errors. Python tests on the parser and on a
       fixture DB; a TS test on the client fallback. *Fixes `bow weather wave`.*
-- [ ] **2. Sidecar index + Rem filters.** *Code done 2026-11-14, awaiting the user's test: `scripts/rem_index.py` (index in `~/.incremental-remnote/search/<kb>.sqlite`, ~180 MB and ~17 s to build for 443k Rems, refreshed in ~5 ms from quanta's indexed `y` stamp, built in the background by the helper), keys in `rem_search.py`, 29 tests. Findings: visible powerup slots live in property children with a stale `ps` copy (newest write wins); `y` tracks local and synced writes. Docs and changelog after approval.* `tag:`, `is:` (Rem kinds), `has:`, `source:`, `refs:`,
+- [x] **2. Sidecar index + Rem filters.** Shipped with v1.0.231 (same changelog entry); docs: `docs/Search-Engine.md`, findings: `findings/SEARCH_AND_DATABASE.md`. *Built 2026-11-14: `scripts/rem_index.py` (index in `~/.incremental-remnote/search/<kb>.sqlite`, ~180 MB and ~17 s to build for 443k Rems, refreshed in ~5 ms from quanta's indexed `y` stamp, built in the background by the helper), keys in `rem_search.py`, 29 tests. Findings: visible powerup slots live in property children with a stale `ps` copy (newest write wins); `y` tracks local and synced writes. Docs and changelog after approval.* *Then: `*` in in:/parent: (documents and folders first, else any Rem, ≤200), source:/refs: (names of Source and referenced Rems kept in the index), names shared by several Rems cover all of them; `/search/source` route + `remsWithSourceViaHelper` used by findIncrementalRemForPDF, getCacheRemsForPDF, findAllRemsForPDF/HTML.* `tag:`, `is:` (Rem kinds), `has:`, `source:`, `refs:`,
       slots and the `prop:` aliases, `added:`/`edited:`, `id:`.
 - [ ] **3. Cards.** `card:`, card `is:` states, `ml:`, `prop:due/ivl/reps/lapses`, `rated:`,
       `introduced:`, `mode=cards`.

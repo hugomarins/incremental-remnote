@@ -13,7 +13,7 @@
 import type { RNPlugin } from '@remnote/plugin-sdk';
 import { aiHelperPairingTokenId } from './consts';
 import { getIESetting } from './settings';
-import { HelperSearchResult, parseSearchResponse } from './rem_search_protocol';
+import { HelperSearchResult, parseRemIdsResponse, parseSearchResponse } from './rem_search_protocol';
 
 export type { HelperQueryError, HelperSearchHit, HelperSearchResult } from './rem_search_protocol';
 export { usesQuerySyntax } from './rem_search_protocol';
@@ -34,32 +34,66 @@ async function currentKbId(plugin: RNPlugin): Promise<string | null> {
   return kbIdCache;
 }
 
+type HelperPost = { status: 'ok'; body: any } | { status: 'unpaired' } | { status: 'unavailable' };
+
+/** POST to a token-guarded helper route for the current knowledge base. Never throws. */
+async function postToHelper(
+  plugin: RNPlugin,
+  path: string,
+  payload: Record<string, unknown>,
+  opts?: { signal?: AbortSignal; timeoutMs?: number }
+): Promise<HelperPost> {
+  const kbId = await currentKbId(plugin);
+  if (!kbId) return { status: 'unavailable' };
+  const token = ((await getIESetting(plugin, aiHelperPairingTokenId)) ?? '').trim();
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts?.timeoutMs ?? TIMEOUT_MS);
+  opts?.signal?.addEventListener('abort', () => controller.abort());
+  try {
+    const res = await fetch(`${SEARCH_HELPER_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-IR-Token': token },
+      body: JSON.stringify({ kbId, ...payload }),
+      signal: controller.signal,
+    });
+    if (res.status === 403) return { status: 'unpaired' };
+    if (!res.ok) return { status: 'unavailable' };
+    return { status: 'ok', body: await res.json() };
+  } catch {
+    return { status: 'unavailable' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Search the current knowledge base through the helper. Never throws. */
 export async function searchViaHelper(
   plugin: RNPlugin,
   query: string,
   opts?: { limit?: number; signal?: AbortSignal }
 ): Promise<HelperSearchResult> {
-  const kbId = await currentKbId(plugin);
-  if (!kbId) return { status: 'unavailable' };
-  const token = ((await getIESetting(plugin, aiHelperPairingTokenId)) ?? '').trim();
+  const res = await postToHelper(plugin, '/search', { query, limit: opts?.limit ?? 100 }, opts);
+  return res.status === 'ok' ? parseSearchResponse(res.body) : res;
+}
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  opts?.signal?.addEventListener('abort', () => controller.abort());
-  try {
-    const res = await fetch(`${SEARCH_HELPER_URL}/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-IR-Token': token },
-      body: JSON.stringify({ kbId, query, limit: opts?.limit ?? 100 }),
-      signal: controller.signal,
-    });
-    if (res.status === 403) return { status: 'unpaired' };
-    if (!res.ok) return { status: 'unavailable' };
-    return parseSearchResponse(await res.json());
-  } catch {
-    return { status: 'unavailable' };
-  } finally {
-    clearTimeout(timer);
-  }
+/**
+ * The Rems whose Sources list `sourceId` (with `incrementalOnly`, only IncRems), from
+ * the helper's index, or null when the helper can't answer (off, unpaired, mobile,
+ * index still being built). A single indexed lookup, replacing a walk over every
+ * IncRem's Sources. Callers still verify each Rem and keep their own caches: the
+ * index follows RemNote's database on disk, which can trail a Rem made seconds ago.
+ */
+export async function remsWithSourceViaHelper(
+  plugin: RNPlugin,
+  sourceId: string,
+  opts?: { incrementalOnly?: boolean }
+): Promise<string[] | null> {
+  const res = await postToHelper(
+    plugin,
+    '/search/source',
+    { sourceId, incrementalOnly: !!opts?.incrementalOnly },
+    { timeoutMs: 3000 }
+  );
+  return res.status === 'ok' ? parseRemIdsResponse(res.body) : null;
 }

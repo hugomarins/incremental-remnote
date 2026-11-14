@@ -6,9 +6,9 @@ This page documents the major changes and improvements for each version of the I
 
 ### ✨ New
 
-**Find Rem**: with the AI helper running on the desktop, Find Rem now finds Rems that have every word you typed, which RemNote's own search could drop, and understands `or`, `-word`, `"phrases"` and `in:"Document"`; without the helper, words split by a Rem reference ("[sea margin] becomes useless") now find their note too.
+**Search Engine**: with the AI helper running on the desktop, Find Rem now searches with an Anki-style query language: every word must match (RemNote's own search could drop such Rems), with `or`, `-word`, `"phrases"`, `in:"Document"`, `tag:`, `is:`, `source:`, `refs:`, slot and property values, and `*` wildcards; the PDF tools find a source's IncRems through the same index instead of checking every IncRem; and without the helper, words split by a Rem reference ("[sea margin] becomes useless") now find their note too.
 
-📖 [Find Rem → Search with the AI helper](Utilities-Finding-and-Navigating.md#search-with-the-ai-helper)
+📖 [Search Engine](Search-Engine.md)
 
 ## v1.0.230 - November 14th, 2026
 

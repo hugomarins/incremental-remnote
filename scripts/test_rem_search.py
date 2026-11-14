@@ -235,12 +235,23 @@ class SearchTest(unittest.TestCase):
         self.assertEqual(self.rems('path:wartsila sea'), {FLARE})
 
     def test_name_resolution(self):
-        with self.assertRaises(SearchError) as ctx:
-            rs.search(KB, 'in:notes', db_path=self.db)
-        self.assertEqual(ctx.exception.kind, 'ambiguous')
-        with self.assertRaises(SearchError) as ctx:
-            rs.search(KB, 'in:"no such thing"', db_path=self.db)
-        self.assertEqual(ctx.exception.kind, 'not-found')
+        # A name shared by several Rems covers all of them.
+        self.assertEqual(self.rems('in:notes'), {DUP1, DUP2})
+        self.assertEqual(self.rems('in:*rtsila*'), {BOOK, BOW, FLARE})
+        # Documents win over other Rems with a matching name: *a* names the Wärtsilä and
+        # Archive documents, and also OTHER ("…heavy weather"), which is then left out.
+        self.assertEqual(self.rems('in:*a* weather'), {FLARE})
+        self.assertEqual(self.rems('in:*ote* -in:archive'), {DUP1})  # no document matches: any Rem
+        self.assertEqual(self.rems('in:wart* -in:wartsila*'), set())
+        self.assertEqual(self.rems('parent:"bow*"'), {FLARE})
+        for query, kind in (('in:"no such thing"', 'not-found'), ('in:*nothing like it*', 'not-found'),
+                            (f'in:{ids("NONE")}', 'not-found')):
+            with self.subTest(query=query):
+                with self.assertRaises(SearchError) as ctx:
+                    rs.search(KB, query, db_path=self.db)
+                self.assertEqual(ctx.exception.kind, kind)
+                if '"' in query:
+                    self.assertIn('*', ctx.exception.message)  # the hint to use a wildcard
 
     def test_relevance_then_rank(self):
         # Both match "bow"; the short title is the better text match.
@@ -296,7 +307,13 @@ class IndexSearchTest(unittest.TestCase):
 
     def test_references_and_ids(self):
         self.assertEqual(self.rems('source:"Wärtsilä Encyclopedia of Ship Technology"'), {FLARE})
+        self.assertEqual(self.rems('source:*encyclopedia*'), {FLARE})
+        self.assertEqual(self.rems(f'source:{BOOK}'), {FLARE})
         self.assertEqual(self.rems('refs:"service power margin"'), {FLARE})
+        self.assertEqual(self.rems('refs:service*'), {FLARE})
+        with self.assertRaises(SearchError) as ctx:
+            rs.search(KB, 'source:*bow*', db_path=self.db, index_file=self.index)  # bow is no one's Source
+        self.assertEqual(ctx.exception.kind, 'not-found')
         self.assertEqual(self.rems(f'id:{BOW},{OTHER}'), {BOW, OTHER})
 
     def test_dates(self):
@@ -332,6 +349,15 @@ class IndexSearchTest(unittest.TestCase):
         self.assertEqual(self.rems('bow is:concept'), {BOW})
         self.assertEqual(self.rems('bow -tag:"anki card"'), {FLARE, OTHER})
         self.assertEqual(self.rems('heavy (tag:incremental or has:source)'), {FLARE})
+
+    def test_rems_with_source(self):
+        db = ri.ready(KB, self.db, self.index)
+        try:
+            self.assertEqual(ri.rems_with_source(db, BOOK), [FLARE])
+            self.assertEqual(ri.rems_with_source(db, BOOK, incremental_only=True), [])
+            self.assertEqual(ri.rems_with_source(db, BOW), [])
+        finally:
+            db.close()
 
     def test_helper_never_waits_for_a_build(self):
         with self.assertRaises(SearchError) as ctx:

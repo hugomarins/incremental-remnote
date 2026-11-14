@@ -20,8 +20,10 @@ Terms (plans/SEARCH_ENGINE_PLAN.md §4):
     "two words"     the words side by side
     w:word          that whole word
     alias:text      only through one of the Rem's aliases
-    in:<name|id>    the Rem and everything under it
-    parent:<name|id> its direct children
+    in:<name|id>    the Rem and everything under it; a name matches every Rem named so,
+                    and `*` matches part of a name (in:*M23*): the documents and folders
+                    it matches, or, when there are none, any Rem (up to 200)
+    parent:<name|id> their direct children (names as for in:)
     path:text       text in the names of the ancestors
   needing the helper's own index (rem_index.py):
     tag:name        tagged with it (`*` wildcards; tag:none = no tag); a powerup's
@@ -29,8 +31,9 @@ Terms (plans/SEARCH_ENGINE_PLAN.md §4):
     is:concept|descriptor|portal|document|folder|flashcard|image|pdf|incremental|
        dismissed|pdf-highlight|html-highlight
     has:alias|source|tag|powerup:<code or name>
-    source:<name|id>  has that Rem among its Sources
-    refs:<name|id>  its text references that Rem
+    source:<name|id>  has that Rem among its Sources (names as for in:, `*` matched
+                    among the Rems that are someone's Source)
+    refs:<name|id>  its text references that Rem (`*` among referenced Rems)
     id:a,b,c        these Rems
     added:N, edited:N  created / text edited in the last N days (1 = today)
     owner.name:text   a slot or property value: owner is a powerup's code or name, or
@@ -442,39 +445,59 @@ def check_schema(db):
             raise SearchError('schema', f'RemNote\'s search index has changed ({table} lacks {", ".join(sorted(missing))}).')
 
 
-def resolve_rem(db, key, value, at):
-    """A Rem id, from an id or an exact name. A name shared by several Rems is resolved
-    to the only document or folder among them; otherwise it's an error listing them."""
+MAX_SCOPES = 200       # in:/parent: with a wildcard: Rems whose subtrees are ORed
+MAX_TARGETS = 2000     # source:/refs: with a wildcard
+
+
+def resolve_rems(db, key, value, at, indexed=False):
+    """{Rem id: its ancestor_ids} for `key:value`: one id, every Rem named exactly
+    `value` (folded), or, with `*` in `value`, every Rem whose name matches it. For
+    source: and refs: on the helper's index (`indexed`), names are matched among the
+    Rems that are a Source or are referenced, which the index keeps (ms); otherwise
+    among every Rem's name in RemNote's search index (~0.3 s)."""
     if REM_ID_RE.match(value):
-        row = db.execute('SELECT id, ancestor_ids FROM remsSearchInfos WHERE id = ? LIMIT 1', (value,)).fetchone()
-        if row:
-            return row[0], row[1] or ''
+        row = db.execute('SELECT ancestor_ids FROM remsSearchInfos WHERE id = ? LIMIT 1', (value,)).fetchone()
+        if row or key in ('source', 'refs'):
+            return {value: (row[0] if row else '') or ''}
+        raise SearchError('not-found', f'No Rem has the id {value}.', at)
     name = fold(value)
+    if '*' in name:
+        _, pattern = like_or_equal(name)
+        if indexed and key in ('source', 'refs'):
+            rows = db.execute(
+                """SELECT DISTINCT id, '' FROM names WHERE name LIKE ? ESCAPE '\\'
+                   AND id IN (SELECT target FROM refs WHERE kind = ?)""",
+                (pattern, 'source' if key == 'source' else 'text')).fetchall()
+        else:
+            # Documents and folders first, as they are what one searches under (Anki's
+            # decks): *miguens* names 53 of them and 1,074 Rems in all. Any Rem only
+            # when no document matches.
+            scan = """SELECT DISTINCT id, ancestor_ids FROM remsSearchInfos
+                      WHERE json_extract(doc, '$.r') LIKE ? ESCAPE '\\'"""
+            rows = db.execute(scan + " AND (json_extract(doc, '$.i') = 1 OR json_extract(doc, '$.l') = 1)",
+                              (pattern,)).fetchall()
+            if not rows:
+                rows = db.execute(scan, (pattern,)).fetchall()
+        found = {rid: anc or '' for rid, anc in rows}
+        if not found:
+            raise SearchError('not-found', f'No Rem name matches "{value}".', at)
+        cap = MAX_TARGETS if key in ('source', 'refs') else MAX_SCOPES
+        if len(found) > cap:
+            raise SearchError('too-many', f'{key}:{value} matches {len(found):,} Rems; make the name more '
+                              f'precise (at most {cap}).', at)
+        return found
     expr = fts_term(value, 'phrase')
-    if not expr:
-        raise SearchError('not-found', f'No Rem is named "{value}".', at)
-    rows = db.execute(
-        '''SELECT s.id, s.ancestor_ids, s.ancestor_not_ref_text,
-                  json_extract(s.doc, '$.r'), json_extract(s.doc, '$.i'), json_extract(s.doc, '$.l')
-           FROM remsSearchInfos s
-           WHERE s.ftsRowId IN (SELECT rowid FROM remsContents WHERE remsContents MATCH ?)''',
-        (expr,)).fetchall()
-    exact = {}
-    for rid, anc, path, raw, is_doc, is_folder in rows:
-        if fold(raw or '') == name:
-            exact.setdefault(rid, (anc or '', fold(path or ''), bool(is_doc) or bool(is_folder)))
-    if not exact:
-        raise SearchError('not-found', f'No Rem is named exactly "{value}".', at)
-    if len(exact) > 1:
-        docs = {rid: v for rid, v in exact.items() if v[2]}
-        if len(docs) == 1:
-            exact = docs
-    if len(exact) > 1:
-        listed = '; '.join(f'{(v[1] or "(top level)")} [{rid}]' for rid, v in list(exact.items())[:5])
-        more = f' and {len(exact) - 5} more' if len(exact) > 5 else ''
-        raise SearchError('ambiguous', f'{len(exact)} Rems are named "{value}": {listed}{more}. Use {key}:<id>.', at)
-    rid, (anc, _, _) = next(iter(exact.items()))
-    return rid, anc
+    found = {}
+    if expr:
+        for rid, anc, raw in db.execute(
+                """SELECT s.id, s.ancestor_ids, json_extract(s.doc, '$.r') FROM remsSearchInfos s
+                   WHERE s.ftsRowId IN (SELECT rowid FROM remsContents WHERE remsContents MATCH ?)""", (expr,)):
+            if fold(raw or '') == name:
+                found.setdefault(rid, anc or '')
+    if not found:
+        raise SearchError('not-found', f'No Rem is named exactly "{value}". For part of a name, use * '
+                          f'({key}:*{value}*).', at)
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -524,14 +547,23 @@ class Compiler:
                 self.rank_terms.append(expr)
             return f'({FTS_IN} AND s.aliasId <> s.id)' if term.alias_only else FTS_IN
         if term.kind == 'in':
-            rid, anc = resolve_rem(self.db, 'in', term.value, term.at)
-            prefix = f'{anc} {rid}'
-            self.args += [rid, prefix, prefix + '~']
-            return '(s.id = ? OR (s.ancestor_ids >= ? AND s.ancestor_ids < ?))'
+            # Every Rem the name matches, with everything under each of them: one
+            # indexed range of ancestor_ids per scope, UNIONed. ORing the ranges in
+            # the WHERE instead keeps SQLite off the index (1.9 s for 11 scopes).
+            scopes = resolve_rems(self.db, 'in', term.value, term.at)
+            ranges = []
+            for rid, anc in scopes.items():
+                prefix = f'{anc} {rid}'
+                self.args += [prefix, prefix + '~']
+                ranges.append('SELECT ftsRowId FROM remsSearchInfos WHERE ancestor_ids >= ? AND ancestor_ids < ?')
+            ids = list(scopes)
+            self.args += ids
+            return (f"(s.ftsRowId IN ({' UNION ALL '.join(ranges)})"
+                    f" OR s.id IN ({','.join('?' * len(ids))}))")
         if term.kind == 'parent':
-            rid, _ = resolve_rem(self.db, 'parent', term.value, term.at)
-            self.args.append(rid)
-            return "json_extract(s.doc, '$.p') = ?"
+            ids = list(resolve_rems(self.db, 'parent', term.value, term.at))
+            self.args += ids
+            return f"json_extract(s.doc, '$.p') IN ({','.join('?' * len(ids))})"
         if term.kind == 'path':
             conds = []
             for tok in words(term.value):
@@ -575,9 +607,9 @@ class Compiler:
             return ('s.id IN (SELECT rem FROM rem_powerups WHERE code IN'
                     ' (SELECT code FROM powerups WHERE name = ? OR lower(code) = ?))')
         if k in ('source', 'refs'):
-            rid, _ = resolve_rem(self.db, k, term.value, term.at)
-            self.args += [rid, 'source' if k == 'source' else 'text']
-            return 's.id IN (SELECT rem FROM refs WHERE target = ? AND kind = ?)'
+            ids = list(resolve_rems(self.db, k, term.value, term.at, indexed=True))
+            self.args += [*ids, 'source' if k == 'source' else 'text']
+            return f's.id IN (SELECT rem FROM refs WHERE target IN ({",".join("?" * len(ids))}) AND kind = ?)'
         if k == 'id':
             ids = term.value.split(',')
             self.args += ids

@@ -27,7 +27,9 @@ What it records, per Rem (field names from RemNote 1.30.2-beta's bundle):
                  rem_search keeps only the most recently written (`at`).
     refs         references in the key and back text ('text'), in the Sources slot
                  (`os_os`: 'source'), and in other slot and property values ('value')
-    names        the name of every Rem used as a tag, property or powerup
+    names        the name of every Rem used as a tag, property or powerup, and of
+                 every Rem referenced in text or listed as a Source (so source:*x* and
+                 refs:*x* match names in ms instead of scanning every Rem)
 
     python3 scripts/rem_index.py --kb <id> build      # rebuild from scratch
     python3 scripts/rem_index.py --kb <id> status
@@ -49,7 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import history_archive  # noqa: E402  (KB paths, read-only open)
 
 INDEX_DIR = Path.home() / '.incremental-remnote' / 'search'
-SCHEMA_VERSION = '5'
+SCHEMA_VERSION = '6'
 # Re-read Rems written up to this long before the last stamp seen: commits and
 # clocks need not arrive in stamp order. Re-reading is idempotent.
 OVERLAP_MS = 10_000
@@ -276,6 +278,7 @@ class Reader:
 
         for target in ref_ids(key) + ref_ids(value):
             out['refs'].append((target, 'text'))
+            out['names'][target] = None
 
         for slot_key, entry in (d.get('ps') or {}).items():
             code, _, slot = slot_key.partition('_')
@@ -318,6 +321,8 @@ class Reader:
         kind = 'source' if (owner, name) == SOURCES else 'value'
         for t in targets:
             out['refs'].append((t, kind))
+            if kind == 'source':
+                out['names'][t] = None
 
 
 # ---------------------------------------------------------------------------
@@ -524,6 +529,15 @@ def ready(kb_id, db_path=None, index_file=None):
     finally:
         src.close()
     return db
+
+
+def rems_with_source(db, source_id, incremental_only=False):
+    """Rems whose Sources slot lists `source_id`, from an open, refreshed index. Unlike
+    a search it doesn't go through RemNote's search index, which lags behind new Rems."""
+    sql = "SELECT DISTINCT rem FROM refs WHERE target = ? AND kind = 'source'"
+    if incremental_only:
+        sql += " AND rem IN (SELECT rem FROM rem_powerups WHERE code = 'incremental')"
+    return [r[0] for r in db.execute(sql, (source_id,))]
 
 
 def status(kb_id, index_file=None):

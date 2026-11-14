@@ -110,7 +110,7 @@ ALLOWED_ORIGINS = {o.strip() for o in os.environ.get('IR_AI_ORIGINS', '').split(
 HOME = Path.home() / '.incremental-remnote' / 'ai-ocr'
 TOKEN_FILE = HOME / 'pairing-token'
 # Routes that hand out the knowledge base's content: only a caller with the token.
-TOKEN_ROUTES = {'/search'}
+TOKEN_ROUTES = {'/search', '/search/source'}
 TOKEN_HEADER = 'X-IR-Token'
 PDF_CACHE = HOME / 'pdf-cache'
 CROPS = HOME / 'crops'
@@ -1298,6 +1298,30 @@ def handle_search(req, entry):
     return out
 
 
+def handle_search_source(req, entry):
+    """Rems whose Sources list `sourceId` (`incrementalOnly`: IncRems only), from the
+    helper's index, which follows RemNote's Rem records rather than its search index.
+    While the index is being built the answer is `queryError` index-building and the
+    plugin uses its own (slower) lookup."""
+    if rem_search is None or history_archive is None:
+        raise RuntimeError('rem_search.py or history_archive.py is missing: download both next to ai_ocr_helper.py')
+    kb_id = history_archive.check_kb_id(req.get('kbId'))
+    source_id = req.get('sourceId')
+    if not isinstance(source_id, str) or not rem_search.REM_ID_RE.match(source_id):
+        raise ValueError(f'not a Rem id: {source_id!r}')
+    index = rem_search.rem_index
+    if index.is_building(kb_id) or index.needs_build(kb_id):
+        index.build_in_background(kb_id, log=lambda m: print(m, flush=True))
+        return {'queryError': {'kind': 'index-building', 'message': 'The search index is being built.'}}
+    db = index.ready(kb_id)
+    try:
+        rem_ids = index.rems_with_source(db, source_id, bool(req.get('incrementalOnly')))
+    finally:
+        db.close()
+    entry.update(results=len(rem_ids))
+    return {'remIds': rem_ids}
+
+
 MEDIA_PREFIX = '/media/'
 MEDIA_CHUNK = 1 << 20
 
@@ -1309,7 +1333,8 @@ ROUTES = {'/ocr': handle_ocr, '/locate': handle_locate, '/find-source': handle_f
           '/video-library-relink': handle_video_library_relink, '/video-scan': handle_video_scan,
           '/video-file': handle_video_file,
           '/history/scan': handle_history_scan, '/history/ghosts': handle_history_ghosts,
-          '/history/status': handle_history_status, '/search': handle_search}
+          '/history/status': handle_history_status, '/search': handle_search,
+          '/search/source': handle_search_source}
 
 
 class Handler(BaseHTTPRequestHandler):

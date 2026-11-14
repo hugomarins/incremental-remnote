@@ -54,6 +54,12 @@ export function parseSearchResponse(body: any): HelperSearchResult {
   };
 }
 
+/** The helper's /search/source answer → Rem ids, or null when it didn't answer one. */
+export function parseRemIdsResponse(body: any): string[] | null {
+  if (!body || body.ok !== true || body.queryError || !Array.isArray(body.remIds)) return null;
+  return body.remIds.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+}
+
 /**
  * Whether a query uses the helper's syntax (operators, quotes, brackets, keys), so
  * RemNote's word search can't stand in for it. Plain words return false.

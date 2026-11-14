@@ -6,7 +6,7 @@ A RemNote plugin runs sandboxed: it cannot start programs, open files on your co
 
 | Helper | What it is for | Program | Address | Set up in |
 |---|---|---|---|---|
-| **AI helper** | [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md), [Pin Source Quote](Source-Pins.md), [Incremental Video](Incremental-Video.md#setup) screenshots and transcripts, the [review history of deleted Rems](#history-archive), and [searching with AND, OR and NOT](#search) | `ai_ocr_helper.py` + `history_archive.py` + `rem_search.py` (Python) | `127.0.0.1:3457` | [this page](#setup) |
+| **AI helper** | [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md), [Pin Source Quote](Source-Pins.md), [Incremental Video](Incremental-Video.md#setup) screenshots and transcripts, the [review history of deleted Rems](#history-archive), and the [Search Engine](Search-Engine.md) | `ai_ocr_helper.py` + `history_archive.py` + `rem_search.py` + `rem_index.py` (Python) | `127.0.0.1:3457` | [this page](#setup) |
 | **Local Media Bridge** | Scripts and AI assistants writing through the RemNote MCP: local images, Rem operations, [Upscale image with ChatGPT](Local-Media-Bridge.md#upscale), [Read aloud and Add pronunciation](Read-Aloud.md) | `media_bridge.py` (Python) | `127.0.0.1:3460` | [Local Media Bridge](Local-Media-Bridge.md#setup) |
 | **Logos bridge** | Reading [Logos Bible Software](Logos-Bible-Software-Integration.md) books incrementally (macOS) | `LogosBridge.app`, built by `build.sh` | `127.0.0.1:3458` | [Logos integration](Logos-Bible-Software-Integration.md#setup) |
 | **Source finder** (yours) | Telling [Pin Source Quote](Source-Pins.md#no-source-open) which book a quote comes from when no PDF is open | Any program you write, run by the AI helper | — | [Source Pins](Source-Pins.md#source-finder-setup) |
@@ -58,9 +58,11 @@ The plugin's messages call it the **AI helper**, although most of what it does i
       https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/history_archive.py
     curl -o ~/.incremental-remnote/rem_search.py \
       https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/rem_search.py
+    curl -o ~/.incremental-remnote/rem_index.py \
+      https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/rem_index.py
     ```
 
-    The second file keeps the [review history of deleted Rems](#history-archive), and the third, which needs the second, does [searching with AND, OR and NOT](#search). Without them, everything else works.
+    The second file keeps the [review history of deleted Rems](#history-archive). The last two, which need the second, run the [Search Engine](Search-Engine.md). Without them, everything else works.
 
 3. **Start it:**
 
@@ -203,7 +205,7 @@ To find a card by its text, replace `WHERE i.state != 'live'` with `WHERE m.text
 
 RemNote's search, the only one a plugin can use, looks for any of the words you type and keeps the first 1,000 Rems by a ranking that ignores your words. A Rem holding every word you typed can be cut before the plugin sees it: in one knowledge base, `bow weather wave` matched 5,874 Rems on any word and a single Rem on all three, and that one was cut.
 
-With `rem_search.py` next to the helper, [Find Rem](Utilities-Finding-and-Navigating.md#search-with-the-ai-helper) searches through the helper instead. The helper reads RemNote's own search index in its local database (`~/remnote/remnote-<id>/remnote.db`), never writes to it, and runs a real search: every word must match, and `or`, `-word`, `"phrases"`, brackets and `in:"Document"` work. A search takes a few milliseconds.
+With `rem_search.py` and `rem_index.py` next to the helper, [Find Rem](Utilities-Finding-and-Navigating.md#search-with-the-ai-helper) searches through the helper instead, with the [Search Engine](Search-Engine.md)'s query language: every word must match, and `or`, `-word`, `"phrases"`, `in:`, `tag:`, `is:`, `source:`, slot and property values work. The helper reads RemNote's local database (`~/remnote/remnote-<id>/remnote.db`) and never writes to it. For the keys beyond plain text it keeps its own index of the knowledge base in `~/.incremental-remnote/search/`: about 180 MB for 440,000 Rems, built once in about 20 seconds, then updated before each search in a few milliseconds. The plugin also asks this index which Rems have a PDF or web page as their Source, instead of checking every IncRem.
 
 **Pair the plugin with the helper.** Any web page open in your browser can reach a program on your computer, so the helper only answers searches that carry its pairing token. It creates the token the first time it starts.
 
@@ -231,6 +233,7 @@ Everything is under `~/.incremental-remnote/`:
 | `ai-ocr/pdf-cache/`, `video-frames/`, `video-transcripts/`, `video-audio/`, `whisper/` | Caches and the speech model. Downloaded audio is deleted after a week. |
 | `history-archive/` | The [review history archive](#history-archive), one SQLite file per knowledge base |
 | `ai-ocr/pairing-token` | The token the plugin sends with [searches](#search) |
+| `search/` | The [Search Engine](Search-Engine.md)'s index, one SQLite file per knowledge base, readable only by you. Deleting it is safe: the helper builds it again. |
 
 ## AI helper troubleshooting { #troubleshooting }
 
