@@ -1,5 +1,8 @@
 # Search Engine
 
+!!! warning "Desktop only, Mac only"
+    The Search Engine, Search & Browse and ✨ AI work only in **RemNote's desktop app on a Mac**, with the [AI helper](Desktop-Helpers.md#search) running and paired. They are not available on Windows, Linux, the web app, the iPhone or Android. Everywhere else, Find Rem uses RemNote's own search and the rest of the plugin works as usual.
+
 On the desktop, the plugin can search your knowledge base with a query language modelled on [Anki's](https://docs.ankiweb.net/searching.html): every word must match, and you can combine words with `or` and `-`, search under a document, or filter by tag, Rem type, Source, slot or property value, card state and review history. Two tools use it: [Find Rem](Utilities-Finding-and-Navigating.md#find-rem-reference-or-open), where a ⚡ in the search box means the search engine answered, and [Search & Browse](#browse), a table of everything a search finds.
 
 The engine runs in the [AI helper](Desktop-Helpers.md#search) on your computer, reading RemNote's own database without changing it. On the iPhone, on the web, or with the helper off, Find Rem uses RemNote's search as before, and the keys on this page are read as ordinary words.
@@ -281,7 +284,7 @@ Each card gets one cause, the first that applies in this order. `is:disabled` (o
 
 ## Search & Browse { #browse }
 
-**Search & Browse** (quick code `sb`) lists everything a search finds in a table, as Anki's Browser does, and lets you act on it. Try it below (example data; the demo knows a subset of the keys):
+**Search & Browse** (quick code `sb`) lists everything a search finds in a table, as Anki's Browser does, and lets you act on it. **Desktop app on a Mac only**, with the AI helper running. Try it below (example data; the demo knows a subset of the keys):
 
 <iframe src="../demos/search-browse.html" title="Search & Browse demo" loading="lazy" style="width:100%;height:560px;border:0;display:block"></iframe>
 
@@ -293,7 +296,7 @@ Each card gets one cause, the first that applies in this order. `is:disabled` (o
 
 ### ✨ AI: search in your own words { #ai }
 
-Write what you are looking for in plain language, in any language, and press **✨ AI** (or Ctrl/Cmd+Enter): Claude writes the search, the box shows it, and it runs. The line under the box shows your words and the search they became; the search stays editable, and ↑ brings your words back to rephrase them.
+**Desktop app on a Mac only**, with the AI helper running and Claude Code signed in. Write what you are looking for in plain language, in any language, and press **✨ AI** (or Ctrl/Cmd+Enter): Claude writes the search, the box shows it, and it runs. The line under the box shows your words and the search they became; the search stays editable, and ↑ brings your words back to rephrase them.
 
 ![✨ AI turning a request into a search in Search & Browse](assets/search-natural-language-AI.png)
 

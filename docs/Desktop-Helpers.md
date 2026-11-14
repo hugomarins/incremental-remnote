@@ -209,6 +209,9 @@ To find a card by its text, replace `WHERE i.state != 'live'` with `WHERE m.text
 
 ## Searching with AND, OR and NOT { #search }
 
+!!! warning "Mac only"
+    The [Search Engine](Search-Engine.md), Search & Browse and ✨ AI run only with RemNote's desktop app on a Mac.
+
 RemNote's search, the only one a plugin can use, looks for any of the words you type and keeps the first 1,000 Rems by a ranking that ignores your words. A Rem holding every word you typed can be cut before the plugin sees it: in one knowledge base, `bow weather wave` matched 5,874 Rems on any word and a single Rem on all three, and that one was cut.
 
 With `rem_search.py` and `rem_index.py` next to the helper, [Find Rem](Utilities-Finding-and-Navigating.md#search-with-the-ai-helper) searches through the helper instead, with the [Search Engine](Search-Engine.md)'s query language: every word must match, and `or`, `-word`, `"phrases"`, `in:`, `tag:`, `is:`, `source:`, slot and property values work. The helper reads RemNote's local database (`~/remnote/remnote-<id>/remnote.db`) and never writes to it. For the keys beyond plain text it keeps its own index of the knowledge base in `~/.incremental-remnote/search/`: about 180 MB for 440,000 Rems, built once in about 20 seconds, then updated before each search in a few milliseconds. The plugin also asks this index which Rems have a PDF or web page as their Source, instead of checking every IncRem.

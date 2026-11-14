@@ -46,6 +46,9 @@ It also asks for the **whole query as a phrase**, which is the one thing that pu
 
 ### Search with the AI helper { #search-with-the-ai-helper }
 
+!!! warning "Desktop only, Mac only"
+    This needs RemNote's desktop app on a Mac with the [AI helper](Desktop-Helpers.md#search) running. Elsewhere (Windows, Linux, web, phone), Find Rem works as described above.
+
 On the desktop, with the [AI helper](Desktop-Helpers.md#search) running and paired, Find Rem searches through the plugin's [Search Engine](Search-Engine.md), and a ⚡ shows in the box. Every word you type must then be in the Rem, so `bow weather wave` finds the one note that has all three words even when each word alone is in thousands of Rems. You can also narrow the search, Anki style:
 
 - `bow (wave or sea) -tug`: or, exclusions, groups, `"phrases"`;
