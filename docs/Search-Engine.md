@@ -1,6 +1,6 @@
 # Search Engine
 
-On the desktop, the plugin can search your knowledge base with a query language modelled on [Anki's](https://docs.ankiweb.net/searching.html): every word must match, and you can combine words with `or` and `-`, search under a document, or filter by tag, Rem type, Source, slot or property value. [Find Rem](Utilities-Finding-and-Navigating.md#find-rem-reference-or-open) uses it: a ⚡ in the search box means the search engine answered.
+On the desktop, the plugin can search your knowledge base with a query language modelled on [Anki's](https://docs.ankiweb.net/searching.html): every word must match, and you can combine words with `or` and `-`, search under a document, or filter by tag, Rem type, Source, slot or property value, card state and review history. [Find Rem](Utilities-Finding-and-Navigating.md#find-rem-reference-or-open) uses it: a ⚡ in the search box means the search engine answered.
 
 The engine runs in the [AI helper](Desktop-Helpers.md#search) on your computer, reading RemNote's own database without changing it. On the iPhone, on the web, or with the helper off, Find Rem uses RemNote's search as before, and the keys on this page are read as ordinary words.
 
@@ -185,6 +185,88 @@ The plugin's own values have shortcuts:
 `edited:1`
 :   Rems whose text was written today. This counts any change to the text, including ones made by a plugin or a bulk command, as Anki's `edited:` does.
 
+## Cards { #cards }
+
+A Rem matches when one of its cards does. Card searches written together must hold for the **same card**: `is:due card:cloze` is a Rem with a due cloze card, not one with a due card and some other cloze card.
+
+`is:due`
+:   a card whose next review time has passed. Cards in a paused deck are left out, as RemNote's queue leaves them out.
+
+`is:new`
+:   a card never answered (or not since its last Reset).
+
+`is:review`
+:   a card answered at least once since its last Reset.
+
+`is:learn-new`
+:   a card waiting in RemNote's *Learn New* queue.
+
+`card:forward`, `card:backward`, `card:cloze`
+:   the card's type.
+
+`ml:growing`
+:   RemNote's mastery level: `new`, `acquiring`, `growing`, `solidifying`, `retaining`, `notyetlearned`.
+
+`prop:due<=-7`
+:   next review a week ago or earlier: days from today, `0` today, `1` tomorrow. Unlike `is:due`, it compares the date alone, so it counts cards in paused decks too.
+
+`prop:ivl>=30`
+:   an interval of 30 days or more: the days from the last review to the next.
+
+`prop:reps>10`, `prop:lapses>3`
+:   answered more than 10 times; forgotten more than 3 times. Both count since the last Reset, and leave out partial reps of list cards, as RemNote's own scheduling does.
+
+`rated:1`
+:   answered today. `rated:7` covers the last 7 days.
+
+`rated:7:forgot`
+:   answered *Forgot* in the last 7 days; also `hard`, `good`, `easy`, or Anki's buttons `1` to `4`, and `skip` for *Too early*.
+
+`introduced:30`
+:   first answered in the last 30 days.
+
+`cid:Wb4KrNxFckJjwNkAC`
+:   these cards.
+
+`is:due card:cloze in:"PSCPP" prop:lapses>=3`
+:   due cloze cards under *PSCPP* that you have forgotten three times or more.
+
+## Suppressed cards { #suppressed }
+
+Some cards can never come up in a queue. These keys find them, with the same causes, in the same order, as the [Suppressed Cards](Prioritization-&-Sorting.md#suppressed-cards) tab of the Weighted Shield:
+
+`is:suppressed`
+:   a card RemNote won't put in any queue, for any reason.
+
+`suppressed:paused` (also `is:paused`)
+:   inside a paused deck. The nearest deck above decides: an active deck inside a paused one is not paused.
+
+`suppressed:ancestor`
+:   under a Rem with *Disable Descendant Cards*.
+
+`suppressed:rem`
+:   cards switched off on the Rem itself (its *Enable Cards* toggle, or *Disable Descendant Cards* on the Rem).
+
+`suppressed:table`
+:   the same, in a table row or cell: RemNote creates them with cards off.
+
+`suppressed:direction`
+:   a forward or backward card whose direction is switched off.
+
+`suppressed:cloze`
+:   a cloze switched off card by card, or with `/Disable All Cloze Cards`.
+
+`suppressed:removed` (also `is:not-generated`)
+:   the cloze or back side the card came from is gone; its history is kept.
+
+`suppressed:other`
+:   none of the above.
+
+Each card gets one cause, the first that applies in this order. `is:disabled` (or Anki's `is:suspended`) finds every card RemNote won't show except paused ones, which keep their due dates.
+
+`suppressed:rem in:"PSCPP"`
+:   Rems under *PSCPP* switched off on purpose: the ones worth a look.
+
 ## Wildcards { #wildcards }
 
 | Key | `*` | `_` |
@@ -212,14 +294,11 @@ Find Rem shows one line under the box, then searches the words with RemNote's se
 | *This "(" is never closed*, *This quote is never closed*, *"or" needs a search term on each side* … | The query can't be read as written. |
 | *No Rem is named exactly "…"* | Check the name, or use `*` for part of it. |
 | *… matches 1,074 Rems; make the name more precise* | A `*` in `in:` matched too many Rems. |
-| *"is:due" is about cards, which come in a later phase* | Card searches are not available yet. |
 | *The helper is indexing this knowledge base* | Once, for about 20 seconds; try again then. |
 | *The AI helper is running but not paired* | Paste the token ([pairing](Desktop-Helpers.md#search)). |
 | *… need the AI helper on the desktop* | The query uses search keys and the helper isn't answering. |
 
 ## Not available { #not-available }
-
-Coming in a later version: card searches such as `is:due`, `card:cloze`, `rated:7`, `prop:ivl` and `introduced:30`.
 
 Not planned: regular expressions (`re:`), wildcards inside a word (`d*g`), and Anki's flags, presets and duplicates, which have no counterpart in RemNote.
 
@@ -228,8 +307,8 @@ Not planned: regular expressions (`re:`), wildcards inside a word (`d*g`), and A
 The helper reads two things, never writing to either:
 
 - **RemNote's search index** for words, phrases and where a Rem sits (`in:`, `path:`). These searches take a few milliseconds.
-- **Its own index** of the knowledge base, for everything else: tags, kinds, Sources, references, dates, slot and property values. It is kept in `~/.incremental-remnote/search/` (about 180 MB for 440,000 Rems, readable only by you), built once in about 20 seconds, and brought up to date before each search from what RemNote wrote since the last one.
+- **Its own index** of the knowledge base, for everything else: tags, kinds, Sources, references, dates, slot and property values, cards and their reviews. It is kept in `~/.incremental-remnote/search/` (about 240 MB for 440,000 Rems and 72,000 cards, readable only by you), built once in about 25 seconds, and brought up to date before each search from what RemNote wrote since the last one. It reads some switches RemNote never shows a plugin (a Rem's *Enable Cards* toggle, its directions, its switched-off clozes), which is how it can tell every suppression cause apart.
 
 A Rem created a moment ago can be missing until RemNote has written it to its database, and its words until RemNote has indexed them; RemNote's own search has the same delay.
 
-The plugin also uses the helper's index to find which Rems have a PDF or web page as their Source, for the PDF reader and the parent picker, instead of checking every IncRem in turn.
+The plugin also uses the helper's index to find which Rems have a PDF or web page as their Source, for the PDF reader and the parent picker, instead of checking every IncRem in turn; and the [Suppressed Cards](Prioritization-&-Sorting.md#suppressed-cards) tab reads each card's cause from it.

@@ -678,7 +678,9 @@ Hovering any cause — in the list above the table or in its column header — s
 
 Anything you have looked at can be marked **✓ checked**, which is remembered across devices, shown as a count next to each bucket's off-rem number, and can be filtered out of the list — so working through a few hundred Rems over several sittings picks up where you left off.
 
-**Paused decks must be scanned before they can be counted.** Pausing a deck does not clear its cards' `nextRepetitionTime`, so without the scan those cards read as *due* everywhere. Press **⏸ Scan paused decks** in the analytics tab (one pass over the knowledge base, then cached) and the `Paused` column fills in; until then the status bar says so in as many words rather than showing a confident zero.
+**With the [AI helper](Desktop-Helpers.md#search)** running and paired, **Compute** asks it for every card's cause instead of working them out Rem by Rem. The helper reads the switches RemNote keeps but never shows a plugin (a Rem's *Enable Cards* toggle, its directions, its switched-off clozes, whether it sits in a table), so causes are read as stored rather than inferred, paused decks need no scan, and the status bar adds *causes read by the AI helper*. The same causes can be searched in Find Rem with [`suppressed:`](Search-Engine.md#suppressed).
+
+**Without the helper, paused decks must be scanned before they can be counted.** Pausing a deck does not clear its cards' `nextRepetitionTime`, so without the scan those cards read as *due* everywhere. Press **⏸ Scan paused decks** in the analytics tab (one pass over the knowledge base, then cached) and the `Paused` column fills in; until then the status bar says so in as many words rather than showing a confident zero.
 
 #### FSRS Calibration { #fsrs-calibration }
 

@@ -13,7 +13,12 @@ edits arriving through sync, and the lookup costs ~0 ms (it has an index).
 
 What it records, per Rem (field names from RemNote 1.30.2-beta's bundle):
     rems         type (1 concept, 2 descriptor, 6 portal), createdAt, text edit time
-                 (`key,u`/`value,u`), parent
+                 (`key,u`/`value,u`), parent, and what decides whether its cards are
+                 shown: `forget` (cards off), `efc` (forward off), `enableBackSR`
+                 (backward on), `dci` (disabled clozes), `vt` (1 = table) and whether
+                 the Rem is in a table (itself or an ancestor; computed at build and
+                 for each re-read Rem, so a Rem turned into a table later only reaches
+                 its descendants at the next rebuild)
     rem_tags     `tp` entries whose target is an ordinary Rem
     rem_powerups `tp` entries whose target represents a powerup (`rcrt`), plus `apu`
     props        every value with a name: powerup slots (`ps` "<code>_<slot>", legacy
@@ -57,7 +62,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import history_archive  # noqa: E402  (KB paths, read-only open)
 
 INDEX_DIR = Path.home() / '.incremental-remnote' / 'search'
-SCHEMA_VERSION = '7'
+SCHEMA_VERSION = '8'
 # Re-read Rems written up to this long before the last stamp seen: commits and
 # clocks need not arrive in stamp order. Re-reading is idempotent.
 OVERLAP_MS = 10_000
@@ -71,7 +76,8 @@ SOURCES = ('os', 'os')  # the Sources powerup slot, as (owner, name)
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS rems (
-    id TEXT PRIMARY KEY, parent TEXT, type INTEGER, created INTEGER, edited INTEGER);
+    id TEXT PRIMARY KEY, parent TEXT, type INTEGER, created INTEGER, edited INTEGER,
+    forget INTEGER, efc INTEGER, back_sr INTEGER, dci TEXT, vt INTEGER, in_table INTEGER);
 CREATE INDEX IF NOT EXISTS rems_type ON rems(type);
 CREATE INDEX IF NOT EXISTS rems_created ON rems(created);
 CREATE INDEX IF NOT EXISTS rems_edited ON rems(edited);
@@ -99,7 +105,7 @@ CREATE TABLE IF NOT EXISTS refs (rem TEXT NOT NULL, src TEXT NOT NULL, target TE
 CREATE INDEX IF NOT EXISTS refs_target ON refs(target, kind);
 CREATE INDEX IF NOT EXISTS refs_src ON refs(src);
 CREATE TABLE IF NOT EXISTS cards (
-    id TEXT PRIMARY KEY, rem TEXT, kind TEXT, next INTEGER, next_day INTEGER, last INTEGER,
+    id TEXT PRIMARY KEY, rem TEXT, kind TEXT, cloze TEXT, next INTEGER, next_day INTEGER, last INTEGER,
     ivl INTEGER, ml TEXT, ny INTEGER, nogen INTEGER, created INTEGER, reps INTEGER,
     lapses INTEGER, first_rep INTEGER);
 CREATE INDEX IF NOT EXISTS cards_rem ON cards(rem);
@@ -278,7 +284,11 @@ class Reader:
             self.powerup_of[rid] = d['rcrt']
         key, value = d.get('key'), d.get('value')
         edited = max([v for v in (d.get('key,u'), d.get('value,u')) if isinstance(v, (int, float))] or [0]) or None
-        out['rem'] = (rid, d.get('parent'), d.get('type'), d.get('createdAt'), edited)
+        dci = d.get('dci')
+        out['rem'] = (rid, d.get('parent'), d.get('type'), d.get('createdAt'), edited,
+                      int(bool(d.get('forget'))), int(bool(d.get('efc'))), int(bool(d.get('enableBackSR'))),
+                      json.dumps([str(x) for x in dci]) if isinstance(dci, list) and dci else None,
+                      d.get('vt') if isinstance(d.get('vt'), int) else None, 0)
 
         for tag, entry in (d.get('tp') or {}).items():
             if not (isinstance(entry, dict) and entry.get('t')):
@@ -363,7 +373,7 @@ def _write(db, reader, docs, fresh=False):
     for rid, d in docs:
         rows = reader.rows(rid, d)
         if rows['rem']:
-            db.execute('INSERT OR REPLACE INTO rems VALUES (?,?,?,?,?)', rows['rem'])
+            db.execute('INSERT OR REPLACE INTO rems VALUES (?,?,?,?,?,?,?,?,?,?,?)', rows['rem'])
         owner_rem = rows.get('host') or rid
         db.executemany('INSERT INTO rem_tags VALUES (?, ?)', [(rid, t) for t in rows['tags']])
         db.executemany('INSERT INTO rem_powerups VALUES (?, ?)', [(rid, c) for c in rows['powerups']])
@@ -382,6 +392,51 @@ def _write(db, reader, docs, fresh=False):
 
 
 BUILD_BATCH = 5000
+
+
+def mark_tables_all(db):
+    """in_table for every Rem: it is a table (vt = 1) or sits under one."""
+    parent, table = {}, set()
+    for rid, par, vt in db.execute('SELECT id, parent, vt FROM rems'):
+        parent[rid] = par
+        if vt == 1:
+            table.add(rid)
+    memo = {}
+
+    def inside(rid):
+        chain = []
+        while rid is not None and rid not in memo and len(chain) < 200:
+            if rid in table:
+                memo[rid] = True
+                break
+            chain.append(rid)
+            rid = parent.get(rid)
+        result = memo.get(rid, False) if rid is not None else False
+        for r in chain:
+            memo[r] = result
+        return result
+
+    hits = [rid for rid in parent if inside(rid)]
+    db.execute('UPDATE rems SET in_table = 0')
+    for chunk in range(0, len(hits), 500):
+        part = hits[chunk:chunk + 500]
+        db.execute(f'UPDATE rems SET in_table = 1 WHERE id IN ({",".join("?" * len(part))})', part)
+    return len(hits)
+
+
+def mark_tables(db, ids):
+    """in_table for re-read Rems, walking up through the index's parents."""
+    for rid in ids:
+        cur, inside, hops = rid, 0, 0
+        while cur is not None and hops < 200:
+            row = db.execute('SELECT parent, vt FROM rems WHERE id = ?', (cur,)).fetchone()
+            if not row:
+                break
+            if row[1] == 1:
+                inside = 1
+                break
+            cur, hops = row[0], hops + 1
+        db.execute('UPDATE rems SET in_table = ? WHERE id = ?', (inside, rid))
 
 # RemNote's QueueInteractionScore (bundle enum, 1.30.2-beta).
 ANSWERS = {0: 'forgot', 0.5: 'hard', 1: 'good', 1.5: 'easy'}
@@ -418,7 +473,7 @@ def card_rows(cid, d):
     nxt = d.get('a') if isinstance(d.get('a'), (int, float)) else None
     last = d.get('l') if isinstance(d.get('l'), (int, float)) else None
     ivl = round((nxt - last) / DAY_MS) if nxt is not None and last is not None else None
-    row = (cid, d.get('rId'), kind, nxt, day_of_ms(nxt) if nxt is not None else None, last, ivl, d.get('ml'),
+    row = (cid, d.get('rId'), kind, None if kind != 'cloze' else str(c), nxt, day_of_ms(nxt) if nxt is not None else None, last, ivl, d.get('ml'),
            int(bool(d.get('ny'))), int(bool(d.get('b'))), d.get('e'), reps, lapses, first)
     rep_rows = [(cid, d.get('rId'), r['date'], r.get('score')) for r in history]
     return row, rep_rows
@@ -436,7 +491,7 @@ def _write_cards(db, docs, fresh=False):
         if not d:
             continue
         row, rep_rows = card_rows(cid, d)
-        db.execute('INSERT OR REPLACE INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', row)
+        db.execute('INSERT OR REPLACE INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', row)
         db.executemany('INSERT INTO reps VALUES (?,?,?,?)', rep_rows)
 
 
@@ -471,6 +526,7 @@ def build(kb_id, db_path=None, index_file=None):
                     batch = []
             _write(db, reader, batch, fresh=True)
             total += len(batch)
+            mark_tables_all(db)
             card_high, cards = 0, []
             for cid, doc, y in src.execute("SELECT _id, doc, json_extract(doc, '$.y') FROM cards"):
                 if doc:
@@ -551,6 +607,7 @@ def refresh(db, kb_id, src):
                 high = max(high, int(y))
         db.execute('BEGIN')
         _write(db, reader, docs)
+        mark_tables(db, [rid for rid, d in docs if d])
         for rid, code in reader.powerup_of.items():
             db.execute('INSERT OR REPLACE INTO powerups VALUES (?, ?, ?)', (code, rid, fold(reader.name(rid))))
         set_meta(db, 'watermark', high)

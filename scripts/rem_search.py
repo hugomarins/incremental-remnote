@@ -49,6 +49,12 @@ Terms (plans/SEARCH_ENGINE_PLAN.md §4):
        last Reset), is:review, is:learn-new, is:disabled (= is:suspended: RemNote
        won't show it), is:not-generated (its cloze or back is gone, history kept)
     is:paused       under a paused deck (the nearest deck above decides)
+    is:suppressed   a card RemNote won't put in a queue, for any reason
+    suppressed:paused|ancestor|rem|table|direction|cloze|removed|other  why, one
+                    cause per card, decided in the order of the Weighted Shield's
+                    Suppressed Cards tab: paused deck, an ancestor's Disable
+                    Descendant Cards, cards off on the Rem (table rows and cells
+                    apart), direction off, cloze switched off (`dci`), text removed
     ml:new|acquiring|growing|solidifying|retaining|notyetlearned
     prop:due<=-7    days from today to the next time; prop:ivl, prop:reps, prop:lapses
     rated:7, rated:7:forgot|hard|good|easy (or 1-4, Anki's buttons), rated:7:skip
@@ -98,7 +104,19 @@ IS_CARD = {
     'suspended': ('c.next IS NULL AND c.nogen = 0', False),
     'not-generated': ('c.nogen = 1', False),
 }
-IS_ALL = sorted([*IS_DOC_FLAGS, *IS_TYPES, *IS_POWERUPS, *IS_CARD, 'paused'])
+IS_ALL = sorted([*IS_DOC_FLAGS, *IS_TYPES, *IS_POWERUPS, *IS_CARD, 'paused', 'suppressed'])
+SUPPRESSED = ['paused', 'ancestor', 'rem', 'table', 'direction', 'cloze', 'removed', 'other']
+# A card's cause once paused decks and disabling ancestors are ruled out (card `c`, its
+# Rem `r`); `c.next IS NULL` is RemNote's mark of a card it won't show.
+CARD_CAUSE = """CASE
+    WHEN c.next IS NOT NULL THEN NULL
+    WHEN r.forget = 1 OR c.rem IN (SELECT rem FROM rem_powerups WHERE code = 'u')
+        THEN CASE WHEN r.in_table = 1 THEN 'table' ELSE 'rem' END
+    WHEN (c.kind = 'forward' AND r.efc = 1) OR (c.kind = 'backward' AND IFNULL(r.back_sr, 0) = 0)
+        THEN 'direction'
+    WHEN c.kind = 'cloze' AND instr(IFNULL(r.dci, ''), '"' || c.cloze || '"') > 0 THEN 'cloze'
+    WHEN c.nogen = 1 THEN 'removed'
+    ELSE 'other' END"""
 CARD_KINDS = {'forward', 'backward', 'cloze'}
 MASTERY = {'new', 'acquiring', 'growing', 'solidifying', 'retaining', 'notyetlearned'}
 CARD_PROPS = {'due': 'c.next_day - :today', 'ivl': 'c.ivl', 'reps': 'c.reps', 'lapses': 'c.lapses'}
@@ -373,9 +391,14 @@ class Parser:
             v = value.strip().lower()
             if v in IS_CARD:
                 return Term('card', v, at=at, name='is')
-            if v not in IS_DOC_FLAGS and v not in IS_TYPES and v not in IS_POWERUPS and v != 'paused':
+            if v not in IS_DOC_FLAGS and v not in IS_TYPES and v not in IS_POWERUPS and v not in ('paused', 'suppressed'):
                 self.fail('unknown-value', f'"is:{value}" is not known. Try is:{", is:".join(IS_ALL)}.', at)
             return Term('is', v, at=at)
+        if k == 'suppressed':
+            v = value.strip().lower()
+            if v not in SUPPRESSED:
+                self.fail('unknown-value', f'Try suppressed:{", suppressed:".join(SUPPRESSED)}, or is:suppressed.', at)
+            return Term('is', 'suppressed:' + v, at=at)
         if k == 'card':
             v = value.strip().lower()
             if v not in CARD_KINDS:
@@ -723,6 +746,36 @@ class Compiler:
         self.args += args
         return sql
 
+    def ancestor_disabled_sql(self):
+        """Rems strictly below a Rem with Disable Descendant Cards (powerup `u`)."""
+        ranges, args = [], []
+        for (rid,) in self.db.execute("SELECT rem FROM rem_powerups WHERE code = 'u'"):
+            row = self.db.execute('SELECT ancestor_ids FROM remsSearchInfos WHERE id = ? LIMIT 1', (rid,)).fetchone()
+            prefix = f"{(row[0] if row else '') or ''} {rid}"
+            ranges.append('SELECT ftsRowId FROM remsSearchInfos WHERE ancestor_ids >= ? AND ancestor_ids < ?')
+            args += [prefix, prefix + '~']
+        if not ranges:
+            return '(0)'
+        self.args += args
+        return f"(s.ftsRowId IN ({' UNION ALL '.join(ranges)}))"
+
+    def suppressed_sql(self, cause):
+        """is:suppressed (cause '') or suppressed:<cause>: one cause per card, in the
+        Suppressed Cards tab's order (lib/card_analytics_export.ts classifyUnscheduled)."""
+        has_card = 's.id IN (SELECT rem FROM cards)'
+        hidden = 's.id IN (SELECT c.rem FROM cards c WHERE c.next IS NULL)'
+        if cause == '':
+            return f'(({self.paused_sql()} AND {has_card}) OR {hidden})'
+        if cause == 'paused':
+            return f'({self.paused_sql()} AND {has_card})'
+        not_paused = f'NOT {self.paused_sql()}'
+        if cause == 'ancestor':
+            return f'({not_paused} AND {self.ancestor_disabled_sql()} AND {hidden})'
+        not_ancestor = f'NOT {self.ancestor_disabled_sql()}'
+        self.args.append(cause)
+        return (f'({not_paused} AND {not_ancestor} AND s.id IN (SELECT c.rem FROM cards c '
+                f'JOIN rems r ON r.id = c.rem WHERE ({CARD_CAUSE}) = ?))')
+
     def index_leaf(self, term):
         k = term.kind
         if k == 'card':
@@ -739,6 +792,8 @@ class Compiler:
             v = term.value
             if v == 'paused':
                 return self.paused_sql()
+            if v == 'suppressed' or v.startswith('suppressed:'):
+                return self.suppressed_sql(v.partition(':')[2])
             if v in IS_DOC_FLAGS:
                 return f"json_extract(s.doc, '$.{IS_DOC_FLAGS[v]}') = 1"
             if v in IS_TYPES:
@@ -896,6 +951,36 @@ def search(kb_id, query, limit=DEFAULT_LIMIT, db_path=None, index_file=None, wai
                 item['aliasId'] = v['alias']
             results.append(item)
         return {'results': results, 'total': len(by_rem), 'ms': int((time.time() - started) * 1000)}
+    finally:
+        db.close()
+
+
+def card_causes(kb_id, db_path=None, index_file=None, wait=True):
+    """Every card RemNote won't put in a queue, with its cause: {cardId: cause} where
+    cause is one of SUPPRESSED, or 'missing' when the card's Rem is gone. Also the Rems
+    in a table among them. For the Weighted Shield's Suppressed Cards tab, which
+    otherwise infers the causes Rem by Rem through the plugin bridge."""
+    db = open_index_for_search(kb_id, db_path, index_file, wait)
+    try:
+        comp = Compiler(db)
+        paused = comp.paused_sql()
+        ancestor = comp.ancestor_disabled_sql()
+        sql = f"""SELECT id, rem, cause, in_table FROM (
+                    SELECT c.id, c.rem, r.in_table,
+                      CASE WHEN r.id IS NULL THEN 'missing'
+                           WHEN {paused} THEN 'paused'
+                           WHEN c.next IS NULL AND {ancestor} THEN 'ancestor'
+                           ELSE ({CARD_CAUSE}) END AS cause
+                    FROM cards c
+                    LEFT JOIN rems r ON r.id = c.rem
+                    LEFT JOIN remsSearchInfos s ON s.id = c.rem AND s.aliasId = s.id)
+                  WHERE cause IS NOT NULL"""
+        causes, in_table = {}, set()
+        for cid, rem, cause, tab in db.execute(sql, comp.args):
+            causes[cid] = cause
+            if tab:
+                in_table.add(rem)
+        return {'causes': causes, 'inTable': sorted(in_table)}
     finally:
         db.close()
 

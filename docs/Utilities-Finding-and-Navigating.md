@@ -51,7 +51,8 @@ On the desktop, with the [AI helper](Desktop-Helpers.md#search) running and pair
 - `bow (wave or sea) -tug`: or, exclusions, groups, `"phrases"`;
 - `in:"Wärtsilä Encyclopedia" squat`, `in:*miguens* radar`: under a document;
 - `tag:anki* squat`, `is:concept`, `is:incremental prop:incdue<=0`: by tag, kind or slot value;
-- `source:*M23*`, `refs:"Service power margin"`: by Source, or backlinks.
+- `source:*M23*`, `refs:"Service power margin"`: by Source, or backlinks;
+- `is:due card:cloze`, `rated:7:forgot`, `suppressed:rem`: by card state, review history, or why a card is hidden.
 
 The [Search Engine](Search-Engine.md) page lists every key, with examples. If a query can't be read, a line under the box says why and Find Rem searches the words instead. Without the helper (on the iPhone, on the web, or with the helper off), Find Rem works as described above and treats these keys as ordinary words.
 

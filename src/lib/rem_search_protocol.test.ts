@@ -1,7 +1,7 @@
 /** The AI helper's search answer and query syntax (rem_search_protocol.ts). Run with `npm test`. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRemIdsResponse, parseSearchResponse, usesQuerySyntax } from './rem_search_protocol';
+import { parseRemIdsResponse, parseSearchResponse, parseSuppressionResponse, usesQuerySyntax } from './rem_search_protocol';
 
 describe('parseSearchResponse', () => {
   it('reads hits, keeping the alias a Rem matched through', () => {
@@ -35,7 +35,7 @@ describe('usesQuerySyntax', () => {
   it('spots operators, quotes, brackets and keys', () => {
     for (const q of ['bow -tug', 'bow or bowsprit', 'bow and wave', '"bow flare"', 'bow (wave)', 'in:PSCPP squat', 'w:bow', 'alias:x',
       'tag:anki squat', 'is:concept', '-is:incremental bow', 'prop:priority<20', 'incremental.priority<=5', 'ankicard.book:pna*', '*.book:x', 'added:7', 'has:alias',
-      'is:due', 'card:cloze squat', 'ml:growing', 'rated:7:forgot', 'introduced:30', 'prop:lapses>3']) {
+      'is:due', 'card:cloze squat', 'ml:growing', 'rated:7:forgot', 'introduced:30', 'prop:lapses>3', 'suppressed:table']) {
       assert.equal(usesQuerySyntax(q), true, q);
     }
   });
@@ -53,5 +53,15 @@ describe('parseRemIdsResponse', () => {
     assert.equal(parseRemIdsResponse({ ok: true, queryError: { kind: 'index-building' } }), null);
     assert.equal(parseRemIdsResponse({ ok: false, error: 'boom' }), null);
     assert.equal(parseRemIdsResponse(null), null);
+  });
+});
+
+describe('parseSuppressionResponse', () => {
+  it('reads causes and table Rems, dropping unknown causes', () => {
+    const out = parseSuppressionResponse({ ok: true, causes: { C1: 'paused', C2: 'cloze', C3: 'bogus' }, inTable: ['R1'] });
+    assert.deepEqual(out && [...out.causes], [['C1', 'paused'], ['C2', 'cloze']]);
+    assert.deepEqual(out && [...out.inTable], ['R1']);
+    assert.equal(parseSuppressionResponse({ ok: true, queryError: { kind: 'index-building' } }), null);
+    assert.equal(parseSuppressionResponse({ ok: false }), null);
   });
 });

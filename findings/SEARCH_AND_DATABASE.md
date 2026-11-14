@@ -89,6 +89,27 @@ stamps need not commit in order) before each search: ~5 ms.
   11 scopes); a `UNION ALL` of one range per scope uses it (0.39 s, the rest a name scan).
 - Scanning every Rem's name (`json_extract(doc, '$.r') LIKE …`) costs ~0.3 s.
 
+## Why a card isn't shown, as stored
+
+Every suppression but pausing clears the card's `a` (measured: all 443 cards under the
+15 Rems with Disable Descendant Cards). The cause is readable from stored fields, in the
+order of the Suppressed Cards tab (`classifyUnscheduled`):
+
+| Cause | Stored as |
+|---|---|
+| paused deck | nearest Deck (`de`) above has slot `s` = "Paused"; `a` stays set |
+| an ancestor's Disable Descendant Cards | an ancestor has powerup `u` |
+| off on the Rem | Rem `forget: true`, or powerup `u` on the Rem itself |
+| … in a table | the same, with the Rem or an ancestor having `vt: 1` (TABLE; 2 = LIST). 827 tables, 5,755 Rems in them |
+| direction off | forward card and Rem `efc: true`, or backward card without `enableBackSR` |
+| cloze switched off | the card's cloze id (`c`) is in the Rem's `dci` (4 Rems use it) |
+| text removed | card `b: true` |
+
+`dci`, `forget`, `efc` and `enableBackSR` never reach a plugin (the SDK's Rem serializer
+drops them), which is why the tab infers "switched off card by card"; the database has
+them as stored. Main KB, cards by cause: table 2,081, Rem 332, removed 324, direction 75,
+cloze 1, and 359 left for the paused/ancestor causes (`rem_search.py` `CARD_CAUSE`).
+
 ## Slot and property values live in two places
 
 - **User properties** of a tag are hidden child Rems of the tagged Rem: `ie: true`, `key` =

@@ -60,11 +60,35 @@ export function parseRemIdsResponse(body: any): string[] | null {
   return body.remIds.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
 }
 
+/** Why a card isn't shown, as the helper's /search/suppression names it. */
+export type HelperSuppressionCause =
+  | 'paused' | 'ancestor' | 'rem' | 'table' | 'direction' | 'cloze' | 'removed' | 'other' | 'missing';
+
+export interface HelperSuppression {
+  /** Card id → its cause, for every card RemNote won't put in a queue. */
+  causes: Map<string, HelperSuppressionCause>;
+  /** Rems among them that are a table or sit in one. */
+  inTable: Set<string>;
+}
+
+const SUPPRESSION_CAUSES = new Set(['paused', 'ancestor', 'rem', 'table', 'direction', 'cloze', 'removed', 'other', 'missing']);
+
+/** The helper's /search/suppression answer, or null when it didn't answer one. */
+export function parseSuppressionResponse(body: any): HelperSuppression | null {
+  if (!body || body.ok !== true || body.queryError || !body.causes || typeof body.causes !== 'object') return null;
+  const causes = new Map<string, HelperSuppressionCause>();
+  for (const [cardId, cause] of Object.entries(body.causes)) {
+    if (typeof cause === 'string' && SUPPRESSION_CAUSES.has(cause)) causes.set(cardId, cause as HelperSuppressionCause);
+  }
+  const inTable = new Set<string>(Array.isArray(body.inTable) ? body.inTable.filter((x: unknown) => typeof x === 'string') : []);
+  return { causes, inTable };
+}
+
 /**
  * Whether a query uses the helper's syntax (operators, quotes, brackets, keys), so
  * RemNote's word search can't stand in for it. Plain words return false.
  */
-const SEARCH_KEYS = 'w|alias|in|parent|path|tag|is|has|source|refs|id|added|edited|prop|card|ml|rated|introduced|cid';
+const SEARCH_KEYS = 'w|alias|in|parent|path|tag|is|has|source|refs|id|added|edited|prop|card|ml|rated|introduced|cid|suppressed';
 const SYNTAX_RE = new RegExp(
   // operators · quotes and brackets · key: · owner.name:value or owner.name<5 (a slot or property)
   `(^|\\s)(-\\S|or\\s|and\\s)|["()]|(^|\\s)-?(${SEARCH_KEYS}):|(^|\\s)-?[^\\s:]*[a-z*]\\.[a-z][^\\s:<>=]*(:|<|>|=)`,

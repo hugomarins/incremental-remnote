@@ -110,7 +110,7 @@ ALLOWED_ORIGINS = {o.strip() for o in os.environ.get('IR_AI_ORIGINS', '').split(
 HOME = Path.home() / '.incremental-remnote' / 'ai-ocr'
 TOKEN_FILE = HOME / 'pairing-token'
 # Routes that hand out the knowledge base's content: only a caller with the token.
-TOKEN_ROUTES = {'/search', '/search/source'}
+TOKEN_ROUTES = {'/search', '/search/source', '/search/suppression'}
 TOKEN_HEADER = 'X-IR-Token'
 PDF_CACHE = HOME / 'pdf-cache'
 CROPS = HOME / 'crops'
@@ -1322,6 +1322,21 @@ def handle_search_source(req, entry):
     return {'remIds': rem_ids}
 
 
+def handle_search_suppression(req, entry):
+    """Each card RemNote won't show, with its cause (rem_search.card_causes), for the
+    Suppressed Cards tab. `queryError` index-building while the index is built."""
+    if rem_search is None or history_archive is None:
+        raise RuntimeError('rem_search.py or history_archive.py is missing: download both next to ai_ocr_helper.py')
+    kb_id = history_archive.check_kb_id(req.get('kbId'))
+    try:
+        out = rem_search.card_causes(kb_id, wait=False)
+    except rem_search.SearchError as e:
+        entry['queryError'] = e.kind
+        return {'queryError': e.to_json()}
+    entry.update(results=len(out['causes']))
+    return out
+
+
 MEDIA_PREFIX = '/media/'
 MEDIA_CHUNK = 1 << 20
 
@@ -1334,7 +1349,7 @@ ROUTES = {'/ocr': handle_ocr, '/locate': handle_locate, '/find-source': handle_f
           '/video-file': handle_video_file,
           '/history/scan': handle_history_scan, '/history/ghosts': handle_history_ghosts,
           '/history/status': handle_history_status, '/search': handle_search,
-          '/search/source': handle_search_source}
+          '/search/source': handle_search_source, '/search/suppression': handle_search_suppression}
 
 
 class Handler(BaseHTTPRequestHandler):

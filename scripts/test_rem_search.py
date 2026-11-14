@@ -28,6 +28,9 @@ def ids(n):
 
 
 ROOT, BOOK, BOW, FLARE, MARGIN, OTHER, ARCHIVE, DUP1, DUP2 = (ids(f'R{i}') for i in range(9))
+# One Rem per suppression cause (see suppressed:)
+DISABLER, UNDER_U, TABLE, ROW, DIR, CLZ = (ids(f'S{i}') for i in range(6))
+SUPPRESSION_FIXTURE = {DISABLER, UNDER_U, TABLE, ROW, DIR, CLZ}
 
 # id, aliasId, parent, ancestors (root first), indexed text, raw text, is document
 ROWS = [
@@ -45,6 +48,12 @@ ROWS = [
     (ARCHIVE, ARCHIVE, None, [], 'archive', 'archive', True),
     (DUP1, DUP1, ROOT, [ROOT], 'notes', 'notes', False),
     (DUP2, DUP2, ARCHIVE, [ARCHIVE], 'notes', 'notes', False),
+    (DISABLER, DISABLER, ROOT, [ROOT], 'old deck', 'old deck', False),
+    (UNDER_U, UNDER_U, DISABLER, [ROOT, DISABLER], 'card under it', 'card under it', False),
+    (TABLE, TABLE, ROOT, [ROOT], 'a table', 'a table', False),
+    (ROW, ROW, TABLE, [ROOT, TABLE], 'a row', 'a row', False),
+    (DIR, DIR, ROOT, [ROOT], 'one way only', 'one way only', False),
+    (CLZ, CLZ, ROOT, [ROOT], 'a cloze switched off', 'a cloze switched off', False),
 ]
 
 
@@ -108,6 +117,23 @@ CARDS = {
     C_GONE: dict(rId=OTHER, c='123', a=None, l=None, ml='New', h=hist((5, 1)), b=True),
     C_PAUSED: dict(rId=DUP2, c='f', a=NOW - DAY, l=NOW - 9 * DAY, ml='Growing', h=hist((9, 1))),
 }
+CARDS.update({
+    ids('C6'): dict(rId=UNDER_U, c='f', a=None, l=None, ml='New', h=[]),
+    ids('C7'): dict(rId=ROW, c='f', a=None, l=None, ml='New', h=[]),
+    ids('C8'): dict(rId=DIR, c='f', a=None, l=None, ml='New', h=[]),
+    ids('C9'): dict(rId=DIR, c='b', a=NOW - DAY, l=None, ml='New', h=[]),  # its backward card is fine
+    ids('CA'): dict(rId=CLZ, c='777', a=None, l=None, ml='New', h=[]),
+    ids('CB'): dict(rId=CLZ, c='888', a=NOW - DAY, l=None, ml='New', h=[]),
+})
+DOCS.update({
+    DISABLER: {'key': ['old deck'], 'createdAt': 1, 'apu': {'u': {'v': True}}},
+    UNDER_U: {'key': ['card under it'], 'parent': DISABLER, 'createdAt': 1},
+    TABLE: {'key': ['a table'], 'parent': ROOT, 'createdAt': 1, 'vt': 1},
+    ROW: {'key': ['a row'], 'parent': TABLE, 'createdAt': 1, 'forget': True},
+    DIR: {'key': ['one way only'], 'parent': ROOT, 'createdAt': 1, 'efc': True, 'enableBackSR': True},
+    CLZ: {'key': ['a cloze switched off'], 'parent': ROOT, 'createdAt': 1, 'dci': ['777']},
+    DUP2: {'key': ['notes'], 'parent': ARCHIVE, 'createdAt': 1},
+})
 # ARCHIVE is a paused deck: DUP2 (under it) is paused.
 DOCS[ARCHIVE] = {'key': ['Archive'], 'createdAt': 1, 'ps': {'de_s': slot('Paused', 1)}, 'apu': {'de': {'v': True}}}
 
@@ -318,6 +344,10 @@ class IndexSearchTest(unittest.TestCase):
         out = rs.search(KB, query, db_path=self.db, index_file=self.index)
         return {r['remId'] for r in out['results']}
 
+    def card_rems(self, query):
+        """Like rems(), leaving out the Rems made for test_suppression_causes."""
+        return self.rems(query) - SUPPRESSION_FIXTURE
+
     def test_tags_and_powerups(self):
         self.assertEqual(self.rems('tag:"anki card"'), {BOW})  # OTHER's tag was removed (t: false)
         self.assertEqual(self.rems('tag:anki*'), {BOW})
@@ -391,47 +421,80 @@ class IndexSearchTest(unittest.TestCase):
             db.close()
 
     def test_card_states(self):
-        self.assertEqual(self.rems('is:due'), {BOW, FLARE})  # DUP2's card is due but paused
-        self.assertEqual(self.rems('is:paused'), {ARCHIVE, DUP2})
-        self.assertEqual(self.rems('is:new'), {BOW})
-        self.assertEqual(self.rems('is:review'), {BOW, FLARE, OTHER, DUP2})
-        self.assertEqual(self.rems('is:disabled'), {OTHER})
-        self.assertEqual(self.rems('is:suspended'), {OTHER})
-        self.assertEqual(self.rems('is:not-generated'), {OTHER})
-        self.assertEqual(self.rems('is:learn-new'), {OTHER})
-        self.assertEqual(self.rems('card:cloze'), {FLARE, OTHER})
-        self.assertEqual(self.rems('ml:growing'), {BOW, DUP2})
+        self.assertEqual(self.card_rems('is:due'), {BOW, FLARE})  # DUP2's card is due but paused
+        self.assertEqual(self.card_rems('is:paused'), {ARCHIVE, DUP2})
+        self.assertEqual(self.card_rems('is:new'), {BOW})
+        self.assertEqual(self.card_rems('is:review'), {BOW, FLARE, OTHER, DUP2})
+        self.assertEqual(self.card_rems('is:disabled'), {OTHER})
+        self.assertEqual(self.card_rems('is:suspended'), {OTHER})
+        self.assertEqual(self.card_rems('is:not-generated'), {OTHER})
+        self.assertEqual(self.card_rems('is:learn-new'), {OTHER})
+        self.assertEqual(self.card_rems('card:cloze'), {FLARE, OTHER})
+        self.assertEqual(self.card_rems('ml:growing'), {BOW, DUP2})
 
     def test_card_terms_hold_for_one_card(self):
         # BOW has a due forward card and a new backward card: no card is both.
-        self.assertEqual(self.rems('is:due card:backward'), set())
-        self.assertEqual(self.rems('is:due card:forward'), {BOW})
-        self.assertEqual(self.rems('is:new card:backward bow'), {BOW})
-        self.assertEqual(self.rems('-is:due card:forward'), {OTHER, DUP2})
+        self.assertEqual(self.card_rems('is:due card:backward'), set())
+        self.assertEqual(self.card_rems('is:due card:forward'), {BOW})
+        self.assertEqual(self.card_rems('is:new card:backward bow'), {BOW})
+        self.assertEqual(self.card_rems('-is:due card:forward'), {OTHER, DUP2})
 
     def test_card_numbers_and_history(self):
-        self.assertEqual(self.rems('prop:lapses>=2'), {BOW})
-        self.assertEqual(self.rems('prop:lapses=0 card:cloze'), {FLARE, OTHER})  # Reset cleared FLARE's
-        self.assertEqual(self.rems('prop:reps>=4'), {BOW})
-        self.assertEqual(self.rems('prop:due<=-2'), {BOW})
-        self.assertEqual(self.rems('prop:due>0'), {BOW})  # the new card
-        self.assertEqual(self.rems('prop:ivl>=19'), {FLARE})
-        self.assertEqual(self.rems('rated:1'), {BOW})
-        self.assertEqual(self.rems('rated:1:easy'), {BOW})
-        self.assertEqual(self.rems('rated:1:4'), {BOW})
-        self.assertEqual(self.rems('rated:15:forgot'), {BOW})
-        self.assertEqual(self.rems('rated:7'), {BOW, OTHER})
-        self.assertEqual(self.rems('introduced:10'), {OTHER, DUP2})
-        self.assertEqual(self.rems(f'cid:{C_CLOZE}'), {FLARE})
+        self.assertEqual(self.card_rems('prop:lapses>=2'), {BOW})
+        self.assertEqual(self.card_rems('prop:lapses=0 card:cloze'), {FLARE, OTHER})  # Reset cleared FLARE's
+        self.assertEqual(self.card_rems('prop:reps>=4'), {BOW})
+        self.assertEqual(self.card_rems('prop:due<=-2'), {BOW})
+        self.assertEqual(self.card_rems('prop:due>0'), {BOW})  # the new card
+        self.assertEqual(self.card_rems('prop:ivl>=19'), {FLARE})
+        self.assertEqual(self.card_rems('rated:1'), {BOW})
+        self.assertEqual(self.card_rems('rated:1:easy'), {BOW})
+        self.assertEqual(self.card_rems('rated:1:4'), {BOW})
+        self.assertEqual(self.card_rems('rated:15:forgot'), {BOW})
+        self.assertEqual(self.card_rems('rated:7'), {BOW, OTHER})
+        self.assertEqual(self.card_rems('introduced:10'), {OTHER, DUP2})
+        self.assertEqual(self.card_rems(f'cid:{C_CLOZE}'), {FLARE})
+
+    def test_suppression_causes(self):
+        self.assertEqual(self.rems('suppressed:paused'), {DUP2})  # ARCHIVE itself has no card
+        self.assertEqual(self.rems('suppressed:ancestor'), {UNDER_U})
+        self.assertEqual(self.rems('suppressed:table'), {ROW})
+        self.assertEqual(self.rems('suppressed:direction'), {DIR})
+        self.assertEqual(self.rems('suppressed:cloze'), {CLZ})
+        self.assertEqual(self.rems('suppressed:removed'), {OTHER})
+        self.assertEqual(self.rems('suppressed:other'), {OTHER})  # its forward card: off for no stored reason
+        self.assertEqual(self.rems('suppressed:rem'), set())
+        self.assertEqual(self.rems('is:suppressed'), {DUP2, UNDER_U, ROW, DIR, CLZ, OTHER})
+        self.assertEqual(self.rems('is:disabled -is:suppressed'), set())
+        # A Rem with Disable Descendant Cards on itself is "off on the Rem", not "ancestor".
+        db = sqlite3.connect(self.db)
+        put_doc(db, ROW, dict(DOCS[ROW], forget=False), NOW)
+        put_card(db, ids('CC'), dict(rId=DISABLER, c='f', a=None, l=None, ml='New', h=[]), NOW)
+        db.commit()
+        db.close()
+        self.assertEqual(self.rems('suppressed:rem'), {DISABLER})
+        self.assertEqual(self.rems('suppressed:table'), set())
+
+    def test_card_causes(self):
+        out = rs.card_causes(KB, self.db, self.index)
+        self.assertEqual(out['causes'], {
+            C_PAUSED: 'paused', ids('C6'): 'ancestor', ids('C7'): 'table', ids('C8'): 'direction',
+            ids('CA'): 'cloze', C_GONE: 'removed', C_OFF: 'other'})
+        self.assertEqual(out['inTable'], [ROW])
+        # A card whose Rem is gone is reported as such.
+        db = sqlite3.connect(self.db)
+        put_card(db, ids('CD'), dict(rId=ids('GONE'), c='f', a=None, l=None, ml='New', h=[]), NOW)
+        db.commit()
+        db.close()
+        self.assertEqual(rs.card_causes(KB, self.db, self.index)['causes'][ids('CD')], 'missing')
 
     def test_card_refresh(self):
-        self.assertEqual(self.rems('is:disabled'), {OTHER})
+        self.assertEqual(self.card_rems('is:disabled'), {OTHER})
         db = sqlite3.connect(self.db)
         put_card(db, C_OFF, dict(CARDS[C_OFF], a=NOW - DAY), NOW)
         db.commit()
         db.close()
-        self.assertEqual(self.rems('is:disabled'), set())
-        self.assertIn(OTHER, self.rems('is:due'))
+        self.assertEqual(self.card_rems('is:disabled'), set())
+        self.assertIn(OTHER, self.card_rems('is:due'))
 
     def test_helper_never_waits_for_a_build(self):
         with self.assertRaises(SearchError) as ctx:

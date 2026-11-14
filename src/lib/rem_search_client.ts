@@ -13,9 +13,21 @@
 import type { RNPlugin } from '@remnote/plugin-sdk';
 import { aiHelperPairingTokenId } from './consts';
 import { getIESetting } from './settings';
-import { HelperSearchResult, parseRemIdsResponse, parseSearchResponse } from './rem_search_protocol';
+import {
+  HelperSearchResult,
+  HelperSuppression,
+  parseRemIdsResponse,
+  parseSearchResponse,
+  parseSuppressionResponse,
+} from './rem_search_protocol';
 
-export type { HelperQueryError, HelperSearchHit, HelperSearchResult } from './rem_search_protocol';
+export type {
+  HelperQueryError,
+  HelperSearchHit,
+  HelperSearchResult,
+  HelperSuppression,
+  HelperSuppressionCause,
+} from './rem_search_protocol';
 export { usesQuerySyntax } from './rem_search_protocol';
 
 export const SEARCH_HELPER_URL = 'http://localhost:3457';
@@ -96,4 +108,15 @@ export async function remsWithSourceViaHelper(
     { timeoutMs: 3000 }
   );
   return res.status === 'ok' ? parseRemIdsResponse(res.body) : null;
+}
+
+/**
+ * Every card RemNote won't put in a queue, with its cause, read from the helper's
+ * index (stored fields the plugin can't read: `forget`, `efc`, `enableBackSR`,
+ * `dci`, table view type), or null when the helper can't answer. Feeds the Weighted
+ * Shield's Suppressed Cards tab, which otherwise infers causes Rem by Rem.
+ */
+export async function suppressionCausesViaHelper(plugin: RNPlugin): Promise<HelperSuppression | null> {
+  const res = await postToHelper(plugin, '/search/suppression', {}, { timeoutMs: 20_000 });
+  return res.status === 'ok' ? parseSuppressionResponse(res.body) : null;
 }
