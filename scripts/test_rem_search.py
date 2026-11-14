@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Tests for rem_search.py: the parser, and searches on a small fake remnote.db shaped like
-RemNote's search index (remsContents FTS5, remsSearchInfos, remsSearchRanks).
+"""Tests for rem_search.py and rem_index.py: the parser, and searches on a small fake
+remnote.db shaped like RemNote's (the search index remsContents FTS5, remsSearchInfos,
+remsSearchRanks, and the Rem documents in quanta).
 
     python3 scripts/test_rem_search.py
 """
+import datetime
 import json
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rem_index as ri  # noqa: E402
 import rem_search as rs  # noqa: E402
 from rem_search import And, Not, Or, SearchError, Term  # noqa: E402
 
@@ -44,9 +48,56 @@ ROWS = [
 ]
 
 
+NOW = int(datetime.datetime.now().timestamp() * 1000)
+DAY = 86_400_000
+TAG, PW_INC, PW_SRC, PROP_BOOK, PROP_NEXT, CHILD_BOOK, CHILD_NEXT, DAILY_OLD, DAILY_NEW = (
+    ids(f'X{i}') for i in range(9))
+
+
+def slot(text, at, rich=None):
+    return {'v': {'v': rich if rich is not None else [text], 's': text}, ',u': at}
+
+
+def date_name(days_from_today):
+    d = datetime.date.today() + datetime.timedelta(days=days_from_today)
+    return f"{d.strftime('%B')} {d.day}th, {d.year}"
+
+
+# Rem documents (quanta), as RemNote stores them.
+DOCS = {
+    BOOK: {'key': ['Wärtsilä Encyclopedia of Ship Technology'], 'createdAt': NOW - 400 * DAY},
+    BOW: {'key': ['Bow flare'], 'type': 1, 'createdAt': NOW - 300 * DAY,
+          'tp': {TAG: {'t': True}}},
+    FLARE: {'key': ['Ships with … ', {'i': 'q', '_id': MARGIN, 'aliasId': ids('ALIAS')}, ' becomes useless'],
+            'createdAt': NOW - 300 * DAY, 'key,u': NOW - 2 * 3600_000,
+            'ps': {'os_os': slot('Wärtsilä Encyclopedia of Ship Technology', 1, [{'i': 'q', '_id': BOOK}])}},
+    MARGIN: {'key': ['Service power margin'], 'type': 1, 'createdAt': NOW - 3600_000,
+             'tp': {PW_INC: {'t': True}},
+             # An old `ps` copy of the slot, and a newer one in a property child (below).
+             'ps': {'incremental_nextRepDate': slot(date_name(30), NOW - 100 * DAY),
+                    'incremental_priority': slot('20', NOW - DAY)}},
+    OTHER: {'key': ['The tug pushes the bow'], 'type': 2, 'createdAt': NOW - 500 * DAY, 'tp': {TAG: {'t': False}}},
+    TAG: {'key': ['Anki Card'], 'createdAt': 1},
+    PW_INC: {'key': ['Incremental'], 'rcrt': 'incremental', 'createdAt': 1},
+    PROP_BOOK: {'key': ['Book'], 'parent': TAG, 'createdAt': 1},
+    PROP_NEXT: {'key': ['Next Rep Date'], 'parent': PW_INC, 'createdAt': 1},
+    CHILD_BOOK: {'key': [{'i': 'q', '_id': PROP_BOOK}], 'value': ['PNA Resistência'], 'ie': True, 'parent': BOW,
+                 'createdAt': 1},
+    CHILD_NEXT: {'key': [{'i': 'q', '_id': PROP_NEXT}], 'value': [{'i': 'q', '_id': DAILY_OLD}], 'ie': True,
+                 'parent': MARGIN, 'createdAt': 1, 'value,u': NOW - 5 * DAY},
+    DAILY_OLD: {'key': [date_name(-3)], 'createdAt': 1},
+    DAILY_NEW: {'key': [date_name(10)], 'createdAt': 1},
+}
+
+
+def put_doc(db, rid, doc, y):
+    db.execute('INSERT OR REPLACE INTO quanta VALUES (?, ?, ?)', (rid, json.dumps({'_id': rid, 'y': y, **doc}), 0))
+
+
 def make_db(path):
     db = sqlite3.connect(path)
     db.executescript('''
+        CREATE TABLE quanta (_id TEXT NOT NULL PRIMARY KEY, doc TEXT, x INTEGER);
         CREATE VIRTUAL TABLE remsContents USING FTS5(data, tokenize = 'unicode61', prefix = '1 2 3');
         CREATE TABLE remsSearchInfos(ftsRowId INTEGER PRIMARY KEY AUTOINCREMENT, aliasId TEXT NOT NULL,
             id TEXT NOT NULL, doc TEXT NOT NULL, freqCounter REAL NOT NULL, freqTime REAL NOT NULL,
@@ -61,6 +112,8 @@ def make_db(path):
                     ' ' + ''.join(f' {a}' for a in anc)))
         db.execute('INSERT INTO remsContents(rowid, data) VALUES (?, ?)', (n, text))
         db.execute('INSERT INTO remsSearchRanks VALUES (?, ?)', (n, n * 10))
+    for rid, doc in DOCS.items():
+        put_doc(db, rid, doc, NOW - 60_000)
     db.commit()
     db.close()
 
@@ -98,8 +151,9 @@ class ParserTest(unittest.TestCase):
         cases = {
             '': 'empty', 'bow (': 'unclosed-group', 'bow )': 'unopened-group', '()': 'empty-group',
             '"bow': 'unclosed-quote', 'or bow': 'misplaced-or', 'bow and': 'misplaced-and',
-            '- bow': 'lone-minus', 'tag:x': 'not-yet', 'incremental.priority:3': 'not-yet',
-            'in:': 'missing-value', '...': 'no-words', 'bow\\': 'unknown-escape',
+            '- bow': 'lone-minus', 'is:due': 'not-yet', 'rated:7': 'not-yet', 'is:bogus': 'unknown-value',
+            'prop:bogus<3': 'unknown-value', 'has:nothing': 'unknown-value', 'id:short': 'bad-id',
+            'added:0': 'bad-number', 'in:': 'missing-value', '...': 'no-words', 'bow\\': 'unknown-escape',
         }
         for query, kind in cases.items():
             with self.subTest(query=query):
@@ -112,6 +166,19 @@ class ParserTest(unittest.TestCase):
             rs.parse('bow (wave')
         self.assertEqual(ctx.exception.at, 4)
 
+    def test_index_terms(self):
+        self.assertEqual(rs.parse('tag:"anki card"'), Term('tag', 'anki card', at=0))
+        self.assertEqual(rs.parse('"tag:anki card"'), Term('tag', 'anki card', at=0))  # Anki's quoting
+        t = rs.parse('incremental.priority<=20')
+        self.assertEqual((t.kind, t.owner, t.name, t.op, t.num), ('field', 'incremental', 'priority', '<=', 20.0))
+        t = rs.parse('"Anki Card.Book:pna*"')
+        self.assertEqual((t.owner, t.name, t.value, t.op), ('ankicard', 'book', 'pna*', ''))
+        t = rs.parse('prop:incdue<=0')
+        self.assertEqual((t.owner, t.name, t.op, t.num), ('incremental', 'nextrepdate', '<=', 0.0))
+        self.assertTrue(rs.needs_index(rs.parse('bow -(tag:x or is:concept)')))
+        self.assertFalse(rs.needs_index(rs.parse('bow -(wave or in:x)')))
+        self.assertEqual(rs.parse('6.4').kind, 'text')
+
     def test_fts_terms_are_quoted(self):
         self.assertEqual(rs.fts_term('Navegação', 'prefix'), '"navegacao"*')
         self.assertEqual(rs.fts_term('under-keel', 'prefix'), '"under keel"*')
@@ -123,6 +190,7 @@ class SearchTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.db = Path(cls.tmp.name) / 'remnote.db'
+        cls.index = Path(cls.tmp.name) / 'index.sqlite'
         make_db(cls.db)
 
     @classmethod
@@ -130,7 +198,7 @@ class SearchTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def find(self, query, **kw):
-        out = rs.search(KB, query, db_path=self.db, **kw)
+        out = rs.search(KB, query, db_path=self.db, index_file=self.index, **kw)
         return [(r['remId'], r.get('aliasId')) for r in out['results']]
 
     def rems(self, query):
@@ -189,6 +257,102 @@ class SearchTest(unittest.TestCase):
         with self.assertRaises(SearchError) as ctx:
             rs.search(KB, 'bow', db_path=bad)
         self.assertEqual(ctx.exception.kind, 'schema')
+
+
+
+class IndexSearchTest(unittest.TestCase):
+    """Terms answered by the helper's own index (rem_index.py)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = Path(self.tmp.name) / 'remnote.db'
+        self.index = Path(self.tmp.name) / 'index.sqlite'
+        make_db(self.db)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def rems(self, query):
+        out = rs.search(KB, query, db_path=self.db, index_file=self.index)
+        return {r['remId'] for r in out['results']}
+
+    def test_tags_and_powerups(self):
+        self.assertEqual(self.rems('tag:"anki card"'), {BOW})  # OTHER's tag was removed (t: false)
+        self.assertEqual(self.rems('tag:anki*'), {BOW})
+        self.assertEqual(self.rems('tag:incremental'), {MARGIN})  # a powerup counts as a tag
+        self.assertNotIn(BOW, self.rems('tag:none'))
+        self.assertIn(OTHER, self.rems('tag:none'))
+        self.assertEqual(self.rems('has:powerup:Incremental'), {MARGIN})
+
+    def test_is_and_has(self):
+        self.assertEqual(self.rems('is:concept'), {BOW, MARGIN})
+        self.assertEqual(self.rems('is:descriptor'), {OTHER})
+        self.assertEqual(self.rems('is:document bow'), set())
+        self.assertIn(BOOK, self.rems('is:document'))
+        self.assertEqual(self.rems('is:incremental'), {MARGIN})
+        self.assertEqual(self.rems('has:alias'), {MARGIN})
+        self.assertEqual(self.rems('has:source'), {FLARE})
+        self.assertEqual(self.rems('has:tag'), {BOW})
+
+    def test_references_and_ids(self):
+        self.assertEqual(self.rems('source:"Wärtsilä Encyclopedia of Ship Technology"'), {FLARE})
+        self.assertEqual(self.rems('refs:"service power margin"'), {FLARE})
+        self.assertEqual(self.rems(f'id:{BOW},{OTHER}'), {BOW, OTHER})
+
+    def test_dates(self):
+        self.assertEqual(self.rems('added:1'), {MARGIN})
+        self.assertEqual(self.rems('edited:1'), {FLARE})
+
+    def test_properties(self):
+        self.assertEqual(self.rems('"anki card.book:pna resistencia"'), {BOW})
+        self.assertEqual(self.rems('ankicard.book:pna*'), {BOW})
+        self.assertEqual(self.rems('*.book:p_a*'), {BOW})
+        self.assertEqual(self.rems('ankicard.book:pna'), set())  # exact unless wildcards
+        self.assertEqual(self.rems('ankicard.book:_*'), {BOW})
+        self.assertEqual(self.rems('prop:incpriority<=20'), {MARGIN})
+        self.assertEqual(self.rems('incremental.priority>20'), set())
+
+    def test_newest_copy_of_a_slot_wins(self):
+        # ps says due in 30 days (written 100 days ago); the child says 3 days ago (5 days ago).
+        self.assertEqual(self.rems('prop:incdue<=0'), {MARGIN})
+        self.assertEqual(self.rems('prop:incdue>0'), set())
+
+    def test_refresh_picks_up_changes(self):
+        self.assertEqual(self.rems('prop:incdue<=0'), {MARGIN})
+        db = sqlite3.connect(self.db)
+        child = dict(DOCS[CHILD_NEXT], value=[{'i': 'q', '_id': DAILY_NEW}], **{'value,u': NOW})
+        put_doc(db, CHILD_NEXT, child, NOW)
+        put_doc(db, OTHER, dict(DOCS[OTHER], tp={TAG: {'t': True}}), NOW)
+        db.commit()
+        db.close()
+        self.assertEqual(self.rems('prop:incdue>0'), {MARGIN})
+        self.assertEqual(self.rems('tag:"anki card"'), {BOW, OTHER})
+
+    def test_text_and_index_terms_together(self):
+        self.assertEqual(self.rems('bow is:concept'), {BOW})
+        self.assertEqual(self.rems('bow -tag:"anki card"'), {FLARE, OTHER})
+        self.assertEqual(self.rems('heavy (tag:incremental or has:source)'), {FLARE})
+
+    def test_helper_never_waits_for_a_build(self):
+        with self.assertRaises(SearchError) as ctx:
+            rs.search(KB, 'is:concept', db_path=self.db, index_file=self.index, wait=False)
+        self.assertEqual(ctx.exception.kind, 'index-building')
+        # Text-only searches don't need the index and answer meanwhile.
+        self.assertEqual(rs.search(KB, 'bow weather', db_path=self.db, index_file=self.index, wait=False)['total'], 2)
+        for _ in range(200):
+            if not ri.is_building(KB):
+                break
+            time.sleep(0.05)
+        out = rs.search(KB, 'is:concept', db_path=self.db, index_file=self.index, wait=False)
+        self.assertEqual({r['remId'] for r in out['results']}, {BOW, MARGIN})
+
+    def test_index_rebuilds_on_format_change(self):
+        self.rems('is:concept')
+        db = ri.open_index(KB, self.index)
+        ri.set_meta(db, 'schema', 'old')
+        db.commit()
+        db.close()
+        self.assertEqual(self.rems('is:concept'), {BOW, MARGIN})
 
 
 if __name__ == '__main__':

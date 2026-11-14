@@ -104,7 +104,9 @@ function engineNoteFor(result: HelperSearchResult, query: string): EngineNote {
     case 'ok':
       return { helper: true };
     case 'query-error':
-      return { helper: false, tone: 'error', message: `${result.error.message} Searching the words instead.` };
+      return result.error.kind === 'index-building'
+        ? { helper: false, tone: 'info', message: `${result.error.message} Searching the words meanwhile.` }
+        : { helper: false, tone: 'error', message: `${result.error.message} Searching the words instead.` };
     case 'unpaired':
       return {
         helper: false,
@@ -115,7 +117,8 @@ function engineNoteFor(result: HelperSearchResult, query: string): EngineNote {
       return usesQuerySyntax(query)
         ? {
             helper: false,
-            message: 'and, or, -word, "phrases" and in: need the AI helper on the desktop. Searching the words instead.',
+            message:
+              'and, or, -word, "phrases", in:, tag:, is: and the other search keys need the AI helper on the desktop. Searching the words instead.',
           }
         : { helper: false };
   }
@@ -1034,7 +1037,7 @@ function ReferenceFinder() {
         />
         {engineNote.helper && query.trim().length >= 2 && (
           <span
-            title="Searched by the AI helper: every word must match; and, or, -word, &quot;phrases&quot; and in:&quot;Document&quot; work"
+            title="Searched by the AI helper: every word must match; or, -word, &quot;phrases&quot;, in:, tag:, is:, prop: and the other search keys work"
             aria-label="Searched by the AI helper"
             style={{ position: 'absolute', right: '9px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', cursor: 'default' }}
           >
@@ -1056,7 +1059,7 @@ function ReferenceFinder() {
       <div style={{ marginTop: '8px', maxHeight: `${listMaxHeight}px`, overflowY: 'auto' }}>
         {query.trim().length < 2 ? (
           <div style={{ fontSize: '12px', color: 'var(--rn-clr-content-tertiary)', padding: '6px 2px' }}>
-            Type at least 2 characters. Searches each word separately and floats exact-name matches up, so it finds rems the normal search can't — including matches by a rem's alias (shown with an ALIAS tag; the inserted reference renders the alias text). Enter inserts a reference; Ctrl/Cmd+Enter inserts a pin (no text); Opt/Alt+Enter inserts the text then a pin; Shift+Enter / Shift+click opens the rem in a new pane. With the AI helper running and paired (⚡), every word must match, and and, or, -word, "phrases" and in:"Document" work too.
+            Type at least 2 characters. Searches each word separately and floats exact-name matches up, so it finds rems the normal search can't — including matches by a rem's alias (shown with an ALIAS tag; the inserted reference renders the alias text). Enter inserts a reference; Ctrl/Cmd+Enter inserts a pin (no text); Opt/Alt+Enter inserts the text then a pin; Shift+Enter / Shift+click opens the rem in a new pane. With the AI helper running and paired (⚡), every word must match, and or, -word, "phrases", in:"Document", tag:, is:, prop: and the other search keys work too.
           </div>
         ) : results.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--rn-clr-content-tertiary)', padding: '6px 2px' }}>

@@ -30,8 +30,9 @@ each knowledge base it has heard from out of remnote.db, read-only, so the
 Study Dashboard can keep counting the reps of Rems deleted since.
 
 It also searches a knowledge base (`/search`, see rem_search.py): an Anki-style
-query (AND, OR, NOT, phrases, in:…) run straight on remnote.db, read-only, because
-RemNote's own search only ever ORs the words. That route hands out note text, so
+query (AND, OR, NOT, phrases, in:, tag:, is:, prop:…) run on remnote.db, read-only,
+because RemNote's own search only ever ORs the words. Keys beyond plain text use the
+helper's own index of the knowledge base (rem_index.py, ~/.incremental-remnote/search/). That route hands out note text, so
 it needs the pairing token (below): any web page open in the browser can reach a
 localhost port, and only the plugin knows the token.
 
@@ -98,7 +99,7 @@ try:
 except ImportError:  # an older install with this file only: everything but the history routes works
     history_archive = None
 try:
-    import rem_search  # rem_search.py, downloaded next to this file (needs history_archive.py)
+    import rem_search  # rem_search.py + rem_index.py, downloaded next to this file (needs history_archive.py)
 except ImportError:
     rem_search = None
 
@@ -1289,7 +1290,7 @@ def handle_search(req, entry):
         raise RuntimeError('rem_search.py or history_archive.py is missing: download both next to ai_ocr_helper.py')
     kb_id = history_archive.check_kb_id(req.get('kbId'))
     try:
-        out = rem_search.search(kb_id, req.get('query'), req.get('limit'))
+        out = rem_search.search(kb_id, req.get('query'), req.get('limit'), wait=False)
     except rem_search.SearchError as e:
         entry['queryError'] = e.kind
         return {'queryError': e.to_json()}
@@ -1446,6 +1447,8 @@ def main():
     pairing_token()
     print(f'Pairing token for /search: {TOKEN_FILE}' if rem_search else
           'rem_search.py not found next to the helper: /search is off', flush=True)
+    if rem_search:
+        rem_search.rem_index.warm_known_kbs(log=lambda m: print(m, flush=True))
     if history_archive:
         history_archive.start_background_scans(log=lambda m: print(m, flush=True))
     else:

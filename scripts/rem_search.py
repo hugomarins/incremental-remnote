@@ -15,7 +15,7 @@ The grammar is Anki's (docs-site/manual/searching.mdx, rslib/src/search/parser.r
 spaces mean AND, `or`, `-` excludes, brackets group, "…" is a phrase, `key:value` and
 `key:"…"`, `\\` escapes. AND binds tighter than OR: `a b or c` = `(a b) or c`.
 
-Phase 1 terms (plans/SEARCH_ENGINE_PLAN.md §4):
+Terms (plans/SEARCH_ENGINE_PLAN.md §4):
     word            a word starting with it (RemNote's index is word-based)
     "two words"     the words side by side
     w:word          that whole word
@@ -23,13 +23,31 @@ Phase 1 terms (plans/SEARCH_ENGINE_PLAN.md §4):
     in:<name|id>    the Rem and everything under it
     parent:<name|id> its direct children
     path:text       text in the names of the ancestors
-Keys of later phases (tag:, is:, prop:, card:, …) are refused with a clear error. Any
-other `x:y` is plain text, so "3:30" or a pasted "Note: …" still search as words.
+  needing the helper's own index (rem_index.py):
+    tag:name        tagged with it (`*` wildcards; tag:none = no tag); a powerup's
+                    name or code counts too, as RemNote shows powerups as tags
+    is:concept|descriptor|portal|document|folder|flashcard|image|pdf|incremental|
+       dismissed|pdf-highlight|html-highlight
+    has:alias|source|tag|powerup:<code or name>
+    source:<name|id>  has that Rem among its Sources
+    refs:<name|id>  its text references that Rem
+    id:a,b,c        these Rems
+    added:N, edited:N  created / text edited in the last N days (1 = today)
+    owner.name:text   a slot or property value: owner is a powerup's code or name, or
+                    the property's tag, `*` for any; text is exact (folded) with `*` and
+                    `_` wildcards; `owner.name:` empty, `owner.name:_*` not empty
+    owner.name<5    numeric (<, <=, >, >=, =, !=); a date value compares in days from
+                    today (`incremental.nextrepdate<=0` = due)
+    prop:priority<20, prop:incpriority, prop:incdue  shortcuts for the plugin's slots
+Card keys (card:, rated:, is:due…) belong to phase 3 and are refused with a clear
+error. Any other `x:y` is plain text, so "3:30" or a pasted "Note: …" still search as
+words.
 
 The text index (remsContents) is RemNote's own: lower-case, accents and clozes removed,
 references appended at the END of a Rem's text, and one row per alias.
 """
 import argparse
+import datetime
 import json
 import re
 import sqlite3
@@ -41,17 +59,29 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import history_archive  # noqa: E402  (KB paths, read-only open)
+import rem_index  # noqa: E402  (the helper's own index, for structural terms)
 
 DEFAULT_LIMIT = 200
 MAX_LIMIT = 2000
 REM_ID_RE = re.compile(r'^[A-Za-z0-9]{17}$')
 
-# Keys that belong to later phases: a clear error rather than a silent text search.
-LATER_KEYS = {
-    'tag', 'is', 'has', 'prop', 'card', 'ml', 'rated', 'introduced', 'added', 'edited',
-    'source', 'refs', 'id', 'cid', 'sort',
-}
+# Keys that belong to a later phase: a clear error rather than a silent text search.
+LATER_KEYS = {'card', 'ml', 'rated', 'introduced', 'cid', 'sort'}
 NAME_KEYS = {'in', 'parent'}
+INDEX_KEYS = {'tag', 'is', 'has', 'source', 'refs', 'id', 'added', 'edited', 'field'}
+
+# is: values. Read from RemNote's search record (s.doc), the Rem's type, or a powerup.
+IS_DOC_FLAGS = {'document': 'i', 'folder': 'l', 'flashcard': 'fl', 'image': 'g', 'pdf': 'd', 'website': 'w'}
+IS_TYPES = {'concept': 1, 'descriptor': 2, 'portal': 6}
+IS_POWERUPS = {'incremental': ['incremental'], 'dismissed': ['dismissed'], 'pdf-highlight': ['n'],
+               'html-highlight': ['hh', 'vh'], 'web-highlight': ['p']}
+IS_LATER = {'due', 'new', 'learn-new', 'learn', 'review', 'disabled', 'not-generated', 'paused', 'suspended'}
+IS_ALL = sorted([*IS_DOC_FLAGS, *IS_TYPES, *IS_POWERUPS])
+
+# prop: shortcuts → (owner, name) in the index's squashed form.
+PROP_ALIASES = {'priority': ('cardpriority', 'priority'), 'incpriority': ('incremental', 'priority'),
+                'incdue': ('incremental', 'nextrepdate')}
+COMPARE_RE = re.compile(r'^(.+?)(<=|>=|!=|<|>|=)(-?\d+(?:\.\d+)?)$')
 
 
 class SearchError(Exception):
@@ -104,11 +134,15 @@ def fts_term(text, mode):
 
 @dataclass
 class Term:
-    kind: str           # 'text' | 'in' | 'parent' | 'path'
+    kind: str           # 'text' | 'in' | 'parent' | 'path' | INDEX_KEYS
     value: str
     mode: str = 'prefix'  # text: 'prefix' | 'phrase' | 'word'
     alias_only: bool = False
     at: int = 0
+    owner: str = ''     # field: squashed owner, '*' for any
+    name: str = ''      # field: squashed slot or property name
+    op: str = ''        # field: '' for a text match, else a comparison
+    num: float = 0.0
 
 
 @dataclass
@@ -268,6 +302,18 @@ class Parser:
         return self.term_for(word, start, quoted=False)
 
     def term_for(self, text, at, quoted):
+        # As in Anki, a quoted term can still be a search key: "tag:anki card".
+        if quoted:
+            key, sep, value = text.partition(':')
+            if sep and key and (key.lower() in INDEX_KEYS | NAME_KEYS | {'w', 'alias', 'path', 'prop'} or '.' in key):
+                return self.keyed(key, value, at, quoted=True)
+            compare = COMPARE_RE.match(text)
+            if compare and '.' in compare.group(1):
+                return self.field_compare(compare, at)
+        elif ':' not in text:
+            compare = COMPARE_RE.match(text)
+            if compare and '.' in compare.group(1):
+                return self.field_compare(compare, at)
         if not words(text):
             self.fail('no-words', f'"{text}" has no letters or digits to search for.', at)
         # A quoted term is a phrase; an unquoted one with inner punctuation
@@ -292,10 +338,71 @@ class Parser:
             if not words(value):
                 self.fail('no-words', 'Put a word after "path:".', at)
             return Term('path', value, at=at)
-        if k in LATER_KEYS or '.' in k:
-            self.fail('not-yet', f'"{key}:" is planned but not available yet.', at)
+        if k == 'tag':
+            if not value.strip():
+                self.fail('missing-value', 'Put a tag name after "tag:" (or tag:none).', at)
+            return Term('tag', value.strip(), at=at)
+        if k == 'is':
+            v = value.strip().lower()
+            if v in IS_LATER:
+                self.fail('not-yet', f'"is:{v}" is about cards, which come in a later phase.', at)
+            if v not in IS_DOC_FLAGS and v not in IS_TYPES and v not in IS_POWERUPS:
+                self.fail('unknown-value', f'"is:{value}" is not known. Try is:{", is:".join(IS_ALL)}.', at)
+            return Term('is', v, at=at)
+        if k == 'has':
+            v = value.strip()
+            if v.lower() in ('alias', 'source', 'tag'):
+                return Term('has', v.lower(), at=at)
+            if v.lower().startswith('powerup:') and v[8:].strip():
+                return Term('has', 'powerup', at=at, owner=v[8:].strip())
+            self.fail('unknown-value', 'Try has:alias, has:source, has:tag or has:powerup:<name or code>.', at)
+        if k in ('source', 'refs'):
+            if not value.strip():
+                self.fail('missing-value', f'Put a Rem name or id after "{k}:".', at)
+            return Term(k, value.strip(), at=at)
+        if k == 'id':
+            ids = [i for i in re.split(r'[,\s]+', value.strip()) if i]
+            if not ids or not all(REM_ID_RE.match(i) for i in ids):
+                self.fail('bad-id', 'id: takes Rem ids separated by commas.', at)
+            return Term('id', ','.join(ids), at=at)
+        if k in ('added', 'edited'):
+            if not re.fullmatch(r'\d{1,5}', value.strip()) or int(value) < 1:
+                self.fail('bad-number', f'{k}: takes a number of days, 1 for today.', at)
+            return Term(k, value.strip(), at=at, num=float(value))
+        if k == 'prop':
+            compare = COMPARE_RE.match(value.strip())
+            alias = PROP_ALIASES.get((compare.group(1) if compare else value.split(':')[0]).strip().lower())
+            if not compare or not alias:
+                self.fail('unknown-value', 'Try prop:priority<20, prop:incpriority<=10 or prop:incdue<=0; '
+                          'for any other slot or property, write owner.name<5 or owner.name:text.', at)
+            return Term('field', value, at=at, owner=alias[0], name=alias[1], op=compare.group(2),
+                        num=float(compare.group(3)))
+        if k in LATER_KEYS:
+            self.fail('not-yet', f'"{key}:" is about cards, which come in a later phase.', at)
+        if '.' in k:
+            owner, _, name = key.rpartition('.')
+            if not owner or not rem_index.squash(name):
+                self.fail('missing-value', f'"{key}:" needs owner.name, like incremental.priority:20.', at)
+            return Term('field', value, at=at, owner='*' if owner.strip() == '*' else rem_index.squash(owner),
+                        name=rem_index.squash(name))
         # Not a search key: the whole thing is text ("3:30", "Note: …").
         return self.term_for(f'{key}:{value}', at, quoted)
+
+
+    def field_compare(self, compare, at):
+        owner, _, name = compare.group(1).rpartition('.')
+        if not owner or not rem_index.squash(name):
+            self.fail('missing-value', f'"{compare.group(1)}" needs owner.name, like incremental.priority<20.', at)
+        return Term('field', compare.group(0), at=at, owner='*' if owner.strip() == '*' else rem_index.squash(owner),
+                    name=rem_index.squash(name), op=compare.group(2), num=float(compare.group(3)))
+
+
+def needs_index(node):
+    if isinstance(node, (And, Or)):
+        return any(needs_index(n) for n in node.nodes)
+    if isinstance(node, Not):
+        return needs_index(node.node)
+    return node.kind in INDEX_KEYS
 
 
 def parse(query):
@@ -431,19 +538,139 @@ class Compiler:
                 self.args.append(f'% {tok}%')
                 conds.append("(' ' || IFNULL(s.ancestor_not_ref_text, '')) LIKE ?")
             return '(' + ' AND '.join(conds) + ')'
-        raise SearchError('parse', f'Unknown term {term.kind}.')
+        return self.index_leaf(term)
+
+    # --- terms answered by the helper's index (rem_index.py) -------------------
+
+    def index_leaf(self, term):
+        k = term.kind
+        if k == 'tag':
+            if term.value.lower() == 'none':
+                return 's.id NOT IN (SELECT rem FROM rem_tags)'
+            cmp, pattern = like_or_equal(fold(term.value))
+            self.args += [pattern, pattern, pattern.replace(' ', '')]
+            return (f'(s.id IN (SELECT rem FROM rem_tags WHERE tag IN (SELECT id FROM names WHERE name {cmp}))'
+                    f' OR s.id IN (SELECT rem FROM rem_powerups WHERE code IN'
+                    f' (SELECT code FROM powerups WHERE name {cmp} OR lower(code) {cmp})))')
+        if k == 'is':
+            v = term.value
+            if v in IS_DOC_FLAGS:
+                return f"json_extract(s.doc, '$.{IS_DOC_FLAGS[v]}') = 1"
+            if v in IS_TYPES:
+                self.args.append(IS_TYPES[v])
+                return 's.id IN (SELECT id FROM rems WHERE type = ?)'
+            codes = IS_POWERUPS[v]
+            self.args += codes
+            return f's.id IN (SELECT rem FROM rem_powerups WHERE code IN ({",".join("?" * len(codes))}))'
+        if k == 'has':
+            if term.value == 'alias':
+                return 'EXISTS (SELECT 1 FROM remsSearchInfos a WHERE a.id = s.id AND a.aliasId <> a.id)'
+            if term.value == 'source':
+                self.args += list(rem_index.SOURCES)
+                return 's.id IN (SELECT rem FROM props WHERE owner = ? AND name = ?)'
+            if term.value == 'tag':
+                return 's.id IN (SELECT rem FROM rem_tags)'
+            name = fold(term.owner)
+            self.args += [name, name.replace(' ', '')]
+            return ('s.id IN (SELECT rem FROM rem_powerups WHERE code IN'
+                    ' (SELECT code FROM powerups WHERE name = ? OR lower(code) = ?))')
+        if k in ('source', 'refs'):
+            rid, _ = resolve_rem(self.db, k, term.value, term.at)
+            self.args += [rid, 'source' if k == 'source' else 'text']
+            return 's.id IN (SELECT rem FROM refs WHERE target = ? AND kind = ?)'
+        if k == 'id':
+            ids = term.value.split(',')
+            self.args += ids
+            return f's.id IN ({",".join("?" * len(ids))})'
+        if k in ('added', 'edited'):
+            self.args.append(days_ago_ms(int(term.num)))
+            col = 'created' if k == 'added' else 'edited'
+            return f's.id IN (SELECT id FROM rems WHERE {col} >= ?)'
+        if k == 'field':
+            owner_sql = ''
+            if term.owner != '*':
+                # The owner as written, or a powerup whose name squashes to it.
+                owner_sql = (' AND (p.owner = ? OR p.owner IN (SELECT lower(code) FROM powerups'
+                             " WHERE replace(replace(name, ' ', ''), '-', '') = ?))")
+            if term.op:
+                cond = f'(CASE WHEN p.day IS NOT NULL THEN p.day - ? ELSE p.num END) {term.op} ?'
+                args = [today_day(), term.num]
+            else:
+                raw = term.value
+                if raw == '':
+                    cond, args = "IFNULL(p.text, '') = ''", []
+                elif raw == '*':
+                    cond, args = '1', []
+                else:
+                    cmp, pattern = like_or_equal(fold(raw), underscore=True)
+                    cond, args = f'p.text {cmp}', [pattern]
+            self.args.append(term.name)
+            if owner_sql:
+                self.args += [term.owner, term.owner]
+            self.args += args
+            # A slot kept in two places (`ps` and a property child) counts once: the
+            # copy written last (see rem_index.py, props).
+            current = ('NOT EXISTS (SELECT 1 FROM props q WHERE q.rem = p.rem'
+                       ' AND q.owner = p.owner AND q.name = p.name AND q.at > p.at)')
+            return f"s.id IN (SELECT p.rem FROM props p WHERE p.name = ?{owner_sql} AND {cond} AND {current})"
+        raise SearchError('parse', f'Unknown term {k}.')
+
+
+def like_or_equal(text, underscore=False):
+    """('= ?', text), or a LIKE with its pattern when `text` has `*` (any run) or, for
+    slot values as in Anki, `_` (one character). Literal % and \\ are escaped."""
+    wild = '*' in text or (underscore and '_' in text)
+    if not wild:
+        return '= ?', text
+    pattern = text.replace('\\', '\\\\').replace('%', '\\%').replace('*', '%')
+    if not underscore:
+        pattern = pattern.replace('_', '\\_')
+    return "LIKE ? ESCAPE '\\'", pattern
+
+
+def today_day():
+    return rem_index.epoch_day(datetime.date.today())
+
+
+def days_ago_ms(days):
+    """Local midnight `days - 1` days ago, in ms: 1 = since this morning."""
+    start = datetime.datetime.combine(datetime.date.today() - datetime.timedelta(days=days - 1), datetime.time())
+    return int(start.timestamp() * 1000)
 
 
 # ---------------------------------------------------------------------------
 # Search
 # ---------------------------------------------------------------------------
 
-def search(kb_id, query, limit=DEFAULT_LIMIT, db_path=None):
+def open_index_for_search(kb_id, db_path=None, index_file=None, wait=True):
+    """The helper's index, current, with remnote.db attached: RemNote's tables resolve
+    by name in the attached database, so the same SQL runs on either connection.
+    `wait=False` (the helper): a missing or outdated index is built in the background
+    and this search is answered with `index-building`, since a build takes ~20 s."""
+    path = Path(db_path) if db_path else history_archive.remnote_db_path(kb_id)
+    if not path.exists():
+        raise SearchError('no-database', f'No RemNote database for knowledge base {kb_id}.')
+    if not wait and (rem_index.is_building(kb_id) or rem_index.needs_build(kb_id, index_file)):
+        rem_index.build_in_background(kb_id, path, index_file)
+        raise SearchError('index-building', 'The helper is indexing this knowledge base for tag:, is:, prop: '
+                          'and the other keys (about 20 seconds, once). Try again in a moment.')
+    try:
+        db = rem_index.ready(kb_id, path, index_file)
+    except sqlite3.Error as e:
+        raise SearchError('index', f'The search index could not be read: {e}.') from e
+    check_schema(db)
+    return db
+
+
+def search(kb_id, query, limit=DEFAULT_LIMIT, db_path=None, index_file=None, wait=True):
     """{results: [{remId, aliasId?}], total, ms}; raises SearchError."""
     started = time.time()
     tree = parse(query)
     limit = max(1, min(int(limit or DEFAULT_LIMIT), MAX_LIMIT))
-    db = open_kb(kb_id, db_path)
+    if needs_index(tree):
+        db = open_index_for_search(kb_id, db_path, index_file, wait)
+    else:
+        db = open_kb(kb_id, db_path)
     try:
         compiler = Compiler(db)
         where = compiler.compile(tree)

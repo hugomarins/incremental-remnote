@@ -215,7 +215,7 @@ independently of this plan.
       `alias:`), `in:`/`parent:`/`path:`, `/search` with the pairing token, the plugin client, Find
       Rem integration with the ⚡ marker and parse errors. Python tests on the parser and on a
       fixture DB; a TS test on the client fallback. *Fixes `bow weather wave`.*
-- [ ] **2. Sidecar index + Rem filters.** `tag:`, `is:` (Rem kinds), `has:`, `source:`, `refs:`,
+- [ ] **2. Sidecar index + Rem filters.** *Code done 2026-11-14, awaiting the user's test: `scripts/rem_index.py` (index in `~/.incremental-remnote/search/<kb>.sqlite`, ~180 MB and ~17 s to build for 443k Rems, refreshed in ~5 ms from quanta's indexed `y` stamp, built in the background by the helper), keys in `rem_search.py`, 29 tests. Findings: visible powerup slots live in property children with a stale `ps` copy (newest write wins); `y` tracks local and synced writes. Docs and changelog after approval.* `tag:`, `is:` (Rem kinds), `has:`, `source:`, `refs:`,
       slots and the `prop:` aliases, `added:`/`edited:`, `id:`.
 - [ ] **3. Cards.** `card:`, card `is:` states, `ml:`, `prop:due/ivl/reps/lapses`, `rated:`,
       `introduced:`, `mode=cards`.

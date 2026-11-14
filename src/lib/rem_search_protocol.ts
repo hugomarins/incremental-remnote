@@ -58,6 +58,13 @@ export function parseSearchResponse(body: any): HelperSearchResult {
  * Whether a query uses the helper's syntax (operators, quotes, brackets, keys), so
  * RemNote's word search can't stand in for it. Plain words return false.
  */
+const SEARCH_KEYS = 'w|alias|in|parent|path|tag|is|has|source|refs|id|added|edited|prop';
+const SYNTAX_RE = new RegExp(
+  // operators · quotes and brackets · key: · owner.name:value or owner.name<5 (a slot or property)
+  `(^|\\s)(-\\S|or\\s|and\\s)|["()]|(^|\\s)-?(${SEARCH_KEYS}):|(^|\\s)-?[^\\s:]*[a-z*]\\.[a-z][^\\s:<>=]*(:|<|>|=)`,
+  'i'
+);
+
 export function usesQuerySyntax(query: string): boolean {
-  return /(^|\s)(-\S|or\s|and\s)|["()]|(^|\s)(w|alias|in|parent|path):/i.test(query.trim() + ' ');
+  return SYNTAX_RE.test(query.trim() + ' ');
 }
