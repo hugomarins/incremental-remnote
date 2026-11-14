@@ -5,6 +5,7 @@ import { resolveRemTextForBreadcrumb, buildAncestorBreadcrumb } from '../lib/ric
 import { sanitizeRichTextForSetText, isHintNode } from '../lib/richTextSanitize';
 import { remHasImage } from '../lib/image_scan';
 import { aliasesWithIds, aliasIdForText, aliasTextOf } from '../lib/rem_aliases';
+import { canonFig, searchSeeds } from '../lib/reference_search_seeds';
 import { useFloatingWidgetDrag, FloatingPosition } from '../lib/floating_widget_drag';
 
 // Report each step of the alias-id resolution as a toast. Off by default: the
@@ -85,19 +86,7 @@ function clozeIdAtOffset(rt: any, offset: number): string | undefined {
 const fold = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
-// Treat "Figure", "Fig" and "Fig." (any capitalisation) as the same word, so
-// typing "fig 4.3" matches a rem named "Figure 4.3" and vice-versa. Collapse a
-// standalone "fig"/"fig." token to the canonical "figure" (and swallow a
-// trailing dot) everywhere matching/scoring reads folded text. `\bfig\b` won't
-// touch the "fig" inside "figure" — there's no word boundary between "g" and
-// "u" — so already-canonical text is left alone.
-const canonFig = (s: string) => s.replace(/\bfig\b\.?/g, 'figure');
-
-// The opposite spelling. Only used to seed the backend search: RemNote reaches a
-// rem written "Fig. 6.4" through the phrase "fig 6.4" and never through
-// "figure 6.4" (see the phrase-seed comment in runSearch), so both spellings of
-// the whole query have to be asked for.
-const shortFig = (s: string) => s.replace(/\bfigure\b/g, 'fig');
+// canonFig: "Figure" = "Fig" = "Fig." in matching (lib/reference_search_seeds).
 
 interface Candidate {
   id: string;
@@ -363,54 +352,20 @@ function ReferenceFinder() {
       }
       setSearching(true);
       try {
-        const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
         // Folded tokens drive matching so accents/special chars are ignored.
         const foldedTokens = qf.split(/\s+/).filter((t) => t.length >= 2);
-        // Seed the backend search with the alternate figure spelling too, so
-        // RemNote's index returns "Figure 4.3" when the user typed "fig" (and
-        // vice-versa) rather than relying only on the distinctive numeric token.
-        const searchTokens = Array.from(
-          new Set(
-            tokens.flatMap((t) =>
-              /^fig\.?$/.test(t) ? [t, 'figure'] : t === 'figure' ? [t, 'fig'] : [t]
-            )
+        // What to ask RemNote's index for: the whole query as a phrase, its
+        // adjacent word pairs, then single words. Why each is needed is in
+        // lib/reference_search_seeds.ts. Run together, merged in seed order.
+        const pools = await Promise.all(
+          searchSeeds(q).map((qq) =>
+            plugin.search
+              .search([qq], undefined, { filterOnlyConcepts: conceptsOnly, numResults: 50 })
+              .catch(() => [])
           )
         );
-        // Seed with the WHOLE query as a phrase, in both figure spellings, before
-        // any single token. This is the seed that matters, because of how
-        // RemNote's search actually retrieves candidates (SQLite FTS5):
-        //   • it splits the query on every non-letter/digit character, so
-        //     "Fig. 6.4" becomes the tokens [fig, ., 6, ., 4];
-        //   • it then keeps only the tokens longer than two characters and ORs
-        //     them as prefix matches — here just `"fig"*`, since "6" and "4" are
-        //     dropped. That pool ("every rem containing a word starting with
-        //     fig") is truncated to the top-ranked thousand, and this picker then
-        //     keeps the best 50 by cost. In a knowledge base full of figures the
-        //     one you want does not survive that cut, however well it would have
-        //     scored once retrieved.
-        //   • the ONE branch that isolates a rem instead of truncating a huge
-        //     pool is an exact adjacent-phrase match on the whole query
-        //     (`"figure 6.4"*`, capped at 100 rows) — and it only runs when the
-        //     phrase is at least 3 characters and 2 tokens.
-        // FTS prefix-matches only the LAST word of a phrase, so the phrase
-        // "fig 6.4" does not match a rem named "Figure 6.4" and vice-versa. Both
-        // spellings therefore have to be asked for; canonFig alone was only ever
-        // applied to matching and scoring, never to what we asked the index for,
-        // which is why "Fig. 6.4" could not find "Figure 6.4: …".
-        const phrases = Array.from(new Set<string>([q, canonFig(q), shortFig(q)]));
-        // …then each token (longest first) so a buried exact-name rem is still
-        // reachable via its most distinctive token. Capped so a query stays a
-        // bounded number of backend searches per keystroke.
-        const queries = Array.from(
-          new Set<string>([...phrases, ...[...searchTokens].sort((a, b) => b.length - a.length)])
-        ).slice(0, 5);
-
         const seen = new Map<string, any>();
-        for (const qq of queries) {
-          const res = await plugin.search.search([qq], undefined, {
-            filterOnlyConcepts: conceptsOnly,
-            numResults: 50,
-          });
+        for (const res of pools) {
           for (const r of res) {
             if (r._id === sourceRemIdRef.current) continue; // never suggest the rem itself
             if (!seen.has(r._id)) seen.set(r._id, r);
