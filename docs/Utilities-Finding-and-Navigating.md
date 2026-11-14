@@ -44,6 +44,27 @@ It also asks for the **whole query as a phrase**, which is the one thing that pu
 
 ![Find Rem — surfacing a Rem that RemNote's own `[[` reference search can't find](assets/find-rem-finds-rems-normal-search-cannot.gif)
 
+### Search with the AI helper { #search-with-the-ai-helper }
+
+On the desktop, with the [AI helper](Desktop-Helpers.md#search) running and paired, Find Rem searches through the helper, and a ⚡ shows in the box. Every word you type must then be in the Rem, so `bow weather wave` finds the one note that has all three words even when each word alone is in thousands of Rems. You can also write:
+
+| Type | To find |
+|---|---|
+| `bow weather` | Rems with both words (each matched from its start: `bow` also finds *bowsprit*) |
+| `bow or bowsprit` | either word |
+| `bow -tug` | `bow` but not `tug` |
+| `bow (wave or sea)` | `bow` with `wave`, or `bow` with `sea` |
+| `"bow flare"` | the words side by side |
+| `w:bow` | the whole word only |
+| `alias:"sea margin"` | Rems found through one of their aliases |
+| `in:"Wärtsilä Encyclopedia"` | the document and everything under it (or `in:` and a Rem id) |
+| `parent:"Bow flare"` | only that Rem's direct children |
+| `path:pscpp` | Rems with that word in the name of a Rem above them |
+
+Accents and capitals never matter. The syntax is [Anki's](https://docs.ankiweb.net/searching.html), so its manual applies to these parts. If a query can't be read (an unclosed bracket or quote, a name that several Rems share), a line under the box says why and Find Rem searches the words instead.
+
+Without the helper (on the iPhone, on the web, or with the helper off), Find Rem works as described above and treats `or`, `-` and the rest as ordinary words.
+
 ### Find by alias
 
 Like RemNote's native `[[` search, this picker also matches a Rem by its **aliases** (the built-in **Aliases** powerup — the alternate names you add via *Edit or Add Alias*). Earlier versions only matched the Rem's *primary* name, so a Rem named **Via navegável** with an alias **vias navegáveis** would not appear when you typed the alias.

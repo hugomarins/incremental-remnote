@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.231 - November 14th, 2026
+
+### ✨ New
+
+**Find Rem**: with the AI helper running on the desktop, Find Rem now finds Rems that have every word you typed, which RemNote's own search could drop, and understands `or`, `-word`, `"phrases"` and `in:"Document"`; without the helper, words split by a Rem reference ("[sea margin] becomes useless") now find their note too.
+
+📖 [Find Rem → Search with the AI helper](Utilities-Finding-and-Navigating.md#search-with-the-ai-helper)
+
 ## v1.0.230 - November 14th, 2026
 
 ### 🐛 Fixed

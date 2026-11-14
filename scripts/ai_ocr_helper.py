@@ -29,7 +29,14 @@ It also archives review history (`/history/scan`, `/history/ghosts`,
 each knowledge base it has heard from out of remnote.db, read-only, so the
 Study Dashboard can keep counting the reps of Rems deleted since.
 
+It also searches a knowledge base (`/search`, see rem_search.py): an Anki-style
+query (AND, OR, NOT, phrases, in:…) run straight on remnote.db, read-only, because
+RemNote's own search only ever ORs the words. That route hands out note text, so
+it needs the pairing token (below): any web page open in the browser can reach a
+localhost port, and only the plugin knows the token.
+
     python3 scripts/ai_ocr_helper.py          # listens on 127.0.0.1:3457
+    python3 scripts/ai_ocr_helper.py --pairing-token   # prints the token to paste in the plugin
 
 Requires PyMuPDF (`pip install pymupdf`) and a logged-in `claude` CLI; video
 frames also need `brew install yt-dlp ffmpeg`. Transcribing audio needs
@@ -46,6 +53,8 @@ Environment:
     IR_WHISPER_MODEL  path of the whisper.cpp model (default whisper/ggml-large-v3-turbo-q5_0.bin)
 
 Files live in ~/.incremental-remnote/ai-ocr/:
+    pairing-token   the secret the plugin sends with /search (created on first start,
+                    readable only by you; delete it and restart to make a new one)
     prompt.md       the transcription instructions — edit freely, re-read per request
     source-finder.json  optional: {"command": ["python3", "/path/to/finder.py"]}, the
                     program /find-source runs (JSON on stdin and stdout; the contract
@@ -64,9 +73,11 @@ Files live in ~/.incremental-remnote/ai-ocr/:
 import base64
 import difflib
 import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
 import shutil
 import ssl
 import subprocess
@@ -86,12 +97,20 @@ try:
     import history_archive  # history_archive.py, downloaded next to this file
 except ImportError:  # an older install with this file only: everything but the history routes works
     history_archive = None
+try:
+    import rem_search  # rem_search.py, downloaded next to this file (needs history_archive.py)
+except ImportError:
+    rem_search = None
 
 PORT = int(os.environ.get('IR_AI_PORT', '3457'))
 MODEL = os.environ.get('IR_AI_MODEL', 'sonnet')
 ALLOWED_ORIGINS = {o.strip() for o in os.environ.get('IR_AI_ORIGINS', '').split(',') if o.strip()}
 
 HOME = Path.home() / '.incremental-remnote' / 'ai-ocr'
+TOKEN_FILE = HOME / 'pairing-token'
+# Routes that hand out the knowledge base's content: only a caller with the token.
+TOKEN_ROUTES = {'/search'}
+TOKEN_HEADER = 'X-IR-Token'
 PDF_CACHE = HOME / 'pdf-cache'
 CROPS = HOME / 'crops'
 LOG = HOME / 'requests.log'
@@ -1247,6 +1266,37 @@ def handle_history_status(req, entry):
     return {'status': history_archive.status(kb_id)}
 
 
+def pairing_token():
+    """The secret the plugin must send on TOKEN_ROUTES; created once, mode 600."""
+    try:
+        token = TOKEN_FILE.read_text().strip()
+        if token:
+            return token
+    except OSError:
+        pass
+    token = secrets.token_urlsafe(24)
+    HOME.mkdir(parents=True, exist_ok=True)
+    fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(token + '\n')
+    return token
+
+
+def handle_search(req, entry):
+    """Rem ids for an Anki-style query (rem_search.py). A query that can't run comes
+    back as `queryError` {kind, message, at?}, not as a failure."""
+    if rem_search is None or history_archive is None:
+        raise RuntimeError('rem_search.py or history_archive.py is missing: download both next to ai_ocr_helper.py')
+    kb_id = history_archive.check_kb_id(req.get('kbId'))
+    try:
+        out = rem_search.search(kb_id, req.get('query'), req.get('limit'))
+    except rem_search.SearchError as e:
+        entry['queryError'] = e.kind
+        return {'queryError': e.to_json()}
+    entry.update(results=len(out['results']), total=out['total'])
+    return out
+
+
 MEDIA_PREFIX = '/media/'
 MEDIA_CHUNK = 1 << 20
 
@@ -1258,7 +1308,7 @@ ROUTES = {'/ocr': handle_ocr, '/locate': handle_locate, '/find-source': handle_f
           '/video-library-relink': handle_video_library_relink, '/video-scan': handle_video_scan,
           '/video-file': handle_video_file,
           '/history/scan': handle_history_scan, '/history/ghosts': handle_history_ghosts,
-          '/history/status': handle_history_status}
+          '/history/status': handle_history_status, '/search': handle_search}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1267,7 +1317,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', f'Content-Type, {TOKEN_HEADER}')
         # Chromium's Private Network Access preflight for requests into localhost.
         self.send_header('Access-Control-Allow-Private-Network', 'true')
         self.send_header('Content-Type', 'application/json')
@@ -1283,7 +1333,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {'ok': True, 'claude': find_claude(), 'model': MODEL,
                                         'ytDlp': find_tool('yt-dlp'), 'ffmpeg': find_tool('ffmpeg'),
                                         'transcripts': True, 'whisper': whisper_ready(), 'localVideo': True,
-                                        'extractTitles': True, 'historyArchive': history_archive is not None})
+                                        'extractTitles': True, 'historyArchive': history_archive is not None,
+                                        'search': rem_search is not None})
         if self.path.startswith(MEDIA_PREFIX):
             return self.send_media()
         self.send_json(404, {'ok': False, 'error': 'POST /ocr or /locate'})
@@ -1345,6 +1396,11 @@ class Handler(BaseHTTPRequestHandler):
         if ALLOWED_ORIGINS and origin not in ALLOWED_ORIGINS:
             log({'at': time.time(), 'route': self.path, 'origin': origin, 'rejected': True})
             return self.send_json(403, {'ok': False, 'error': f'origin not allowed: {origin}'})
+        if self.path in TOKEN_ROUTES:
+            sent = (self.headers.get(TOKEN_HEADER) or '').encode()
+            if not hmac.compare_digest(sent, pairing_token().encode()):
+                log({'at': time.time(), 'route': self.path, 'origin': origin, 'rejected': 'token'})
+                return self.send_json(403, {'ok': False, 'error': 'pairing'})
 
         started = time.time()
         entry = {'at': started, 'route': self.path, 'origin': origin}
@@ -1373,6 +1429,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    if '--pairing-token' in sys.argv:
+        print(pairing_token())
+        return
     for d in (HOME, PDF_CACHE, CROPS, VIDEO_FRAMES, VIDEO_TRANSCRIPTS, VIDEO_AUDIO, WHISPER_DIR):
         d.mkdir(parents=True, exist_ok=True)
     prompt()
@@ -1384,6 +1443,9 @@ def main():
             old.unlink(missing_ok=True)
     print(f'AI OCR helper on http://127.0.0.1:{PORT}  (claude: {find_claude()}, model: {MODEL})', flush=True)
     print(f'Prompt: {PROMPT_FILE}', flush=True)
+    pairing_token()
+    print(f'Pairing token for /search: {TOKEN_FILE}' if rem_search else
+          'rem_search.py not found next to the helper: /search is off', flush=True)
     if history_archive:
         history_archive.start_background_scans(log=lambda m: print(m, flush=True))
     else:

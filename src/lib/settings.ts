@@ -85,6 +85,7 @@ import {
   logosAutoOpenId,
   mediaBridgeEnabledId,
   readAloudTagId,
+  aiHelperPairingTokenId,
   enableFlashcardPrioritisationId,
   performanceModeId,
   alwaysUseLightModeOnMobileId,
@@ -195,6 +196,7 @@ export interface IESettings {
   [logosAutoOpenId]: boolean;
   [mediaBridgeEnabledId]: boolean;
   [readAloudTagId]: string;
+  [aiHelperPairingTokenId]: string;
   [enableFlashcardPrioritisationId]: boolean;
   [performanceModeId]: PerformanceMode;
   [alwaysUseLightModeOnMobileId]: boolean;
@@ -298,6 +300,7 @@ export const IE_SETTINGS_DEFAULTS: IESettings = {
   [logosAutoOpenId]: false,
   [mediaBridgeEnabledId]: false,
   [readAloudTagId]: '',
+  [aiHelperPairingTokenId]: '',
   [enableFlashcardPrioritisationId]: false,
   [performanceModeId]: 'light',
   [alwaysUseLightModeOnMobileId]: true,
@@ -1422,6 +1425,19 @@ export const IE_SETTINGS_SCHEMA: Record<IESettingId, SettingSpec> = {
     description:
       'Name of a tag to put on every audio rem that "Read aloud" adds (created if it does not exist). ' +
       'Leave empty for no tag.',
+  },
+  [aiHelperPairingTokenId]: {
+    kind: 'string',
+    group: 'integrations',
+    helpPath: 'Desktop-Helpers/',
+    placeholder: 'Not paired',
+    wide: true,
+    title: 'AI Helper Pairing Token',
+    description:
+      'Lets Find Rem search through the AI helper (scripts/ai_ocr_helper.py, http://127.0.0.1:3457), ' +
+      'which understands AND, OR, -word, "phrases" and in:"Document", and finds Rems that RemNote\'s ' +
+      'own search drops. Print the token with `python3 ai_ocr_helper.py --pairing-token` and paste it ' +
+      'here. Without it the helper refuses to search, so no web page can read your notes through it.',
   },
 
   // --- Misc ---

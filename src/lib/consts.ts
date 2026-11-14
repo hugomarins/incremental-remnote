@@ -793,6 +793,8 @@ export const openInLogosCommandId = 'open-in-logos';
 // Local Media Bridge (lib/media_bridge.ts + scripts/media_bridge/): uploads images
 // that outside tools (the RemNote MCP) write as http://127.0.0.1:3460 links.
 export const mediaBridgeEnabledId = 'media-bridge-enabled';
+/** Secret the AI helper requires on /search (its pairing-token file); see lib/rem_search_client.ts. */
+export const aiHelperPairingTokenId = 'ai-helper-pairing-token';
 // Upscale the focused rem's image with ChatGPT (Codex CLI) through the helper's
 // /upscale endpoint, review, replace in place (lib/upscale_image.ts).
 export const upscaleImageCommandId = 'upscale-image-chatgpt';

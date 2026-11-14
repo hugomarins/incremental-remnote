@@ -6,6 +6,7 @@ import { sanitizeRichTextForSetText, isHintNode } from '../lib/richTextSanitize'
 import { remHasImage } from '../lib/image_scan';
 import { aliasesWithIds, aliasIdForText, aliasTextOf } from '../lib/rem_aliases';
 import { canonFig, searchSeeds } from '../lib/reference_search_seeds';
+import { HelperSearchResult, searchViaHelper, usesQuerySyntax } from '../lib/rem_search_client';
 import { useFloatingWidgetDrag, FloatingPosition } from '../lib/floating_widget_drag';
 
 // Report each step of the alias-id resolution as a toast. Off by default: the
@@ -88,6 +89,38 @@ const fold = (s: string) =>
 
 // canonFig: "Figure" = "Fig" = "Fig." in matching (lib/reference_search_seeds).
 
+/** How many hits to ask the helper for; each one costs bridge calls to show. */
+const HELPER_LIMIT = 100;
+
+/** Which engine answered, and a line to show under the box when there is something to say. */
+interface EngineNote {
+  helper: boolean;
+  message?: string;
+  tone?: 'info' | 'error';
+}
+
+function engineNoteFor(result: HelperSearchResult, query: string): EngineNote {
+  switch (result.status) {
+    case 'ok':
+      return { helper: true };
+    case 'query-error':
+      return { helper: false, tone: 'error', message: `${result.error.message} Searching the words instead.` };
+    case 'unpaired':
+      return {
+        helper: false,
+        message:
+          'The AI helper is running but not paired, so this is RemNote\'s search. Paste its token in the plugin settings (AI Helper Pairing Token).',
+      };
+    default:
+      return usesQuerySyntax(query)
+        ? {
+            helper: false,
+            message: 'and, or, -word, "phrases" and in: need the AI helper on the desktop. Searching the words instead.',
+          }
+        : { helper: false };
+  }
+}
+
 interface Candidate {
   id: string;
   name: string;
@@ -146,6 +179,8 @@ function ReferenceFinder() {
   const [selected, setSelected] = useState(0);
   const [conceptsOnly, setConceptsOnly] = useState(false);
   const [searching, setSearching] = useState(false);
+  // Which engine answered, and anything to say about it (lib/rem_search_client.ts).
+  const [engineNote, setEngineNote] = useState<EngineNote>({ helper: false });
   // True when the picker was opened over selected text. Gates the "pin at end"
   // hint in the footer so the key list stays short in the ordinary case.
   const [openedFromSelection, setOpenedFromSelection] = useState(false);
@@ -354,21 +389,47 @@ function ReferenceFinder() {
       try {
         // Folded tokens drive matching so accents/special chars are ignored.
         const foldedTokens = qf.split(/\s+/).filter((t) => t.length >= 2);
-        // What to ask RemNote's index for: the whole query as a phrase, its
-        // adjacent word pairs, then single words. Why each is needed is in
-        // lib/reference_search_seeds.ts. Run together, merged in seed order.
-        const pools = await Promise.all(
-          searchSeeds(q).map((qq) =>
-            plugin.search
-              .search([qq], undefined, { filterOnlyConcepts: conceptsOnly, numResults: 50 })
-              .catch(() => [])
-          )
-        );
         const seen = new Map<string, any>();
-        for (const res of pools) {
-          for (const r of res) {
-            if (r._id === sourceRemIdRef.current) continue; // never suggest the rem itself
-            if (!seen.has(r._id)) seen.set(r._id, r);
+
+        // The AI helper first (desktop, when running and paired): it ANDs the
+        // words over RemNote's whole index and understands -word, or, "phrases"
+        // and in:"Document" (lib/rem_search_client.ts). Its hits are already
+        // matched, so they skip the every-word filter below, and their order is
+        // the helper's relevance.
+        const helper = await searchViaHelper(plugin, raw, { limit: HELPER_LIMIT });
+        if (reqId !== reqIdRef.current) return;
+        const helperRank = new Map<string, number>();
+        const helperAlias = new Map<string, string>();
+        if (helper.status === 'ok') {
+          const ids = helper.hits.map((h) => h.remId).filter((id) => id !== sourceRemIdRef.current);
+          const rems = ids.length ? ((await plugin.rem.findMany(ids).catch(() => undefined)) ?? []) : [];
+          const byId = new Map(rems.map((r: any) => [r._id, r]));
+          ids.forEach((id, i) => {
+            const r = byId.get(id);
+            if (!r) return; // gone since the index was written
+            seen.set(id, r);
+            helperRank.set(id, i);
+          });
+          for (const h of helper.hits) if (h.aliasId) helperAlias.set(h.remId, h.aliasId);
+        }
+        setEngineNote(engineNoteFor(helper, raw));
+
+        if (helper.status !== 'ok') {
+          // RemNote's own search: the whole query as a phrase, its adjacent word
+          // pairs, then single words. Why each is needed is in
+          // lib/reference_search_seeds.ts. Run together, merged in seed order.
+          const pools = await Promise.all(
+            searchSeeds(q).map((qq) =>
+              plugin.search
+                .search([qq], undefined, { filterOnlyConcepts: conceptsOnly, numResults: 50 })
+                .catch(() => [])
+            )
+          );
+          for (const res of pools) {
+            for (const r of res) {
+              if (r._id === sourceRemIdRef.current) continue; // never suggest the rem itself
+              if (!seen.has(r._id)) seen.set(r._id, r);
+            }
           }
         }
         if (reqId !== reqIdRef.current) return; // a newer search superseded this
@@ -379,6 +440,7 @@ function ReferenceFinder() {
         type Scored = {
           r: any; id: string; name: string; normName: string; type: number; times: number;
           score: number; aliasId?: string; aliasText?: string; aliasRichText?: any;
+          helperRank: number; // position in the helper's answer; Infinity for RemNote's search
           matchFold: string; // folded text the match was made on (alias or name)
         };
         const scored: Scored[] = [];
@@ -399,7 +461,23 @@ function ReferenceFinder() {
           let aliasText: string | undefined;
           let aliasRichText: any; // the alias's own rich text — resolves its id at pick time
           let matchFold = foldName;
-          if (!foldedTokens.every((t) => foldName.includes(t))) {
+          const fromHelper = helperRank.has(r._id);
+          const helperAliasId = helperAlias.get(r._id);
+          if (fromHelper && helperAliasId) {
+            // The helper matched it through this alias: show and reference that one.
+            try {
+              const a = (await aliasesWithIds(r)).find((x) => x.aliasId === helperAliasId);
+              if (a) {
+                const atRaw = (await resolveRemTextForBreadcrumb(plugin, a.text)).trim();
+                aliasText = atRaw === 'Untitled' ? undefined : atRaw;
+                if (aliasText) {
+                  aliasId = a.aliasId;
+                  aliasRichText = a.text;
+                  matchFold = canonFig(fold(aliasText));
+                }
+              }
+            } catch { /* show it under its own name */ }
+          } else if (!fromHelper && !foldedTokens.every((t) => foldName.includes(t))) {
             // …or in one of the rem's aliases. RemNote indexes aliases into the
             // owning rem, so an alias-text search returns THIS rem (with a
             // non-matching primary name); consult its aliases to confirm and
@@ -435,7 +513,10 @@ function ReferenceFinder() {
           if (matchFold === qf) score = 0;
           else if (matchFold.startsWith(qf)) score = 1;
           else if (matchFold.includes(qf)) score = 2;
-          scored.push({ r, id: r._id, name, normName: normalize(name), type, times, score, aliasId, aliasText, aliasRichText, matchFold });
+          scored.push({
+            r, id: r._id, name, normName: normalize(name), type, times, score, aliasId, aliasText, aliasRichText, matchFold,
+            helperRank: helperRank.get(r._id) ?? Infinity,
+          });
         }
 
         scored.sort((a, b) => {
@@ -444,6 +525,7 @@ function ReferenceFinder() {
           const bc = b.type === RemType.CONCEPT ? 0 : 1;
           if (ac !== bc) return ac - bc;
           if (a.times !== b.times) return b.times - a.times;
+          if (a.helperRank !== b.helperRank) return a.helperRank - b.helperRank;
           return a.matchFold.length - b.matchFold.length;
         });
 
@@ -931,28 +1013,50 @@ function ReferenceFinder() {
           Concepts only
         </label>
       </div>
-      <input
-        ref={inputRef}
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder="Type a rem name"
-        style={{
-          width: '100%',
-          padding: '8px 10px',
-          fontSize: '13px',
-          boxSizing: 'border-box',
-          borderRadius: '6px',
-          border: '1px solid var(--rn-clr-border)',
-          backgroundColor: 'var(--rn-clr-background-secondary)',
-          color: 'var(--rn-clr-content-primary)',
-        }}
-      />
+      <div style={{ position: 'relative' }}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="Type a rem name"
+          style={{
+            width: '100%',
+            padding: engineNote.helper ? '8px 30px 8px 10px' : '8px 10px',
+            fontSize: '13px',
+            boxSizing: 'border-box',
+            borderRadius: '6px',
+            border: '1px solid var(--rn-clr-border)',
+            backgroundColor: 'var(--rn-clr-background-secondary)',
+            color: 'var(--rn-clr-content-primary)',
+          }}
+        />
+        {engineNote.helper && query.trim().length >= 2 && (
+          <span
+            title="Searched by the AI helper: every word must match; and, or, -word, &quot;phrases&quot; and in:&quot;Document&quot; work"
+            aria-label="Searched by the AI helper"
+            style={{ position: 'absolute', right: '9px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', cursor: 'default' }}
+          >
+            ⚡
+          </span>
+        )}
+      </div>
+      {engineNote.message && query.trim().length >= 2 && (
+        <div
+          style={{
+            fontSize: '11.5px',
+            marginTop: '5px',
+            color: engineNote.tone === 'error' ? 'var(--rn-clr-red, #c0392b)' : 'var(--rn-clr-content-secondary)',
+          }}
+        >
+          {engineNote.message}
+        </div>
+      )}
       <div style={{ marginTop: '8px', maxHeight: `${listMaxHeight}px`, overflowY: 'auto' }}>
         {query.trim().length < 2 ? (
           <div style={{ fontSize: '12px', color: 'var(--rn-clr-content-tertiary)', padding: '6px 2px' }}>
-            Type at least 2 characters. Searches each word separately and floats exact-name matches up, so it finds rems the normal search can't — including matches by a rem's alias (shown with an ALIAS tag; the inserted reference renders the alias text). Enter inserts a reference; Ctrl/Cmd+Enter inserts a pin (no text); Opt/Alt+Enter inserts the text then a pin; Shift+Enter / Shift+click opens the rem in a new pane.
+            Type at least 2 characters. Searches each word separately and floats exact-name matches up, so it finds rems the normal search can't — including matches by a rem's alias (shown with an ALIAS tag; the inserted reference renders the alias text). Enter inserts a reference; Ctrl/Cmd+Enter inserts a pin (no text); Opt/Alt+Enter inserts the text then a pin; Shift+Enter / Shift+click opens the rem in a new pane. With the AI helper running and paired (⚡), every word must match, and and, or, -word, "phrases" and in:"Document" work too.
           </div>
         ) : results.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--rn-clr-content-tertiary)', padding: '6px 2px' }}>

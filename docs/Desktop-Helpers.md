@@ -6,7 +6,7 @@ A RemNote plugin runs sandboxed: it cannot start programs, open files on your co
 
 | Helper | What it is for | Program | Address | Set up in |
 |---|---|---|---|---|
-| **AI helper** | [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md), [Pin Source Quote](Source-Pins.md), [Incremental Video](Incremental-Video.md#setup) screenshots and transcripts, and the [review history of deleted Rems](#history-archive) | `ai_ocr_helper.py` + `history_archive.py` (Python) | `127.0.0.1:3457` | [this page](#setup) |
+| **AI helper** | [AI Transcription of PDF Highlights](AI-Transcription-of-PDF-Highlights.md), [Pin Source Quote](Source-Pins.md), [Incremental Video](Incremental-Video.md#setup) screenshots and transcripts, the [review history of deleted Rems](#history-archive), and [searching with AND, OR and NOT](#search) | `ai_ocr_helper.py` + `history_archive.py` + `rem_search.py` (Python) | `127.0.0.1:3457` | [this page](#setup) |
 | **Local Media Bridge** | Scripts and AI assistants writing through the RemNote MCP: local images, Rem operations, [Upscale image with ChatGPT](Local-Media-Bridge.md#upscale), [Read aloud and Add pronunciation](Read-Aloud.md) | `media_bridge.py` (Python) | `127.0.0.1:3460` | [Local Media Bridge](Local-Media-Bridge.md#setup) |
 | **Logos bridge** | Reading [Logos Bible Software](Logos-Bible-Software-Integration.md) books incrementally (macOS) | `LogosBridge.app`, built by `build.sh` | `127.0.0.1:3458` | [Logos integration](Logos-Bible-Software-Integration.md#setup) |
 | **Source finder** (yours) | Telling [Pin Source Quote](Source-Pins.md#no-source-open) which book a quote comes from when no PDF is open | Any program you write, run by the AI helper | — | [Source Pins](Source-Pins.md#source-finder-setup) |
@@ -56,9 +56,11 @@ The plugin's messages call it the **AI helper**, although most of what it does i
       https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/ai_ocr_helper.py
     curl -o ~/.incremental-remnote/history_archive.py \
       https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/history_archive.py
+    curl -o ~/.incremental-remnote/rem_search.py \
+      https://raw.githubusercontent.com/hugomarins/incremental-remnote/main/scripts/rem_search.py
     ```
 
-    The second file keeps the [review history of deleted Rems](#history-archive). Without it, everything else works.
+    The second file keeps the [review history of deleted Rems](#history-archive), and the third, which needs the second, does [searching with AND, OR and NOT](#search). Without them, everything else works.
 
 3. **Start it:**
 
@@ -70,7 +72,7 @@ The plugin's messages call it the **AI helper**, although most of what it does i
 
 4. **For AI features**, install **Claude Code** ([claude.com/claude-code](https://claude.com/claude-code)) and run `claude` once in a terminal to log in. The helper uses your Claude subscription: no API key, nothing to pay beyond your plan.
 
-**To check it is running**, open <http://127.0.0.1:3457/>. The answer shows `"ok": true` and what the helper found: `claude`, `ytDlp`, `ffmpeg` and `whisper` give where each tool is (or `null`), and `historyArchive` is `true` when `history_archive.py` was loaded.
+**To check it is running**, open <http://127.0.0.1:3457/>. The answer shows `"ok": true` and what the helper found: `claude`, `ytDlp`, `ffmpeg` and `whisper` give where each tool is (or `null`), `historyArchive` is `true` when `history_archive.py` was loaded, and `search` is `true` when `rem_search.py` was.
 
 ### Start the AI helper at login (macOS) { #run-at-login }
 
@@ -197,6 +199,24 @@ What the columns mean:
 
 To find a card by its text, replace `WHERE i.state != 'live'` with `WHERE m.text LIKE '%a few words%'` in the first query. That also lists the live cards with that text; the `state` column tells them apart. A Rem with several cards (both directions, or several clozes) has one row per card.
 
+## Searching with AND, OR and NOT { #search }
+
+RemNote's search, the only one a plugin can use, looks for any of the words you type and keeps the first 1,000 Rems by a ranking that ignores your words. A Rem holding every word you typed can be cut before the plugin sees it: in one knowledge base, `bow weather wave` matched 5,874 Rems on any word and a single Rem on all three, and that one was cut.
+
+With `rem_search.py` next to the helper, [Find Rem](Utilities-Finding-and-Navigating.md#search-with-the-ai-helper) searches through the helper instead. The helper reads RemNote's own search index in its local database (`~/remnote/remnote-<id>/remnote.db`), never writes to it, and runs a real search: every word must match, and `or`, `-word`, `"phrases"`, brackets and `in:"Document"` work. A search takes a few milliseconds.
+
+**Pair the plugin with the helper.** Any web page open in your browser can reach a program on your computer, so the helper only answers searches that carry its pairing token. It creates the token the first time it starts.
+
+1. Print it:
+
+    ```bash
+    python3 ~/.incremental-remnote/ai_ocr_helper.py --pairing-token
+    ```
+
+2. Paste it into the plugin's settings, **AI Helper Pairing Token**.
+
+The token is kept in `ai-ocr/pairing-token`, readable only by your user. To make a new one, delete that file, restart the helper and paste the new token. If you run the helper on two computers, copy the file from one to the other: the plugin setting is the same on both.
+
 ## Files the AI helper keeps { #files }
 
 Everything is under `~/.incremental-remnote/`:
@@ -210,6 +230,7 @@ Everything is under `~/.incremental-remnote/`:
 | `ai-ocr/crops/` | The image sent for each highlight, useful when a transcription covers more or less than you highlighted |
 | `ai-ocr/pdf-cache/`, `video-frames/`, `video-transcripts/`, `video-audio/`, `whisper/` | Caches and the speech model. Downloaded audio is deleted after a week. |
 | `history-archive/` | The [review history archive](#history-archive), one SQLite file per knowledge base |
+| `ai-ocr/pairing-token` | The token the plugin sends with [searches](#search) |
 
 ## AI helper troubleshooting { #troubleshooting }
 
@@ -218,6 +239,7 @@ Everything is under `~/.incremental-remnote/`:
 | *AI helper is not running*, or *The helper is not running* | Start the helper ([Setup](#setup), step 3) and check <http://127.0.0.1:3457/>. |
 | *… claude CLI not found* | Install Claude Code. The helper looks for `claude` on your `PATH` and in `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. |
 | *Include deleted Rems (helper not running)* in the Study Dashboard | Start the helper. If it is running and <http://127.0.0.1:3457/> shows `"historyArchive": false`, put `history_archive.py` next to `ai_ocr_helper.py` and restart the helper. |
+| Find Rem says *The AI helper is running but not paired* | Paste the token in the plugin settings ([Searching with AND, OR and NOT](#search)). If it was pasted, the helper's token changed: print it again. |
 | A feature behaves as before after an update | Restart the helper: it keeps running the version it started with. |
 
 For anything else, look at `requests.log` and `helper.log` ([Files the AI helper keeps](#files)). Each feature's page lists the problems specific to it.
@@ -228,4 +250,4 @@ The AI helper accepts connections only from your own computer. What leaves it:
 
 - **AI features** send Anthropic, through your Claude account, only what that request needs: the image of a highlighted region and its text, a video frame, or a transcript. It is the same as pasting them into a Claude conversation.
 - **Video features** download from YouTube the video or captions you asked for.
-- **Pin Source Quote** and the **review history archive** send nothing anywhere. The archive stays on your computer.
+- **Pin Source Quote**, the **review history archive** and **search** send nothing anywhere. The archive stays on your computer, and searches answer only the plugin, which holds the pairing token.
