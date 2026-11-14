@@ -44,7 +44,7 @@ REM_SORT = {
     'created': '(SELECT created FROM rems WHERE id = h.id)',
     'edited': '(SELECT edited FROM rems WHERE id = h.id)',
     'due': '(SELECT MIN(next) FROM cards WHERE rem = h.id)',
-    'priority': prop_expr('h.id', 'cardpriority', 'priority'),
+    'priority': f"COALESCE({prop_expr('h.id', 'cardpriority', 'priorityvalue')}, {prop_expr('h.id', 'cardpriority', 'priority')})",
     'incpriority': prop_expr('h.id', 'incremental', 'priority'),
     'reps': '(SELECT SUM(reps) FROM cards WHERE rem = h.id)',
     'lapses': '(SELECT SUM(lapses) FROM cards WHERE rem = h.id)',
@@ -204,7 +204,9 @@ def _common(db, rid, texts):
         'tags': [t for t in tags if t],
         'incremental': 'incremental' in powerups,
         'dismissed': 'dismissed' in powerups,
-        'priority': db.execute('SELECT ' + prop_expr('?', 'cardpriority', 'priority'), (rid,)).fetchone()[0],
+        # The hidden priorityValue slot, the visible priority as fallback (slot_access.ts).
+        'priority': db.execute(f"SELECT COALESCE({prop_expr('?', 'cardpriority', 'priorityvalue')}, "
+                               f"{prop_expr('?', 'cardpriority', 'priority')})", (rid, rid)).fetchone()[0],
         'incPriority': db.execute('SELECT ' + prop_expr('?', 'incremental', 'priority'), (rid,)).fetchone()[0],
         'incDue': (inc_due - today) if inc_due is not None else None,
     }

@@ -899,4 +899,5 @@ export const menuHubAnchorPosition = { top: 1, left: 1 };
 // Search & Browse (plans/SEARCH_ENGINE_PLAN.md phase 4; lib/search_browse.ts).
 export const searchBrowseWidgetId = 'search_browse_popup';
 export const savedSearchesKey = 'search-browse-saved'; // synced: SavedSearch[]
+export const searchHistoryKey = 'search-browse-history'; // local (per device): last searches, newest first
 export const searchQueuesParentName = 'Search Queues';

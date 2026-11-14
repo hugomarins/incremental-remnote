@@ -82,10 +82,13 @@ DOCS = {
             'createdAt': NOW - 300 * DAY, 'key,u': NOW - 2 * 3600_000,
             'ps': {'os_os': slot('Wärtsilä Encyclopedia of Ship Technology', 1, [{'i': 'q', '_id': BOOK}])}},
     MARGIN: {'key': ['Service power margin'], 'type': 1, 'createdAt': NOW - 3600_000,
+             # Card priority: the hidden slot (30) wins over the visible one (90).
+             'bpc': {'cardPriority': {'priority': {'v': ['90'], 's': '90'}}},
              'al': [{'aliasId': ids('ALIAS'), 'alias': 'sea margin'}],
              'tp': {PW_INC: {'t': True}},
              # An old `ps` copy of the slot, and a newer one in a property child (below).
-             'ps': {'incremental_nextRepDate': slot(date_name(30), NOW - 100 * DAY),
+             'ps': {'cardPriority_priorityValue': slot('30', NOW - DAY),
+                    'incremental_nextRepDate': slot(date_name(30), NOW - 100 * DAY),
                     'incremental_priority': slot('20', NOW - DAY)}},
     OTHER: {'key': ['The tug pushes the bow'], 'type': 2, 'createdAt': NOW - 500 * DAY, 'tp': {TAG: {'t': False}}},
     TAG: {'key': ['Anki Card'], 'createdAt': 1},
@@ -93,7 +96,9 @@ DOCS = {
     PROP_BOOK: {'key': ['Book'], 'parent': TAG, 'createdAt': 1},
     PROP_NEXT: {'key': ['Next Rep Date'], 'parent': PW_INC, 'createdAt': 1},
     CHILD_BOOK: {'key': [{'i': 'q', '_id': PROP_BOOK}], 'value': ['PNA Resistência'], 'ie': True, 'parent': BOW,
-                 'createdAt': 1},
+                 'createdAt': 1,
+                 # A property child with a card priority of its own: it stays the child's.
+                 'ps': {'cardPriority_priorityValue': slot('77', 1)}},
     CHILD_NEXT: {'key': [{'i': 'q', '_id': PROP_NEXT}], 'value': [{'i': 'q', '_id': DAILY_OLD}], 'ie': True,
                  'parent': MARGIN, 'createdAt': 1, 'value,u': NOW - 5 * DAY},
     DAILY_OLD: {'key': [date_name(-3)], 'createdAt': 1},
@@ -392,6 +397,19 @@ class IndexSearchTest(unittest.TestCase):
         self.assertEqual(self.rems('ankicard.book:_*'), {BOW})
         self.assertEqual(self.rems('prop:incpriority<=20'), {MARGIN})
         self.assertEqual(self.rems('incremental.priority>20'), set())
+
+    def test_card_priority_reads_the_hidden_slot(self):
+        self.assertEqual(self.rems('prop:priority<=30'), {MARGIN})
+        self.assertEqual(self.rems('prop:priority>50'), set())  # not the visible 90
+        self.assertEqual(self.rems('cardpriority.priority=30'), {MARGIN})
+        row = [r for r in rb.browse(KB, 'margin', db_path=self.db, index_file=self.index)['rows'] if r['remId'] == MARGIN][0]
+        self.assertEqual(row['priority'], 30)
+        db = ri.ready(KB, self.db, self.index)
+        try:  # the property child's own priority is filed under the child, not BOW
+            self.assertEqual(db.execute("SELECT rem FROM props WHERE name = 'priorityvalue' AND num = 77").fetchall(),
+                             [(CHILD_BOOK,)])
+        finally:
+            db.close()
 
     def test_newest_copy_of_a_slot_wins(self):
         # ps says due in 30 days (written 100 days ago); the child says 3 days ago (5 days ago).

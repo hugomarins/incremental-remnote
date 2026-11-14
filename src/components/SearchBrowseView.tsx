@@ -5,8 +5,9 @@
  * by asking again, and runs the bulk actions in lib/search_browse.ts.
  *
  * Keyboard (house rule: keys on the container, never on buttons): in the box, Enter
- * searches and ↓ enters the table; in the table ↑/↓ move, Space selects, Enter opens
- * the Rem, Shift+Enter opens it in a new pane, / returns to the box; Esc closes.
+ * searches, ↑/↓ walk the last searches (as in Anki's Browser) and Tab enters the
+ * table; in the table ↑/↓ move, Space selects, Enter opens the Rem, Shift+Enter opens
+ * it in a new pane, / or Shift+Tab returns to the box; Esc closes.
  */
 import { usePlugin } from '@remnote/plugin-sdk';
 import React from 'react';
@@ -28,8 +29,11 @@ import {
   setCardPriorityForRems,
 } from '../lib/search_browse';
 import { openRemInNewPane } from '../lib/remHelpers';
+import { searchHistoryKey } from '../lib/consts';
 
 const PAGE = 100;
+/** Searches remembered for ↑/↓ in the box. */
+const HISTORY_MAX = 50;
 const RING = '2px solid var(--rn-clr-border-accent, #3B82F6)';
 
 const CAUSE_LABEL: Record<string, string> = {
@@ -71,7 +75,10 @@ const COLUMNS: Column[] = [
     sort: 'text',
     render: (r) => (
       <div style={{ minWidth: 0 }}>
-        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div
+          style={{ overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+          title={r.back ? `${r.text} → ${r.back}` : r.text}
+        >
           {r.text || <em style={{ opacity: 0.6 }}>(no text)</em>}
           {r.back ? <span style={{ color: 'var(--rn-clr-content-secondary)' }}> → {r.back}</span> : null}
         </div>
@@ -147,9 +154,18 @@ export function SearchBrowse() {
   const [activeSaved, setActiveSaved] = React.useState<string>('');
   const [priority, setPriority] = React.useState('');
   const [busy, setBusy] = React.useState<string | null>(null);
+  // Search history, newest first, kept per device. `histPos` -1 is what is being
+  // typed (kept in `draftRef` while walking the history).
+  const [history, setHistory] = React.useState<string[]>([]);
+  const [histPos, setHistPos] = React.useState(-1);
+  const draftRef = React.useRef('');
 
   React.useEffect(() => {
     loadSavedSearches(plugin).then(setSaved);
+    plugin.storage
+      .getLocal<string[]>(searchHistoryKey)
+      .then((h) => setHistory(Array.isArray(h) ? h.filter((x) => typeof x === 'string') : []))
+      .catch(() => {});
     let tries = 0;
     const grab = () => {
       inputRef.current?.focus();
@@ -171,6 +187,12 @@ export function SearchBrowse() {
       const res = await browseViaHelper(plugin, { query: q, mode: m, sort: s, desc: d, offset, limit: PAGE });
       if (req !== reqRef.current) return;
       setLoading(false);
+      if (!opts?.append) {
+        const next = [q, ...history.filter((h) => h !== q)].slice(0, HISTORY_MAX);
+        setHistory(next);
+        setHistPos(-1);
+        plugin.storage.setLocal(searchHistoryKey, next).catch(() => {});
+      }
       if (res.status === 'ok') {
         setRows(opts?.append ? [...rows, ...res.rows] : res.rows);
         setTotal(res.total);
@@ -185,8 +207,18 @@ export function SearchBrowse() {
         setMessage({ text: 'Search & Browse needs the AI helper running on this computer (see the Search Engine page of the manual).', tone: 'error' });
       }
     },
-    [plugin, query, mode, sort, desc, rows]
+    [plugin, query, mode, sort, desc, rows, history]
   );
+
+  /** ↑ (older) / ↓ (newer) through the search history, as Anki's Browser does. */
+  const walkHistory = (step: 1 | -1) => {
+    if (!history.length) return;
+    const pos = Math.max(-1, Math.min(history.length - 1, histPos + step));
+    if (pos === histPos) return;
+    if (histPos === -1) draftRef.current = query;
+    setHistPos(pos);
+    setQuery(pos === -1 ? draftRef.current : history[pos]);
+  };
 
   const changeSort = (s: BrowseSort) => {
     const d = s === sort ? !desc : false;
@@ -310,7 +342,13 @@ export function SearchBrowse() {
       if (e.key === 'Enter') {
         e.preventDefault();
         run();
-      } else if (e.key === 'ArrowDown' && rows.length) {
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        walkHistory(1);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        walkHistory(-1);
+      } else if (e.key === 'Tab' && !e.shiftKey && rows.length) {
         e.preventDefault();
         setFocus(0);
         containerRef.current?.focus();
@@ -322,10 +360,11 @@ export function SearchBrowse() {
       setFocus(Math.min(rows.length - 1, focus + 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (focus === 0) {
-        setFocus(-1);
-        inputRef.current?.focus();
-      } else setFocus(focus - 1);
+      setFocus(Math.max(0, focus - 1));
+    } else if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      setFocus(-1);
+      inputRef.current?.focus();
     } else if (e.key === ' ') {
       e.preventDefault();
       if (rows[focus]) toggle(rows[focus]);
@@ -344,7 +383,8 @@ export function SearchBrowse() {
   }, [focus]);
 
   const columns = COLUMNS.filter((c) => !c.modes || c.modes.includes(mode));
-  const grid = `28px ${columns.map((c) => c.width ?? 'minmax(0, 1fr)').join(' ')}`;
+  // The Rem column takes whatever the fixed columns leave, never less than 420 px.
+  const grid = `28px ${columns.map((c) => c.width ?? 'minmax(420px, 1fr)').join(' ')}`;
   const btn: React.CSSProperties = {
     padding: '5px 10px',
     fontSize: '12px',
@@ -422,8 +462,12 @@ export function SearchBrowse() {
         <input
           ref={inputRef}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setHistPos(-1);
+          }}
           onFocus={() => setFocus(-1)}
+          title={history.length ? '↑/↓: your last searches' : undefined}
           placeholder='bow weather · tag:anki* is:due · in:"PSCPP" suppressed:rem · prop:lapses>3'
           style={{
             flex: 1,
@@ -601,7 +645,7 @@ export function SearchBrowse() {
         </button>
       </div>
       <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)' }}>
-        Enter search / open · ↓↑ move · Space select · Shift+Enter open in new pane · / back to the box · Esc close · Ctrl/Cmd+click select
+        In the box: Enter search · ↑↓ last searches · Tab to the table — In the table: ↑↓ move · Space select · Enter open · Shift+Enter open in new pane · / or Shift+Tab back to the box — Esc close · Ctrl/Cmd+click select
       </div>
     </div>
   );

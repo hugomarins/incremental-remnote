@@ -123,6 +123,13 @@ cloze 1, and 359 left for the paused/ancestor causes (`rem_search.py` `CARD_CAUS
 - A visible slot can **also** keep an older copy in `ps`: 5,063 IncRems had both, and in
   every one the child was written later (`value,u` > the `ps` entry's `,u`). The `ps` copy
   is stale. Reading "a slot's value" means taking the newest write across both places.
+- A property child is a Rem too and can carry **slots of its own**: the plugin's
+  inherited card priority lands on them (e.g. a "Mnemonic recall" value). Only the
+  child's `value` belongs to the parent; its own `ps` stays its. (An index filing the
+  child's whole document under the parent lost thousands of card priorities, Nov 2026.)
+- **Card priority** is the hidden `cardPriority_priorityValue`, with the visible
+  `cardPriority_priority` as fallback (`src/lib/card_priority/slot_access.ts`). 1,913
+  Rems hold different values in the two; the hidden one is the priority.
 - Date slots hold a reference to a daily document; the text is its name ("August 1st,
   2026"). Sources are the slot `os_os`, whose value lists references to the source Rems.
 

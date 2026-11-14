@@ -62,7 +62,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import history_archive  # noqa: E402  (KB paths, read-only open)
 
 INDEX_DIR = Path.home() / '.incremental-remnote' / 'search'
-SCHEMA_VERSION = '8'
+SCHEMA_VERSION = '9'
 # Re-read Rems written up to this long before the last stamp seen: commits and
 # clocks need not arrive in stamp order. Re-reading is idempotent.
 OVERLAP_MS = 10_000
@@ -277,7 +277,11 @@ class Reader:
 
     def rows(self, rid, d):
         """Every index row for Rem `rid`; `names` collects Rems whose name must be kept."""
-        out = {'rem': None, 'tags': [], 'powerups': set(), 'props': [], 'refs': [], 'names': {}}
+        # props/refs belong to this Rem; host_props/host_refs to the Rem this one is a
+        # property value of (its parent), when it is a hidden property child. A child
+        # can have slots of its own (card priority on a property child), which stay its.
+        out = {'rem': None, 'tags': [], 'powerups': set(), 'props': [], 'refs': [], 'names': {},
+               'host_props': [], 'host_refs': []}
         if not d:
             return out
         if isinstance(d.get('rcrt'), str):  # a powerup Rem, new or renamed
@@ -332,20 +336,22 @@ class Reader:
                 tag_name = self.powerup_of.get(tag) or (self.name(tag) if tag else '')
                 out['host'] = d['parent']
                 out['names'][prop_id] = None
-                self._prop(out, tag_name, self.name(prop_id), prop_id, None, value, d.get('value,u') or d.get('u'))
+                self._prop(out, tag_name, self.name(prop_id), prop_id, None, value, d.get('value,u') or d.get('u'),
+                           host=True)
         return out
 
-    def _prop(self, out, owner, name, prop_id, text, rich, at=None):
+    def _prop(self, out, owner, name, prop_id, text, rich, at=None, host=False):
         targets = ref_ids(rich)
         if text is None:
             text = plain(rich, {t: self.name(t) for t in targets})
         text = fold(str(text))[:MAX_TEXT]
         num, day = number_and_day(text)
         owner, name = squash(owner), squash(name)
-        out['props'].append((owner, name, prop_id, text, num, day, at if isinstance(at, (int, float)) else 0))
+        out['host_props' if host else 'props'].append(
+            (owner, name, prop_id, text, num, day, at if isinstance(at, (int, float)) else 0))
         kind = 'source' if (owner, name) == SOURCES else 'value'
         for t in targets:
-            out['refs'].append((t, kind))
+            out['host_refs' if host else 'refs'].append((t, kind))
             if kind == 'source':
                 out['names'][t] = None
 
@@ -374,12 +380,13 @@ def _write(db, reader, docs, fresh=False):
         rows = reader.rows(rid, d)
         if rows['rem']:
             db.execute('INSERT OR REPLACE INTO rems VALUES (?,?,?,?,?,?,?,?,?,?,?)', rows['rem'])
-        owner_rem = rows.get('host') or rid
+        host = rows.get('host')
         db.executemany('INSERT INTO rem_tags VALUES (?, ?)', [(rid, t) for t in rows['tags']])
         db.executemany('INSERT INTO rem_powerups VALUES (?, ?)', [(rid, c) for c in rows['powerups']])
-        db.executemany('INSERT INTO props VALUES (?,?,?,?,?,?,?,?,?)', [(owner_rem, rid, *p) for p in rows['props']])
+        db.executemany('INSERT INTO props VALUES (?,?,?,?,?,?,?,?,?)',
+                       [(rid, rid, *p) for p in rows['props']] + [(host, rid, *p) for p in rows['host_props']])
         db.executemany('INSERT INTO refs VALUES (?,?,?,?)',
-                       [(rid if k == 'text' else owner_rem, rid, t, k) for t, k in rows['refs']])
+                       [(rid, rid, t, k) for t, k in rows['refs']] + [(host, rid, t, k) for t, k in rows['host_refs']])
         names.update(rows['names'])
     # Names of tags and properties, and of any already-named Rem that changed (a rename).
     renamed = set()

@@ -124,6 +124,9 @@ RATINGS = {'forgot': 0, 'again': 0, '1': 0, 'hard': 0.5, '2': 0.5, 'good': 1, '3
            'skip': 0.01}
 
 # prop: shortcuts → (owner, name) in the index's squashed form.
+CARD_PRIORITY_NEWEST = ("(SELECT p.num FROM props p WHERE p.rem = {rem} AND p.owner = 'cardpriority'"
+                        " AND p.name = '{name}' ORDER BY p.at DESC LIMIT 1)")
+NUMBER_RE = re.compile(r'^-?\d+(?:\.\d+)?$')
 PROP_ALIASES = {'priority': ('cardpriority', 'priority'), 'incpriority': ('incremental', 'priority'),
                 'incdue': ('incremental', 'nextrepdate')}
 COMPARE_RE = re.compile(r'^(.+?)(<=|>=|!=|<|>|=)(-?\d+(?:\.\d+)?)$')
@@ -776,6 +779,24 @@ class Compiler:
         return (f'({not_paused} AND {not_ancestor} AND s.id IN (SELECT c.rem FROM cards c '
                 f'JOIN rems r ON r.id = c.rem WHERE ({CARD_CAUSE}) = ?))')
 
+    def card_priority_sql(self, term):
+        """Card priority as the plugin reads it (src/lib/card_priority/slot_access.ts):
+        the hidden `priorityValue` slot, the visible `priority` as fallback. 1,913 Rems
+        hold different values in the two (Nov 2026); the hidden one is the priority."""
+        value = f"COALESCE({CARD_PRIORITY_NEWEST.format(rem='r.rem', name='priorityvalue')}, " \
+                f"{CARD_PRIORITY_NEWEST.format(rem='r.rem', name='priority')})"
+        if term.op:
+            cond, args = f'{value} {term.op} ?', [term.num]
+        elif term.value == '':
+            cond, args = f'{value} IS NULL', []
+        elif term.value == '*':
+            cond, args = '1', []
+        else:
+            cond, args = f'{value} = ?', [float(term.value) if NUMBER_RE.match(term.value) else term.value]
+        self.args += args
+        return ("s.id IN (SELECT r.rem FROM (SELECT DISTINCT rem FROM props WHERE owner = 'cardpriority'"
+                f" AND name IN ('priorityvalue', 'priority')) r WHERE {cond})")
+
     def index_leaf(self, term):
         k = term.kind
         if k == 'card':
@@ -826,6 +847,8 @@ class Compiler:
             self.args.append(days_ago_ms(int(term.num)))
             col = 'created' if k == 'added' else 'edited'
             return f's.id IN (SELECT id FROM rems WHERE {col} >= ?)'
+        if k == 'field' and term.owner == 'cardpriority' and term.name == 'priority':
+            return self.card_priority_sql(term)
         if k == 'field':
             owner_sql = ''
             if term.owner != '*':

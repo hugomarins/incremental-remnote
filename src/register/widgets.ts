@@ -1,7 +1,7 @@
 import { QueueItemType, ReactRNPlugin, WidgetLocation } from '@remnote/plugin-sdk';
 import { pageRangeWidgetId, parentSelectorWidgetId, parentPickWidgetId, powerupCode, priorityGraphPowerupCode, incremNotesSidebarWidgetId, enableMasteryDrillId, pluginHubWidgetId, onboardingTipsWidgetId, cardVideoPowerupCode, mcScissorsWidgetId, mcAssertionsWidgetId, menuHubWidgetId, READ_ALOUD_POPUP } from '../lib/consts';
 import { getIESetting } from '../lib/settings';
-import { screenFittedHeight } from '../lib/utils';
+import { screenFittedHeight, screenFittedWidth } from '../lib/utils';
 
 /* Shows each queue badge/timer widget in one queue variant only. RemNote wraps
    each location widget as
@@ -604,8 +604,9 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
   // Search Engine, wide enough for its columns.
   plugin.app.registerWidget('search_browse_popup', WidgetLocation.Popup, {
     dimensions: {
-      width: '1300px',
-      // As tall as the screen allows (90%), so the table shows more rows.
+      // As wide and tall as the display allows (90%): the Rem column takes the extra
+      // width, the table more rows.
+      width: screenFittedWidth(1100, 2400),
       height: screenFittedHeight(640, 1300),
     },
   });
