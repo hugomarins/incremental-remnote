@@ -9,13 +9,13 @@ Served by ai_ocr_helper.py as POST /search; also a command line for tests:
 
 Why it exists: the plugin can only search through RemNote, whose worker always ORs the
 words and keeps the best 1,000 by a rank that ignores the query, so a Rem holding every
-word you typed can be dropped before the plugin sees it. See plans/SEARCH_ENGINE_PLAN.md.
+word you typed can be dropped before the plugin sees it. See plans/implemented/SEARCH_ENGINE_PLAN.md.
 
 The grammar is Anki's (docs-site/manual/searching.mdx, rslib/src/search/parser.rs):
 spaces mean AND, `or`, `-` excludes, brackets group, "…" is a phrase, `key:value` and
 `key:"…"`, `\\` escapes. AND binds tighter than OR: `a b or c` = `(a b) or c`.
 
-Terms (plans/SEARCH_ENGINE_PLAN.md §4):
+Terms (plans/implemented/SEARCH_ENGINE_PLAN.md §4):
     word            a word starting with it (RemNote's index is word-based)
     "two words"     the words side by side
     w:word          that whole word

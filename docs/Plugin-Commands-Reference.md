@@ -425,7 +425,7 @@ Turn statements into [True or False cards](Utilities-True-or-False-Cards.md). Al
   📖 See [Utilities → Find Rem — Reference or Open](Utilities-Finding-and-Navigating.md#find-rem-reference-or-open).
 
 - **Search & Browse** — `quick: sb`
-  Opens a table of everything a [Search Engine](Search-Engine.md) query finds, like Anki's Browser: Rems or cards, sortable columns (priority, due date, interval, reps, lapses…), bulk card priority, switching cards back on, copying ids, saved searches and a practice document per saved search. It floats over the editor and collapses to a bar at the bottom right when you open a Rem; running `sb` again brings it back where you left it. Needs the AI helper on the desktop.
+  Opens a table of everything a [Search Engine](Search-Engine.md) query finds, like Anki's Browser: Rems or cards, sortable columns (priority, due date, interval, reps, lapses, FSRS stability, difficulty and retrievability…), searches written in plain language by **✨ AI**, bulk card priority, switching cards back on, copying ids, saved searches and a practice document per saved search. It floats over the editor and collapses to a bar at the bottom right when you open a Rem; running `sb` again brings it back where you left it. Needs the AI helper on the desktop.
 
   📖 See [Search Engine → Search & Browse](Search-Engine.md#browse).
 

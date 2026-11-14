@@ -1,7 +1,7 @@
 # RemNote's search and local database
 
 What the Search Engine (`scripts/rem_search.py`, `scripts/rem_index.py`; plan in
-`plans/SEARCH_ENGINE_PLAN.md`) relies on. Established 2026-11-14 on RemNote desktop
+`plans/implemented/SEARCH_ENGINE_PLAN.md`) relies on. Established 2026-11-14 on RemNote desktop
 1.30.2-beta (macOS) by reading the app bundle and the main knowledge base's
 `~/remnote/remnote-<kbId>/remnote.db` (SQLite, opened `?mode=ro`; 443,381 Rems, 71,730
 cards, 357,745 search rows). Re-verify after a RemNote update: its storage changed under

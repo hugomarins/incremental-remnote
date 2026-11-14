@@ -1,7 +1,7 @@
 # Search engine — design proposal
 
 Maintainer notes, not published (the docs site is built from `docs/` only).
-**Status:** approved 2026-11-14 (all four decisions in §9 as proposed); all five phases shipped in v1.0.231.
+**Status:** implemented — shipped in v1.0.231 (Nov 14, 2026): all five phases plus ✨ AI search. Kept for its decisions; the user-facing result is `docs/Search-Engine.md`, the RemNote facts `findings/SEARCH_AND_DATABASE.md`.
 
 **Goal:** an Anki-style query language over the knowledge base, run by the local helper against
 `remnote.db`, returning Rem (or card) ids. First user: Find Rem (`fir`). Later: a browser widget,
@@ -179,6 +179,17 @@ Not offered: flags (RemNote has none), presets, `dupe:`, custom data.
   priority, due), saved searches, and "make a queue from this search". That queue would go
   through a portal document, since a plugin can't start RemNote's filtered queue
   (its card list is read from the host's localStorage).
+
+## 5b. ✨ AI search (shipped in v1.0.231; docs: Search Engine → ✨ AI)
+
+Search & Browse's ✨ AI button (and Ctrl/Cmd+Enter): the box's plain-language request,
+in any language, becomes a query through `/search/ai` (`scripts/rem_search_ai.py`): one
+`claude -p` turn via the helper's `run_claude` (model `IR_AI_MODEL`, default sonnet, the
+user's subscription), instructions in `ai-ocr/search-prompt.md` (written from
+DEFAULT_PROMPT, re-read per request, never overwritten: delete it for newer defaults).
+Sent with the request: scheduler names, the 60 most-used tags and top 150
+documents/folders (names only), so places resolve to real `in:`. The reply is parsed by
+`rem_search.parse`; an invalid one goes back once with the error. ~3.5 s per request.
 
 ## 6. Security and privacy (blocking)
 

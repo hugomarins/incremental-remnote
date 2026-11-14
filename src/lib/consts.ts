@@ -896,7 +896,7 @@ export const menuHubTargetKey = 'menu-hub-target';
 export const menuHubActiveIdKey = 'menu-hub-active-id';
 export const menuHubAnchorPosition = { top: 1, left: 1 };
 
-// Search & Browse (plans/SEARCH_ENGINE_PLAN.md phase 4; lib/search_browse.ts).
+// Search & Browse (plans/implemented/SEARCH_ENGINE_PLAN.md phase 4; lib/search_browse.ts).
 export const searchBrowseWidgetId = 'search_browse_floating';
 export const searchBrowseFloatIdKey = 'search-browse-float-id'; // session: the open browser's floating widget id
 export const searchBrowseRequestKey = 'search-browse-request'; // session: {action: 'expand', at} from the `sb` command

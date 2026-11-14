@@ -3,7 +3,7 @@
 Search & Browse: a page of table rows for a query, every column read from the
 helper's index and remnote.db in one call (served by ai_ocr_helper.py as POST
 /search/browse). The plugin's Search & Browse popup only renders them, so a page
-costs no bridge calls. Plan: plans/SEARCH_ENGINE_PLAN.md, phase 4.
+costs no bridge calls. Plan: plans/implemented/SEARCH_ENGINE_PLAN.md, phase 4.
 
     python3 scripts/rem_browse.py --kb <id> 'is:due card:cloze' --mode cards --sort due
 

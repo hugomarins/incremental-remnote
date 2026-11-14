@@ -1,5 +1,5 @@
 /**
- * Search & Browse (plans/SEARCH_ENGINE_PLAN.md, phase 4): saved searches, the
+ * Search & Browse (plans/implemented/SEARCH_ENGINE_PLAN.md, phase 4): saved searches, the
  * Search Queue document a saved search can be practised from, and the bulk
  * actions of the popup. The table itself comes from the AI helper
  * (rem_search_client.browseViaHelper).

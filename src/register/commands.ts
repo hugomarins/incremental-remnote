@@ -3366,7 +3366,7 @@ export async function registerCommands(plugin: ReactRNPlugin) {
   });
 
   // Search & Browse: an Anki-Browser-like table over the AI helper's Search Engine
-  // (components/SearchBrowseView.tsx, plans/SEARCH_ENGINE_PLAN.md phase 4).
+  // (components/SearchBrowseView.tsx, plans/implemented/SEARCH_ENGINE_PLAN.md phase 4).
   plugin.app.registerCommand({
     id: 'search-and-browse',
     name: 'Search & Browse',

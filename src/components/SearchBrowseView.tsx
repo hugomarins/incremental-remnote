@@ -5,7 +5,7 @@
  * rows and scroll intact (the `sb` command, or the bar). Collapsing moves the panel so
  * only its top-left corner shows; RemNote clips the rest at the window's edge, and
  * moving a floating widget doesn't remount it.
- * (plans/SEARCH_ENGINE_PLAN.md, phase 4). Every row and column comes from the AI
+ * (plans/implemented/SEARCH_ENGINE_PLAN.md, phase 4). Every row and column comes from the AI
  * helper in one call per page (scripts/rem_browse.py); this view renders them, sorts
  * by asking again, and runs the bulk actions in lib/search_browse.ts.
  *
@@ -21,6 +21,7 @@ import {
   BrowseRow,
   BrowseSort,
   browseViaHelper,
+  translateQueryViaHelper,
 } from '../lib/rem_search_client';
 import {
   SavedSearch,
@@ -356,6 +357,42 @@ export function SearchBrowse() {
     [plugin, query, mode, sort, desc, rows, history]
   );
 
+  /**
+   * ✨ AI: the box's text, in plain language and any language, turned into a query by
+   * Claude through the AI helper (scripts/rem_search_ai.py). The request goes into the
+   * history first, so ↑ brings it back; the query replaces it, stays editable, and runs.
+   */
+  const [aiBusy, setAiBusy] = React.useState(false);
+  const askAi = async () => {
+    const request = query.trim();
+    if (!request || aiBusy) return;
+    setAiBusy(true);
+    setMessage({ text: `✨ Asking Claude to write the search for “${request}”…`, tone: 'info' });
+    const next = [request, ...history.filter((h) => h !== request)].slice(0, HISTORY_MAX);
+    setHistory(next);
+    plugin.storage.setLocal(searchHistoryKey, next).catch(() => {});
+    const res = await translateQueryViaHelper(plugin, request);
+    setAiBusy(false);
+    if (res.status === 'ok') {
+      setQuery(res.query);
+      const m = res.mode ?? mode;
+      setMode(m);
+      if (res.valid) {
+        await run({ q: res.query, m });
+        setMessage({ text: `✨ “${request}” → ${res.query}  (edit it freely; ↑ brings your words back)`, tone: 'info' });
+      } else {
+        setMessage({ text: `✨ Claude's search doesn't work as written: ${res.error ?? ''} Edit it, or rephrase and ask again.`, tone: 'error' });
+      }
+    } else if (res.status === 'failed') {
+      setMessage({ text: `✨ ${res.message}`, tone: 'error' });
+    } else if (res.status === 'unpaired') {
+      setMessage({ text: 'The AI helper is running but not paired: paste its token in the plugin settings (AI Helper Pairing Token).', tone: 'error' });
+    } else {
+      setMessage({ text: '✨ AI needs the AI helper running on this computer, with Claude Code signed in.', tone: 'error' });
+    }
+    focusBox();
+  };
+
   /** ↑ (older) / ↓ (newer) through the search history, as Anki's Browser does. */
   const walkHistory = (step: 1 | -1) => {
     if (!history.length) return;
@@ -495,7 +532,10 @@ export function SearchBrowse() {
       return;
     }
     if (focus < 0) {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        askAi();
+      } else if (e.key === 'Enter') {
         e.preventDefault();
         run();
       } else if (e.key === 'ArrowUp') {
@@ -679,7 +719,7 @@ export function SearchBrowse() {
           }}
           onFocus={() => setFocus(-1)}
           title={history.length ? '↑/↓: your last searches' : undefined}
-          placeholder='bow weather · tag:anki* is:due · in:"PSCPP" suppressed:rem · prop:lapses>3'
+          placeholder='bow weather · tag:anki* is:due · in:"PSCPP" prop:r<0.7 — or plain words, then ✨ AI'
           style={{
             flex: 1,
             padding: '8px 10px',
@@ -694,6 +734,15 @@ export function SearchBrowse() {
         />
         <button onMouseDown={noSteal} onClick={() => run()} style={btn}>
           {loading ? 'Searching…' : 'Search'}
+        </button>
+        <button
+          onMouseDown={noSteal}
+          onClick={askAi}
+          style={{ ...btn, opacity: aiBusy ? 0.6 : 1 }}
+          disabled={aiBusy || !query.trim()}
+          title="Write what you want in plain language, in any language, then press this (or Ctrl/Cmd+Enter): Claude turns it into a search. Uses your Claude subscription through the AI helper."
+        >
+          {aiBusy ? '✨ Thinking…' : '✨ AI'}
         </button>
         {naming === null ? (
           <button onMouseDown={noSteal} onClick={() => setNaming(active?.name ?? query.trim().slice(0, 40))} style={btn} disabled={!query.trim()}>
@@ -866,7 +915,7 @@ export function SearchBrowse() {
         </button>
       </div>
       <div style={{ fontSize: '11px', color: 'var(--rn-clr-content-tertiary)' }}>
-        In the box: Enter search · ↑↓ last searches · Tab to the table — In the table: ↑↓ move · Space select · Enter open · Shift+Enter open in new pane · / or Shift+Tab back to the box — Esc collapse (sb or the bar brings it back) · Ctrl/Cmd+click select
+        In the box: Enter search · Ctrl/Cmd+Enter ✨ AI (plain language) · ↑↓ last searches · Tab to the table — In the table: ↑↓ move · Space select · Enter open · Shift+Enter open in new pane · / or Shift+Tab back to the box — Esc collapse (sb or the bar brings it back) · Ctrl/Cmd+click select
       </div>
     </div>
   );

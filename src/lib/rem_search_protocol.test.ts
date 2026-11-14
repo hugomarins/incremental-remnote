@@ -1,7 +1,7 @@
 /** The AI helper's search answer and query syntax (rem_search_protocol.ts). Run with `npm test`. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRemIdsResponse, parseSearchResponse, parseSuppressionResponse, usesQuerySyntax } from './rem_search_protocol';
+import { parseAiResponse, parseRemIdsResponse, parseSearchResponse, parseSuppressionResponse, usesQuerySyntax } from './rem_search_protocol';
 
 describe('parseSearchResponse', () => {
   it('reads hits, keeping the alias a Rem matched through', () => {
@@ -64,5 +64,13 @@ describe('parseSuppressionResponse', () => {
     assert.deepEqual(out && [...out.inTable], ['R1']);
     assert.equal(parseSuppressionResponse({ ok: true, queryError: { kind: 'index-building' } }), null);
     assert.equal(parseSuppressionResponse({ ok: false }), null);
+  });
+});
+
+describe('parseAiResponse', () => {
+  it('reads the query, its mode and whether it parses', () => {
+    assert.deepEqual(parseAiResponse({ ok: true, query: ' is:due ', mode: 'cards', valid: true }), { query: 'is:due', mode: 'cards', valid: true });
+    assert.deepEqual(parseAiResponse({ ok: true, query: '(bow', mode: 'x', valid: false, error: 'never closed' }), { query: '(bow', mode: null, valid: false, error: 'never closed' });
+    assert.equal(parseAiResponse({ ok: false, error: 'claude CLI not found' }), null);
   });
 });

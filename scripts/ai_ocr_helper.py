@@ -54,6 +54,8 @@ Environment:
     IR_WHISPER_MODEL  path of the whisper.cpp model (default whisper/ggml-large-v3-turbo-q5_0.bin)
 
 Files live in ~/.incremental-remnote/ai-ocr/:
+    search-prompt.md  how Claude turns a plain-language request into a search query
+                    (Search & Browse's ✨ AI), re-read per request
     pairing-token   the secret the plugin sends with /search (created on first start,
                     readable only by you; delete it and restart to make a new one)
     prompt.md       the transcription instructions — edit freely, re-read per request
@@ -106,6 +108,10 @@ try:
     import rem_browse  # rem_browse.py, for the plugin's Search & Browse popup
 except ImportError:
     rem_browse = None
+try:
+    import rem_search_ai  # rem_search_ai.py, plain language → a search query, with Claude
+except ImportError:
+    rem_search_ai = None
 
 PORT = int(os.environ.get('IR_AI_PORT', '3457'))
 MODEL = os.environ.get('IR_AI_MODEL', 'sonnet')
@@ -114,7 +120,7 @@ ALLOWED_ORIGINS = {o.strip() for o in os.environ.get('IR_AI_ORIGINS', '').split(
 HOME = Path.home() / '.incremental-remnote' / 'ai-ocr'
 TOKEN_FILE = HOME / 'pairing-token'
 # Routes that hand out the knowledge base's content: only a caller with the token.
-TOKEN_ROUTES = {'/search', '/search/source', '/search/suppression', '/search/browse'}
+TOKEN_ROUTES = {'/search', '/search/source', '/search/suppression', '/search/browse', '/search/ai'}
 TOKEN_HEADER = 'X-IR-Token'
 PDF_CACHE = HOME / 'pdf-cache'
 CROPS = HOME / 'crops'
@@ -1356,6 +1362,17 @@ def handle_search_browse(req, entry):
     return out
 
 
+def handle_search_ai(req, entry):
+    """A plain-language request in, a Search Engine query out (rem_search_ai.py):
+    one `claude -p` turn, checked with the search's parser, retried once if invalid."""
+    if rem_search_ai is None or rem_search is None:
+        raise RuntimeError('rem_search_ai.py is missing: download it next to ai_ocr_helper.py')
+    kb_id = history_archive.check_kb_id(req.get('kbId'))
+    out = rem_search_ai.translate(kb_id, req.get('request'), run_claude, HOME)
+    entry.update(model=out.get('model'), valid=out.get('valid'))
+    return out
+
+
 MEDIA_PREFIX = '/media/'
 MEDIA_CHUNK = 1 << 20
 
@@ -1369,7 +1386,7 @@ ROUTES = {'/ocr': handle_ocr, '/locate': handle_locate, '/find-source': handle_f
           '/history/scan': handle_history_scan, '/history/ghosts': handle_history_ghosts,
           '/history/status': handle_history_status, '/search': handle_search,
           '/search/source': handle_search_source, '/search/suppression': handle_search_suppression,
-          '/search/browse': handle_search_browse}
+          '/search/browse': handle_search_browse, '/search/ai': handle_search_ai}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1395,7 +1412,8 @@ class Handler(BaseHTTPRequestHandler):
                                         'ytDlp': find_tool('yt-dlp'), 'ffmpeg': find_tool('ffmpeg'),
                                         'transcripts': True, 'whisper': whisper_ready(), 'localVideo': True,
                                         'extractTitles': True, 'historyArchive': history_archive is not None,
-                                        'search': rem_search is not None, 'browse': rem_browse is not None})
+                                        'search': rem_search is not None, 'browse': rem_browse is not None,
+                                        'searchAi': rem_search_ai is not None})
         if self.path.startswith(MEDIA_PREFIX):
             return self.send_media()
         self.send_json(404, {'ok': False, 'error': 'POST /ocr or /locate'})

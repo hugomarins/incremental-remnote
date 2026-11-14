@@ -162,6 +162,25 @@ export function parseBrowseResponse(body: any): HelperBrowseResult {
     ms: typeof body.ms === 'number' ? body.ms : 0 };
 }
 
+/** The helper's /search/ai answer: a query for a plain-language request. */
+export interface HelperAiQuery {
+  query: string;
+  mode: BrowseMode | null;
+  /** False when even Claude's second try doesn't parse; `error` says why. */
+  valid: boolean;
+  error?: string;
+}
+
+export function parseAiResponse(body: any): HelperAiQuery | null {
+  if (!body || body.ok !== true || typeof body.query !== 'string' || !body.query.trim()) return null;
+  return {
+    query: body.query.trim(),
+    mode: body.mode === 'rems' || body.mode === 'cards' ? body.mode : null,
+    valid: body.valid !== false,
+    ...(typeof body.error === 'string' ? { error: body.error } : {}),
+  };
+}
+
 /**
  * Whether a query uses the helper's syntax (operators, quotes, brackets, keys), so
  * RemNote's word search can't stand in for it. Plain words return false.

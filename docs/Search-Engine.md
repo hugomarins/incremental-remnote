@@ -5,7 +5,7 @@ On the desktop, the plugin can search your knowledge base with a query language 
 The engine runs in the [AI helper](Desktop-Helpers.md#search) on your computer, reading RemNote's own database without changing it. On the iPhone, on the web, or with the helper off, Find Rem uses RemNote's search as before, and the keys on this page are read as ordinary words.
 
 !!! info "Setting it up"
-    1. Run the [AI helper](Desktop-Helpers.md#setup), version 1.0.231 or later, with `rem_search.py`, `rem_index.py` and `rem_browse.py` next to it.
+    1. Run the [AI helper](Desktop-Helpers.md#setup), version 1.0.231 or later, with `rem_search.py`, `rem_index.py`, `rem_browse.py`, `fsrs.py` and `rem_search_ai.py` next to it.
     2. Print its pairing token with `python3 ~/.incremental-remnote/ai_ocr_helper.py --pairing-token` and paste it in the plugin settings, **AI Helper Pairing Token** ([why a token](Desktop-Helpers.md#search)).
 
     The first time you use a key such as `tag:` or `is:`, the helper indexes the knowledge base, which takes about 20 seconds; Find Rem says so and searches the words meanwhile.
@@ -281,13 +281,34 @@ Each card gets one cause, the first that applies in this order. `is:disabled` (o
 
 ## Search & Browse { #browse }
 
-**Search & Browse** (quick code `sb`) lists everything a search finds in a table, as Anki's Browser does, and lets you act on it.
+**Search & Browse** (quick code `sb`) lists everything a search finds in a table, as Anki's Browser does, and lets you act on it. Try it below (example data; the demo knows a subset of the keys):
+
+<iframe src="../demos/search-browse.html" title="Search & Browse demo" loading="lazy" style="width:100%;height:560px;border:0;display:block"></iframe>
 
 - **Rems or Cards.** *Rems* lists each Rem once. *Cards* lists the cards the search matched: `is:due card:cloze` lists the due cloze cards, not every card of those Rems.
 - **Columns:** the Rem (front → back, with its path), the card type, its kind (document, concept, IncRem…), tags, card priority, IncRem priority and next date, due date, interval, reps, lapses, mastery level, FSRS stability **S**, difficulty **D** and retrievability **R**, the scheduler, and why its cards are hidden. In *Rems*, S, D and R are those of the Rem's card with the lowest R. Click a column title to sort by it, again to reverse; the whole result is sorted, not only the rows on screen. **Load more** adds 100 rows at a time.
 - **Opening a Rem** (Enter, Shift+Enter for a new pane, or a double-click) opens it in the editor and **collapses** the browser to a bar at the bottom right of the window: **⤢ Browse** brings it back with the same search, rows, selection and scroll; **✕** closes it. Running `sb` again also brings it back. **Esc** and the **–** button collapse it too.
 - **Selecting:** Space or Ctrl/Cmd+click selects a row, the box in the header selects every loaded row. **Set card priority**, **Switch cards on** and **Copy ids** act on the selection, or on the highlighted row when nothing is selected. Setting a priority works as the batch tools do, inheritance included.
-- **Keyboard:** in the search box, Enter searches, ↑/↓ go through your last 50 searches (as in Anki), Tab moves into the table. In the table, ↑/↓ move, / or Shift+Tab returns to the box.
+- **Keyboard:** in the search box, Enter searches, Ctrl/Cmd+Enter asks [✨ AI](#ai), ↑/↓ go through your last 50 searches (as in Anki), Tab moves into the table. In the table, ↑/↓ move, / or Shift+Tab returns to the box.
+
+### ✨ AI: search in your own words { #ai }
+
+Write what you are looking for in plain language, in any language, and press **✨ AI** (or Ctrl/Cmd+Enter): Claude writes the search, the box shows it, and it runs. The line under the box shows your words and the search they became; the search stays editable, and ↑ brings your words back to rephrase them.
+
+![✨ AI turning a request into a search in Search & Browse](assets/search-natural-language-AI.png)
+
+*english cards forgotten more than twice, late (retrievability less than 80%)*
+:   `in:english prop:lapses>2 prop:r<0.8`, in *Cards*.
+
+*overdue cards with interval greater than 1 year, rated again at least once, in the biology folder*
+:   `is:due prop:ivl>365 prop:lapses>=1 in:*biology*`, in *Cards*.
+
+*cartões sobre rebocadores que esqueci mais de duas vezes, com retenção abaixo de 80%*
+:   `rebocador prop:lapses>2 prop:r<0.8`: a subject becomes words (in the singular, so the plural matches too); `in:` is kept for a folder, document or deck you name.
+
+It runs through the [AI helper](Desktop-Helpers.md#ai-helper) with **your** Claude account (Claude Code, the model set for the helper, Sonnet by default), and takes a few seconds. Claude gets the request, the search language, and a few names from your knowledge base so that "the biology folder" becomes a real `in:`: your schedulers, your 60 most-used tags and your top documents and folders. Only names, never note text. Its answer is checked before it runs; a search that doesn't work goes back to Claude once with the error, and if it still doesn't, you see it with the reason.
+
+The instructions Claude follows are in `~/.incremental-remnote/ai-ocr/search-prompt.md`, which you can edit; it is read again on every request. Delete it to get a newer version's instructions after an update.
 
 ### Saved searches and practice { #saved }
 
