@@ -37,6 +37,14 @@ What it records, per Rem (field names from RemNote 1.30.2-beta's bundle):
                  review, mastery level, Learn New (`ny`), no longer generated (`b`),
                  and the answers since the last Reset (reps, Forgots), as RemNote's
                  own FSRS counts them (src/lib/fsrs.ts)
+                 For a card on an FSRS scheduler, its memory state too: stability and
+                 difficulty from a replay with ITS scheduler's weights (fsrs.py), the
+                 scheduler's decay and the last review's time, so retrievability is
+                 computed when searching. The scheduler is the `src` of the card's Rem
+                 or of its nearest ancestor that has one, else the Global Default
+                 (`knowledge_base_data` spacedRepetitionSchedulerIdKb), as RemNote's
+                 own Bullet Information panel resolves it.
+    schedulers   RemNote's schedulers (`spaced_repetition_scheduler`: n, st, w, tr)
     reps         every history entry (card, date, score) for rated:
     names        the name of every Rem used as a tag, property or powerup, and of
                  every Rem referenced in text or listed as a Source (so source:*x* and
@@ -60,9 +68,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import history_archive  # noqa: E402  (KB paths, read-only open)
+import fsrs  # noqa: E402  (memory state of FSRS cards)
 
 INDEX_DIR = Path.home() / '.incremental-remnote' / 'search'
-SCHEMA_VERSION = '9'
+SCHEMA_VERSION = '10'
 # Re-read Rems written up to this long before the last stamp seen: commits and
 # clocks need not arrive in stamp order. Re-reading is idempotent.
 OVERLAP_MS = 10_000
@@ -77,7 +86,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS rems (
     id TEXT PRIMARY KEY, parent TEXT, type INTEGER, created INTEGER, edited INTEGER,
-    forget INTEGER, efc INTEGER, back_sr INTEGER, dci TEXT, vt INTEGER, in_table INTEGER);
+    forget INTEGER, efc INTEGER, back_sr INTEGER, dci TEXT, vt INTEGER, in_table INTEGER, src TEXT);
+CREATE INDEX IF NOT EXISTS rems_parent ON rems(parent);
 CREATE INDEX IF NOT EXISTS rems_type ON rems(type);
 CREATE INDEX IF NOT EXISTS rems_created ON rems(created);
 CREATE INDEX IF NOT EXISTS rems_edited ON rems(edited);
@@ -107,7 +117,10 @@ CREATE INDEX IF NOT EXISTS refs_src ON refs(src);
 CREATE TABLE IF NOT EXISTS cards (
     id TEXT PRIMARY KEY, rem TEXT, kind TEXT, cloze TEXT, next INTEGER, next_day INTEGER, last INTEGER,
     ivl INTEGER, ml TEXT, ny INTEGER, nogen INTEGER, created INTEGER, reps INTEGER,
-    lapses INTEGER, first_rep INTEGER);
+    lapses INTEGER, first_rep INTEGER,
+    sched TEXT, mem_s REAL, mem_d REAL, decay REAL, mem_last INTEGER);
+CREATE INDEX IF NOT EXISTS cards_sched ON cards(sched);
+CREATE TABLE IF NOT EXISTS schedulers (id TEXT PRIMARY KEY, name TEXT, type TEXT, weights TEXT, tr REAL);
 CREATE INDEX IF NOT EXISTS cards_rem ON cards(rem);
 CREATE INDEX IF NOT EXISTS cards_next ON cards(next);
 CREATE TABLE IF NOT EXISTS reps (card TEXT NOT NULL, rem TEXT, date INTEGER, score REAL);
@@ -292,7 +305,8 @@ class Reader:
         out['rem'] = (rid, d.get('parent'), d.get('type'), d.get('createdAt'), edited,
                       int(bool(d.get('forget'))), int(bool(d.get('efc'))), int(bool(d.get('enableBackSR'))),
                       json.dumps([str(x) for x in dci]) if isinstance(dci, list) and dci else None,
-                      d.get('vt') if isinstance(d.get('vt'), int) else None, 0)
+                      d.get('vt') if isinstance(d.get('vt'), int) else None, 0,
+                      d.get('src') if isinstance(d.get('src'), str) else None)
 
         for tag, entry in (d.get('tp') or {}).items():
             if not (isinstance(entry, dict) and entry.get('t')):
@@ -379,7 +393,7 @@ def _write(db, reader, docs, fresh=False):
     for rid, d in docs:
         rows = reader.rows(rid, d)
         if rows['rem']:
-            db.execute('INSERT OR REPLACE INTO rems VALUES (?,?,?,?,?,?,?,?,?,?,?)', rows['rem'])
+            db.execute('INSERT OR REPLACE INTO rems VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', rows['rem'])
         host = rows.get('host')
         db.executemany('INSERT INTO rem_tags VALUES (?, ?)', [(rid, t) for t in rows['tags']])
         db.executemany('INSERT INTO rem_powerups VALUES (?, ?)', [(rid, c) for c in rows['powerups']])
@@ -460,8 +474,9 @@ def counts_for_main_card(rep):
     return not rep.get('subCardScores')
 
 
-def card_rows(cid, d):
-    """(card row, [rep rows]) for one card document."""
+def card_rows(cid, d, sched=None):
+    """(card row, [rep rows]) for one card document. `sched` is (scheduler id, type,
+    weights) of the card's scheduler; an FSRS one gets the memory state."""
     history = sorted((r for r in (d.get('h') or []) if isinstance(r, dict) and isinstance(r.get('date'), (int, float))),
                      key=lambda r: r['date'])
     reps = lapses = 0
@@ -480,13 +495,101 @@ def card_rows(cid, d):
     nxt = d.get('a') if isinstance(d.get('a'), (int, float)) else None
     last = d.get('l') if isinstance(d.get('l'), (int, float)) else None
     ivl = round((nxt - last) / DAY_MS) if nxt is not None and last is not None else None
+    sid, stype, weights = sched or (None, None, None)
+    mem = fsrs.replay(history, weights) if stype == 'fsrs' else None
     row = (cid, d.get('rId'), kind, None if kind != 'cloze' else str(c), nxt, day_of_ms(nxt) if nxt is not None else None, last, ivl, d.get('ml'),
-           int(bool(d.get('ny'))), int(bool(d.get('b'))), d.get('e'), reps, lapses, first)
+           int(bool(d.get('ny'))), int(bool(d.get('b'))), d.get('e'), reps, lapses, first,
+           sid, mem['s'] if mem else None, mem['d'] if mem else None,
+           fsrs.decay_of(weights) if mem else None, mem['last'] if mem else None)
     rep_rows = [(cid, d.get('rId'), r['date'], r.get('score')) for r in history]
     return row, rep_rows
 
 
-def _write_cards(db, docs, fresh=False):
+class Schedulers:
+    """Each card's scheduler: the `src` of its Rem or nearest ancestor, else the Global
+    Default. `parent_src(rid)` gives (parent, src) of a Rem; resolutions are memoised."""
+
+    def __init__(self, table, global_id, parent_src):
+        self.table = table  # id → (type, weights)
+        self.global_id = global_id
+        self.parent_src = parent_src
+        self.memo = {}
+
+    def of_rem(self, rid):
+        path, current, found = [], rid, None
+        while current and len(path) < 1000:
+            if current in self.memo:
+                found = self.memo[current]
+                break
+            path.append(current)
+            parent, src = self.parent_src(current)
+            if src:
+                found = src
+                break
+            current = parent
+        for p in path:
+            self.memo[p] = found
+        sid = found if found in self.table else self.global_id
+        stype, weights = self.table.get(sid, (None, None))
+        return sid, stype, weights
+
+
+GLOBAL_SCHEDULER_KEY = 'spacedRepetitionSchedulerIdKb'
+
+
+def read_schedulers(src):
+    """({id: (type, weights)}, global id, rows for the schedulers table, a hash)."""
+    table, rows = {}, []
+    try:
+        scheduler_rows = src.execute('SELECT _id, doc FROM spaced_repetition_scheduler').fetchall()
+        kb_rows = src.execute('SELECT doc FROM knowledge_base_data').fetchall()
+    except sqlite3.OperationalError:  # a database without them: no memory state
+        scheduler_rows, kb_rows = [], []
+    for sid, doc in scheduler_rows:
+        d = json.loads(doc) if doc else {}
+        weights = d.get('w') if isinstance(d.get('w'), list) else None
+        table[sid] = (d.get('st'), weights)
+        rows.append((sid, d.get('n') or '', d.get('st'), json.dumps(weights) if weights else None, d.get('tr')))
+    global_id = None
+    for (doc,) in kb_rows:
+        entry = json.loads(doc) if doc else {}
+        if entry.get('key') == GLOBAL_SCHEDULER_KEY:
+            global_id = entry.get('value')
+    digest = json.dumps([sorted(rows), global_id], sort_keys=True)
+    return table, global_id, rows, digest
+
+
+def _store_schedulers(db, rows, global_id, digest):
+    db.execute('DELETE FROM schedulers')
+    db.executemany('INSERT INTO schedulers VALUES (?,?,?,?,?)', rows)
+    set_meta(db, 'global_scheduler', global_id or '')
+    set_meta(db, 'scheduler_hash', digest)
+
+
+def _index_parent_src(db):
+    def lookup(rid):
+        row = db.execute('SELECT parent, src FROM rems WHERE id = ?', (rid,)).fetchone()
+        return (row[0], row[1]) if row else (None, None)
+    return lookup
+
+
+def _recompute_cards(db, src, sched, rem_ids=None):
+    """Re-read and rewrite cards (all, or those of `rem_ids`), e.g. after their
+    scheduler changed."""
+    if rem_ids is None:
+        rows = src.execute('SELECT _id, doc FROM cards').fetchall()
+    else:
+        rows = []
+        ids = list(rem_ids)
+        for chunk in range(0, len(ids), 500):
+            part = ids[chunk:chunk + 500]
+            rows += src.execute(f"SELECT _id, doc FROM cards WHERE json_extract(doc, '$.rId') IN "
+                                f"({','.join('?' * len(part))})", part).fetchall()
+    _write_cards(db, [(cid, json.loads(doc) if doc else None) for cid, doc in rows], sched=sched)
+    return len(rows)
+
+
+def _write_cards(db, docs, fresh=False, sched=None):
     if not fresh:
         ids = [cid for cid, _ in docs]
         for chunk in range(0, len(ids), 500):
@@ -497,8 +600,8 @@ def _write_cards(db, docs, fresh=False):
     for cid, d in docs:
         if not d:
             continue
-        row, rep_rows = card_rows(cid, d)
-        db.execute('INSERT OR REPLACE INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', row)
+        row, rep_rows = card_rows(cid, d, sched.of_rem(d.get('rId')) if sched else None)
+        db.execute('INSERT OR REPLACE INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', row)
         db.executemany('INSERT INTO reps VALUES (?,?,?,?)', rep_rows)
 
 
@@ -534,6 +637,10 @@ def build(kb_id, db_path=None, index_file=None):
             _write(db, reader, batch, fresh=True)
             total += len(batch)
             mark_tables_all(db)
+            table, global_id, sched_rows, digest = read_schedulers(src)
+            _store_schedulers(db, sched_rows, global_id, digest)
+            parent_src = {rid: (par, sid) for rid, par, sid in db.execute('SELECT id, parent, src FROM rems')}
+            sched = Schedulers(table, global_id, lambda rid: parent_src.get(rid, (None, None)))
             card_high, cards = 0, []
             for cid, doc, y in src.execute("SELECT _id, doc, json_extract(doc, '$.y') FROM cards"):
                 if doc:
@@ -541,9 +648,9 @@ def build(kb_id, db_path=None, index_file=None):
                     if isinstance(y, (int, float)):
                         card_high = max(card_high, y)
                 if len(cards) >= BUILD_BATCH:
-                    _write_cards(db, cards, fresh=True)
+                    _write_cards(db, cards, fresh=True, sched=sched)
                     cards = []
-            _write_cards(db, cards, fresh=True)
+            _write_cards(db, cards, fresh=True, sched=sched)
             set_meta(db, 'card_watermark', int(card_high))
             for rid, code in reader.powerup_of.items():
                 db.execute('INSERT OR REPLACE INTO powerups VALUES (?, ?, ?)', (code, rid, fold(reader.name(rid))))
@@ -568,9 +675,25 @@ def build(kb_id, db_path=None, index_file=None):
             src.close()
 
 
+def _subtree(db, rem_ids):
+    """The Rems and every Rem below them, from the index's parents."""
+    ids = list(rem_ids)
+    if not ids:
+        return set()
+    marks = ','.join('?' * len(ids))
+    return {r[0] for r in db.execute(
+        f"""WITH RECURSIVE sub(id) AS (SELECT id FROM rems WHERE id IN ({marks})
+                UNION SELECT r.id FROM rems r JOIN sub ON r.parent = sub.id)
+            SELECT id FROM sub""", ids)}
+
+
 def refresh(db, kb_id, src):
-    """Bring an open index up to date from the attached or given remnote.db
-    connection `src`. Returns how many Rems were re-read."""
+    """Bring an open index up to date from the given remnote.db connection `src`.
+
+    Order matters for the cards' schedulers: Rems first (a moved Rem, or one given
+    another scheduler, changes the scheduler of every card below it), then the cards
+    that changed, then the cards below such Rems; a change to a scheduler itself (new
+    weights) recomputes every card (~1.4 s, rare)."""
     with _locks[kb_id]:
         mark = int(meta(db, 'watermark', '0') or 0)
         changed = src.execute(
@@ -580,16 +703,54 @@ def refresh(db, kb_id, src):
         changed_cards = src.execute(
             "SELECT _id, doc, json_extract(doc, '$.y') FROM cards WHERE json_extract(doc, '$.y') > ?",
             (card_mark - OVERLAP_MS,)).fetchall()
+        table, global_id, sched_rows, digest = read_schedulers(src)
+        schedulers_changed = digest != meta(db, 'scheduler_hash')
+
+        db.execute('BEGIN')
+        moved = set()
+        if changed:
+            ids = [rid for rid, _, _ in changed]
+            before = {}
+            for chunk in range(0, len(ids), 500):
+                part = ids[chunk:chunk + 500]
+                for rid, par, sid in db.execute(
+                        f'SELECT id, parent, src FROM rems WHERE id IN ({",".join("?" * len(part))})', part):
+                    before[rid] = (par, sid)
+            reader = Reader(src, {rid: code for code, rid in db.execute('SELECT code, rem FROM powerups')})
+            docs, high = [], mark
+            for rid, doc, y in changed:
+                d = json.loads(doc) if doc else None
+                docs.append((rid, d))
+                if isinstance(y, (int, float)):
+                    high = max(high, int(y))
+                if d:
+                    now = (d.get('parent'), d.get('src') if isinstance(d.get('src'), str) else None)
+                    if rid in before and before[rid] != now:
+                        moved.add(rid)
+            _write(db, reader, docs)
+            mark_tables(db, [rid for rid, d in docs if d])
+            for rid, code in reader.powerup_of.items():
+                db.execute('INSERT OR REPLACE INTO powerups VALUES (?, ?, ?)', (code, rid, fold(reader.name(rid))))
+            set_meta(db, 'watermark', high)
+
+        if schedulers_changed:
+            _store_schedulers(db, sched_rows, global_id, digest)
+        sched = Schedulers(table, global_id, _index_parent_src(db))
         if changed_cards:
             docs, high = [], card_mark
             for cid, doc, y in changed_cards:
                 docs.append((cid, json.loads(doc) if doc else None))
                 if isinstance(y, (int, float)):
                     high = max(high, int(y))
-            db.execute('BEGIN')
-            _write_cards(db, docs)
+            _write_cards(db, docs, sched=sched)
             set_meta(db, 'card_watermark', high)
-            db.execute('COMMIT')
+        recomputed = 0
+        if schedulers_changed:
+            recomputed = _recompute_cards(db, src, sched)
+        elif moved:
+            recomputed = _recompute_cards(db, src, sched, _subtree(db, moved))
+        db.execute('COMMIT')
+
         swept = 0
         if time.time() - _last_sweep.get(kb_id, 0) > DELETION_SWEEP_S:
             live = {r[0] for r in src.execute('SELECT _id FROM quanta')}
@@ -603,23 +764,7 @@ def refresh(db, kb_id, src):
                 db.execute('COMMIT')
             swept = len(gone) + len(gone_cards)
             _last_sweep[kb_id] = time.time()
-        if not changed:
-            return {'changed': len(changed_cards), 'deleted': swept}
-        reader = Reader(src, {rid: code for code, rid in db.execute('SELECT code, rem FROM powerups')})
-        docs, high = [], mark
-        for rid, doc, y in changed:
-            d = json.loads(doc) if doc else None
-            docs.append((rid, d))
-            if isinstance(y, (int, float)):
-                high = max(high, int(y))
-        db.execute('BEGIN')
-        _write(db, reader, docs)
-        mark_tables(db, [rid for rid, d in docs if d])
-        for rid, code in reader.powerup_of.items():
-            db.execute('INSERT OR REPLACE INTO powerups VALUES (?, ?, ?)', (code, rid, fold(reader.name(rid))))
-        set_meta(db, 'watermark', high)
-        db.execute('COMMIT')
-        return {'changed': len(docs) + len(changed_cards), 'deleted': swept}
+        return {'changed': len(changed) + len(changed_cards), 'recomputed': recomputed, 'deleted': swept}
 
 
 _building = set()
@@ -630,11 +775,17 @@ def needs_build(kb_id, index_file=None):
     path = Path(index_file) if index_file else index_path(kb_id)
     if not path.exists():
         return True
-    probe = open_index(kb_id, path)
+    # Read only the version: running the schema on an older index can fail (an
+    # index on a column that file doesn't have yet), and the file is rebuilt anyway.
     try:
-        return meta(probe, 'schema') != SCHEMA_VERSION
-    finally:
-        probe.close()
+        probe = sqlite3.connect(f'file:{path}?mode=ro', uri=True, timeout=30)
+        try:
+            row = probe.execute("SELECT v FROM meta WHERE k = 'schema'").fetchone()
+        finally:
+            probe.close()
+    except sqlite3.Error:
+        return True
+    return not row or row[0] != SCHEMA_VERSION
 
 
 def build_in_background(kb_id, db_path=None, index_file=None, log=print):

@@ -216,6 +216,15 @@ A Rem matches when one of its cards does. Card searches written together must ho
 `prop:reps>10`, `prop:lapses>3`
 :   answered more than 10 times; forgotten more than 3 times. Both count since the last Reset, and leave out partial reps of list cards, as RemNote's own scheduling does.
 
+`prop:s>365`, `prop:d>=9`, `prop:r<0.8`
+:   FSRS **stability** (in days), **difficulty** (1 to 10) and **retrievability** now (the chance of recalling it today, 0 to 1). They are worked out from the card's history with **its own scheduler's** weights, as RemNote's *Bullet Information* panel does, and match it. Cards on an SM-2 scheduler, and cards never answered, have none. After a *Reset* they follow RemNote's scheduling, which starts over at the Reset; the panel replays the whole history instead, so the two differ for reset cards.
+
+`scheduler:vocabulary`, `scheduler:global`
+:   cards on that scheduler: the one assigned to a document above them, or the Global Default. A name matches from its start (`scheduler:vocabulary` finds *Vocabulary (FSRS default)*); `*` matches any part.
+
+`is:fsrs`, `is:sm2`
+:   cards whose scheduler is FSRS, or SM-2.
+
 `rated:1`
 :   answered today. `rated:7` covers the last 7 days.
 
@@ -230,6 +239,9 @@ A Rem matches when one of its cards does. Card searches written together must ho
 
 `is:due card:cloze in:"PSCPP" prop:lapses>=3`
 :   due cloze cards under *PSCPP* that you have forgotten three times or more.
+
+`is:due prop:r<0.7`
+:   due cards you are more likely to have forgotten than not by now; sorted by **R** in [Search & Browse](#browse), the most at risk come first.
 
 ## Suppressed cards { #suppressed }
 
@@ -272,7 +284,7 @@ Each card gets one cause, the first that applies in this order. `is:disabled` (o
 **Search & Browse** (quick code `sb`) lists everything a search finds in a table, as Anki's Browser does, and lets you act on it.
 
 - **Rems or Cards.** *Rems* lists each Rem once. *Cards* lists the cards the search matched: `is:due card:cloze` lists the due cloze cards, not every card of those Rems.
-- **Columns:** the Rem (front → back, with its path), the card type, its kind (document, concept, IncRem…), tags, card priority, IncRem priority and next date, due date, interval, reps, lapses, mastery level, and why its cards are hidden. Click a column title to sort by it, again to reverse; the whole result is sorted, not only the rows on screen. **Load more** adds 100 rows at a time.
+- **Columns:** the Rem (front → back, with its path), the card type, its kind (document, concept, IncRem…), tags, card priority, IncRem priority and next date, due date, interval, reps, lapses, mastery level, FSRS stability **S**, difficulty **D** and retrievability **R**, the scheduler, and why its cards are hidden. In *Rems*, S, D and R are those of the Rem's card with the lowest R. Click a column title to sort by it, again to reverse; the whole result is sorted, not only the rows on screen. **Load more** adds 100 rows at a time.
 - **Opening a Rem** (Enter, Shift+Enter for a new pane, or a double-click) opens it in the editor and **collapses** the browser to a bar at the bottom right of the window: **⤢ Browse** brings it back with the same search, rows, selection and scroll; **✕** closes it. Running `sb` again also brings it back. **Esc** and the **–** button collapse it too.
 - **Selecting:** Space or Ctrl/Cmd+click selects a row, the box in the header selects every loaded row. **Set card priority**, **Switch cards on** and **Copy ids** act on the selection, or on the highlighted row when nothing is selected. Setting a priority works as the batch tools do, inheritance included.
 - **Keyboard:** in the search box, Enter searches, ↑/↓ go through your last 50 searches (as in Anki), Tab moves into the table. In the table, ↑/↓ move, / or Shift+Tab returns to the box.
@@ -326,7 +338,7 @@ Not planned: regular expressions (`re:`), wildcards inside a word (`d*g`), and A
 The helper reads two things, never writing to either:
 
 - **RemNote's search index** for words, phrases and where a Rem sits (`in:`, `path:`). These searches take a few milliseconds.
-- **Its own index** of the knowledge base, for everything else: tags, kinds, Sources, references, dates, slot and property values, cards and their reviews. It is kept in `~/.incremental-remnote/search/` (about 240 MB for 440,000 Rems and 72,000 cards, readable only by you), built once in about 25 seconds, and brought up to date before each search from what RemNote wrote since the last one. It reads some switches RemNote never shows a plugin (a Rem's *Enable Cards* toggle, its directions, its switched-off clozes), which is how it can tell every suppression cause apart.
+- **Its own index** of the knowledge base, for everything else: tags, kinds, Sources, references, dates, slot and property values, cards and their reviews, and each card's scheduler and FSRS memory state. It is kept in `~/.incremental-remnote/search/` (about 240 MB for 440,000 Rems and 72,000 cards, readable only by you), built once in about 30 seconds, and brought up to date before each search from what RemNote wrote since the last one. It reads some switches RemNote never shows a plugin (a Rem's *Enable Cards* toggle, its directions, its switched-off clozes), which is how it can tell every suppression cause apart.
 
 A Rem created a moment ago can be missing until RemNote has written it to its database, and its words until RemNote has indexed them; RemNote's own search has the same delay.
 

@@ -110,6 +110,27 @@ drops them), which is why the tab infers "switched off card by card"; the databa
 them as stored. Main KB, cards by cause: table 2,081, Rem 332, removed 324, direction 75,
 cloze 1, and 359 left for the paused/ancestor causes (`rem_search.py` `CARD_CAUSE`).
 
+## Stability and difficulty are computed, not stored
+
+RemNote's Bullet Information panel computes them when it opens (1.30.2-beta: component
+`X` → module `440825` `O$`/`Wx`): `ts-fsrs` (module `673402`) built from the card's
+scheduler settings and replayed over its history sorted by date. Scheduler doc fields
+(`spaced_repetition_scheduler`): `n` name, `st` type (`fsrs`, `sm2`, `plugin`), `w`
+weights (empty = defaults), `tr` target retention (0.9), `fls`/`frs` learning and
+relearning steps, `md` maximum interval (1,825), plus SM-2 ones (`se`, `ift`, `eb`…).
+The card's scheduler is the `src` of its Rem or nearest ancestor, else the Global
+Default (`knowledge_base_data` key `spacedRepetitionSchedulerIdKb`). An SM-2 scheduler
+shows Ease and Phase instead. No bridge call returns any of this.
+
+The panel replays the whole history, Resets included; RemNote's scheduling starts over
+at a Reset. `scripts/fsrs.py` (a port of `src/lib/fsrs.ts`) follows the scheduling.
+Checked Nov 14, 2026: the panel's S 198.86914922 / D 6.52020114 for one card came out
+as 198.8691506 / 6.5202011; for cards reviewed in the last 14 days, 92.4% of the
+intervals RemNote scheduled are within ±10% of S × the retention factor (median ratio
+0.999, the rest RemNote's fuzz and reviews made under the previous Global weights).
+Main KB schedulers: Global Default (FSRS, optimised), Vocabulary (FSRS, default
+weights), Questions and an imported one (SM-2). Only 138 Rems carry `src`.
+
 ## Slot and property values live in two places
 
 - **User properties** of a tag are hidden child Rems of the tagged Rem: `ie: true`, `key` =

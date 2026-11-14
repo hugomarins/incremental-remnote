@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rem_index as ri  # noqa: E402
 import rem_search as rs  # noqa: E402
 import rem_browse as rb  # noqa: E402
+import fsrs  # noqa: E402
 from rem_search import And, Not, Or, SearchError, Term  # noqa: E402
 
 KB = '0123456789abcdef01234567'
@@ -77,7 +78,7 @@ def date_name(days_from_today):
 DOCS = {
     BOOK: {'key': ['Wärtsilä Encyclopedia of Ship Technology'], 'createdAt': NOW - 400 * DAY},
     BOW: {'key': ['Bow flare'], 'type': 1, 'createdAt': NOW - 300 * DAY,
-          'tp': {TAG: {'t': True}}},
+          'tp': {TAG: {'t': True}}, 'src': 'VOCAB'},
     FLARE: {'key': ['Ships with … ', {'i': 'q', '_id': MARGIN, 'aliasId': ids('ALIAS')}, ' becomes useless'],
             'createdAt': NOW - 300 * DAY, 'key,u': NOW - 2 * 3600_000,
             'ps': {'os_os': slot('Wärtsilä Encyclopedia of Ship Technology', 1, [{'i': 'q', '_id': BOOK}])}},
@@ -143,7 +144,29 @@ DOCS.update({
     ROOT: {'key': ['PSCPP'], 'createdAt': 1},
 })
 # ARCHIVE is a paused deck: DUP2 (under it) is paused.
-DOCS[ARCHIVE] = {'key': ['Archive'], 'createdAt': 1, 'ps': {'de_s': slot('Paused', 1)}, 'apu': {'de': {'v': True}}}
+DOCS[ARCHIVE] = {'key': ['Archive'], 'createdAt': 1, 'ps': {'de_s': slot('Paused', 1)}, 'apu': {'de': {'v': True}},
+                 'src': 'QS'}
+
+
+OPTIMIZED = [3.973, 13.618, 43.322, 100, 7.011, 0.46, 2.096, 0.15, 2.5, 0.27, 1.081, 1.601, 0.068, 0.504, 1.387,
+             0.011, 3, 0.546, 0.08, 0.066, 0.118]
+# Schedulers: the Global Default (FSRS, optimised), Vocabulary (FSRS, default weights)
+# on BOW's subtree, Questions (SM-2) on ARCHIVE's.
+SCHEDULERS = {
+    'GLOB': {'n': '', 'st': 'fsrs', 'w': OPTIMIZED, 'tr': 0.9},
+    'VOCAB': {'n': 'Vocabulary', 'st': 'fsrs', 'tr': 0.9},
+    'QS': {'n': 'Questions', 'st': 'sm2'},
+}
+
+
+def put_scheduler(db, sid, doc):
+    db.execute('INSERT OR REPLACE INTO spaced_repetition_scheduler VALUES (?, ?)', (sid, json.dumps(doc)))
+
+
+# Real Rem records carry their parent; take it from the search rows where missing.
+for _rid, _alias, _parent, *_ in ROWS:
+    if _rid == _alias and _rid in DOCS and _parent and 'parent' not in DOCS[_rid]:
+        DOCS[_rid]['parent'] = _parent
 
 
 def put_card(db, cid, card, y):
@@ -159,6 +182,8 @@ def make_db(path):
     db.executescript('''
         CREATE TABLE quanta (_id TEXT NOT NULL PRIMARY KEY, doc TEXT, x INTEGER);
         CREATE TABLE cards (_id TEXT NOT NULL PRIMARY KEY, doc TEXT, x INTEGER);
+        CREATE TABLE spaced_repetition_scheduler (_id TEXT PRIMARY KEY, doc TEXT);
+        CREATE TABLE knowledge_base_data (_id TEXT PRIMARY KEY, doc TEXT);
         CREATE VIRTUAL TABLE remsContents USING FTS5(data, tokenize = 'unicode61', prefix = '1 2 3');
         CREATE TABLE remsSearchInfos(ftsRowId INTEGER PRIMARY KEY AUTOINCREMENT, aliasId TEXT NOT NULL,
             id TEXT NOT NULL, doc TEXT NOT NULL, freqCounter REAL NOT NULL, freqTime REAL NOT NULL,
@@ -177,6 +202,10 @@ def make_db(path):
         put_doc(db, rid, doc, NOW - 60_000)
     for cid, card in CARDS.items():
         put_card(db, cid, card, NOW - 60_000)
+    for sid, doc in SCHEDULERS.items():
+        put_scheduler(db, sid, doc)
+    db.execute('INSERT INTO knowledge_base_data VALUES (?, ?)',
+               ('k1', json.dumps({'key': 'spacedRepetitionSchedulerIdKb', 'value': 'GLOB'})))
     db.commit()
     db.close()
 
@@ -530,6 +559,20 @@ class IndexSearchTest(unittest.TestCase):
         due = rb.browse(KB, 'is:review', sort='due', db_path=self.db, index_file=self.index)
         self.assertEqual(due['rows'][0]['remId'], BOW)  # earliest next time first, no time last
 
+    def test_browse_memory(self):
+        out = rb.browse(KB, 'is:fsrs', mode='cards', sort='r', db_path=self.db, index_file=self.index)
+        rs_ = [r['retrievability'] for r in out['rows']]
+        known = [x for x in rs_ if x is not None]
+        self.assertEqual(rs_[:len(known)], sorted(known))  # lowest R first; never-reviewed cards (no R) last
+        self.assertTrue(all(x is None for x in rs_[len(known):]))
+        due = [r for r in out['rows'] if r.get('cardId') == C_DUE][0]
+        self.assertEqual(due['scheduler'], 'Vocabulary')
+        self.assertAlmostEqual(due['stability'], fsrs.replay(CARDS[C_DUE]['h'], None)['s'], places=9)
+        other = [r for r in out['rows'] if r.get('cardId') == C_OFF][0]
+        self.assertEqual(other['scheduler'], 'Global Default')
+        sm2 = rb.browse(KB, 'is:sm2', mode='cards', db_path=self.db, index_file=self.index)['rows'][0]
+        self.assertEqual((sm2['scheduler'], sm2['stability']), ('Questions', None))
+
     def test_browse_cards(self):
         out = rb.browse(KB, 'is:due card:forward', mode='cards', db_path=self.db, index_file=self.index)
         self.assertEqual([r['cardId'] for r in out['rows']], [C_DUE])  # not BOW's backward card
@@ -539,6 +582,65 @@ class IndexSearchTest(unittest.TestCase):
         with self.assertRaises(SearchError):
             rb.browse(KB, 'bow', mode='notes', db_path=self.db, index_file=self.index)
 
+    def test_memory_state_uses_each_cards_scheduler(self):
+        db = ri.ready(KB, self.db, self.index)
+        try:
+            mem = dict(((cid), (sched, s, d)) for cid, sched, s, d in db.execute('SELECT id, sched, mem_s, mem_d FROM cards'))
+        finally:
+            db.close()
+        # BOW (and FLARE below it) on Vocabulary: default weights.
+        expected = fsrs.replay(CARDS[C_DUE]['h'], None)
+        self.assertEqual(mem[C_DUE][0], 'VOCAB')
+        self.assertAlmostEqual(mem[C_DUE][1], expected['s'], places=9)
+        self.assertAlmostEqual(mem[C_DUE][2], expected['d'], places=9)
+        self.assertEqual(mem[C_CLOZE][0], 'VOCAB')  # FLARE inherits from BOW
+        # OTHER on the Global Default: its optimised weights.
+        self.assertEqual(mem[C_OFF][0], 'GLOB')
+        self.assertAlmostEqual(mem[C_OFF][1], fsrs.replay(CARDS[C_OFF]['h'], OPTIMIZED)['s'], places=9)
+        # DUP2 under Questions (SM-2): no memory state.
+        self.assertEqual(mem[C_PAUSED], ('QS', None, None))
+
+    def test_memory_keys(self):
+        self.assertEqual(self.card_rems('scheduler:vocabulary'), {BOW, FLARE})
+        self.assertEqual(self.card_rems('scheduler:vocab'), {BOW, FLARE})  # from the start of the name
+        self.assertEqual(self.card_rems('scheduler:*abul*'), {BOW, FLARE})
+        self.assertEqual(self.card_rems('scheduler:global'), {OTHER})
+        self.assertEqual(self.card_rems('is:sm2'), {DUP2})
+        self.assertEqual(self.card_rems('is:fsrs card:cloze'), {FLARE, OTHER})
+        s_due = fsrs.replay(CARDS[C_DUE]['h'], None)['s']
+        self.assertEqual(self.card_rems(f'prop:s>={s_due - 0.001} prop:s<={s_due + 0.001}'), {BOW})
+        self.assertEqual(self.card_rems('prop:r>1'), set())
+        self.assertEqual(self.card_rems('prop:r>=0 is:sm2'), set())  # SM-2: no R
+        # R of C_DUE: last review 0.1 day ago → still high; C_CLOZE: 20 days ago → lower.
+        r_due = fsrs.forgetting_curve(0.1, s_due, fsrs.decay_of(None))
+        self.assertIn(BOW, self.card_rems(f'prop:r>{r_due - 0.01}'))
+
+    def test_scheduler_changes_recompute(self):
+        self.assertEqual(self.card_rems('scheduler:vocabulary'), {BOW, FLARE})
+        db = sqlite3.connect(self.db)
+        put_doc(db, BOW, {k: v for k, v in DOCS[BOW].items() if k != 'src'}, NOW)  # back to the Global Default
+        db.commit()
+        db.close()
+        self.assertEqual(self.card_rems('scheduler:vocabulary'), set())
+        self.assertEqual(self.card_rems('scheduler:global'), {BOW, FLARE, OTHER})
+        idx = ri.ready(KB, self.db, self.index)
+        try:
+            s_now = idx.execute('SELECT mem_s FROM cards WHERE id = ?', (C_DUE,)).fetchone()[0]
+        finally:
+            idx.close()
+        self.assertAlmostEqual(s_now, fsrs.replay(CARDS[C_DUE]['h'], OPTIMIZED)['s'], places=9)
+        # New weights on a scheduler: every card is recomputed.
+        db = sqlite3.connect(self.db)
+        put_scheduler(db, 'GLOB', dict(SCHEDULERS['GLOB'], w=None))
+        db.commit()
+        db.close()
+        idx = ri.ready(KB, self.db, self.index)
+        try:
+            s_now = idx.execute('SELECT mem_s FROM cards WHERE id = ?', (C_DUE,)).fetchone()[0]
+        finally:
+            idx.close()
+        self.assertAlmostEqual(s_now, fsrs.replay(CARDS[C_DUE]['h'], None)['s'], places=9)
+
     def test_card_refresh(self):
         self.assertEqual(self.card_rems('is:disabled'), {OTHER})
         db = sqlite3.connect(self.db)
@@ -547,6 +649,16 @@ class IndexSearchTest(unittest.TestCase):
         db.close()
         self.assertEqual(self.card_rems('is:disabled'), set())
         self.assertIn(OTHER, self.card_rems('is:due'))
+
+    def test_an_older_index_is_rebuilt_not_opened(self):
+        # An index from before a schema change lacks columns the new schema indexes.
+        old = sqlite3.connect(self.index)
+        old.executescript("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT); INSERT INTO meta VALUES ('schema', '1');"
+                          "CREATE TABLE cards (id TEXT PRIMARY KEY, rem TEXT);")
+        old.commit()
+        old.close()
+        self.assertTrue(ri.needs_build(KB, self.index))
+        self.assertEqual(self.rems('is:concept'), {BOW, MARGIN})
 
     def test_helper_never_waits_for_a_build(self):
         with self.assertRaises(SearchError) as ctx:

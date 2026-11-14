@@ -119,11 +119,20 @@ export interface BrowseRow {
   learnNew?: boolean;
   /** Suppression causes of its cards (rem_search SUPPRESSED names). */
   suppressed: string[];
+  /** FSRS memory state from the card's own scheduler (rem mode: its card with the
+   *  lowest retrievability); null for SM-2 cards and cards never answered. */
+  stability: number | null;
+  difficulty: number | null;
+  /** 0–1, now. */
+  retrievability: number | null;
+  /** The card's scheduler ('Global Default' or its name). */
+  scheduler: string | null;
 }
 
 export type BrowseMode = 'rems' | 'cards';
 export type BrowseSort =
-  | 'relevance' | 'text' | 'created' | 'edited' | 'due' | 'priority' | 'incpriority' | 'reps' | 'lapses' | 'ivl';
+  | 'relevance' | 'text' | 'created' | 'edited' | 'due' | 'priority' | 'incpriority' | 'reps' | 'lapses' | 'ivl'
+  | 's' | 'd' | 'r';
 
 export type HelperBrowseResult =
   | { status: 'ok'; rows: BrowseRow[]; total: number; ms: number }
@@ -157,7 +166,7 @@ export function parseBrowseResponse(body: any): HelperBrowseResult {
  * Whether a query uses the helper's syntax (operators, quotes, brackets, keys), so
  * RemNote's word search can't stand in for it. Plain words return false.
  */
-const SEARCH_KEYS = 'w|alias|in|parent|path|tag|is|has|source|refs|id|added|edited|prop|card|ml|rated|introduced|cid|suppressed';
+const SEARCH_KEYS = 'w|alias|in|parent|path|tag|is|has|source|refs|id|added|edited|prop|card|ml|rated|introduced|cid|suppressed|scheduler';
 const SYNTAX_RE = new RegExp(
   // operators · quotes and brackets · key: · owner.name:value or owner.name<5 (a slot or property)
   `(^|\\s)(-\\S|or\\s|and\\s)|["()]|(^|\\s)-?(${SEARCH_KEYS}):|(^|\\s)-?[^\\s:]*[a-z*]\\.[a-z][^\\s:<>=]*(:|<|>|=)`,

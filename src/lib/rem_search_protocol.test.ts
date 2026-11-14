@@ -35,7 +35,8 @@ describe('usesQuerySyntax', () => {
   it('spots operators, quotes, brackets and keys', () => {
     for (const q of ['bow -tug', 'bow or bowsprit', 'bow and wave', '"bow flare"', 'bow (wave)', 'in:PSCPP squat', 'w:bow', 'alias:x',
       'tag:anki squat', 'is:concept', '-is:incremental bow', 'prop:priority<20', 'incremental.priority<=5', 'ankicard.book:pna*', '*.book:x', 'added:7', 'has:alias',
-      'is:due', 'card:cloze squat', 'ml:growing', 'rated:7:forgot', 'introduced:30', 'prop:lapses>3', 'suppressed:table']) {
+      'is:due', 'card:cloze squat', 'ml:growing', 'rated:7:forgot', 'introduced:30', 'prop:lapses>3', 'suppressed:table',
+      'prop:r<0.8', 'prop:s>21', 'scheduler:Vocabulary', 'is:fsrs']) {
       assert.equal(usesQuerySyntax(q), true, q);
     }
   });

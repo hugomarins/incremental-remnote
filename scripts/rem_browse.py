@@ -25,7 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rem_index  # noqa: E402
 import rem_search as rs  # noqa: E402
 
-SORTS = {'relevance', 'text', 'created', 'edited', 'due', 'priority', 'incpriority', 'reps', 'lapses', 'ivl'}
+SORTS = {'relevance', 'text', 'created', 'edited', 'due', 'priority', 'incpriority', 'reps', 'lapses', 'ivl',
+         's', 'd', 'r'}
 MAX_PAGE = 500
 TEXT_CHARS = 300
 
@@ -50,8 +51,20 @@ REM_SORT = {
     'lapses': '(SELECT SUM(lapses) FROM cards WHERE rem = h.id)',
     'ivl': '(SELECT MAX(ivl) FROM cards WHERE rem = h.id)',
 }
+# Retrievability now, for sorting (rem_search.R_SQL with the time bound in).
+def r_sql(now_ms):
+    return rs.R_SQL.replace(':now', str(int(now_ms)))
+
+
+def rem_memory_sort(col):
+    """Rem mode: the value of its card with the lowest R (its most at-risk card)."""
+    return (f'(SELECT {col} FROM cards c WHERE c.rem = h.id AND c.mem_s IS NOT NULL '
+            f'ORDER BY {{R}} ASC LIMIT 1)')
+
+
+REM_SORT.update(s=rem_memory_sort('c.mem_s'), d=rem_memory_sort('c.mem_d'), r=rem_memory_sort('{R}'))
 CARD_SORT = dict(REM_SORT, due='c.next', reps='c.reps', lapses='c.lapses', ivl='c.ivl',
-                 text=REM_SORT['text'], created='c.created')
+                 text=REM_SORT['text'], created='c.created', s='c.mem_s', d='c.mem_d', r='{R}')
 
 
 def top_card_terms(tree):
@@ -128,7 +141,7 @@ def browse(kb_id, query, mode='rems', sort='relevance', desc=False, offset=0, li
         _hits_table(db, hits)
         direction = 'DESC' if desc else 'ASC'
         if mode == 'rems':
-            key = 'h.ord' if sort == 'relevance' else REM_SORT[sort]
+            key = 'h.ord' if sort == 'relevance' else REM_SORT[sort].replace('{R}', r_sql(time.time() * 1000))
             order = f'({key}) IS NULL, ({key}) {direction}, h.ord'
             total = len(hits)
             page = db.execute(f'SELECT h.id, h.alias FROM hits h ORDER BY {order} LIMIT ? OFFSET ?',
@@ -144,7 +157,7 @@ def browse(kb_id, query, mode='rems', sort='relevance', desc=False, offset=0, li
                 conds.append(cond)
                 args += cargs
             where = ' AND '.join(conds) or '1'
-            key = 'h.ord' if sort == 'relevance' else CARD_SORT[sort]
+            key = 'h.ord' if sort == 'relevance' else CARD_SORT[sort].replace('{R}', r_sql(time.time() * 1000))
             order = f'({key}) IS NULL, ({key}) {direction}, h.ord, c.id'
             base = f'FROM cards c JOIN hits h ON h.id = c.rem WHERE {where}'
             total = db.execute(f'SELECT COUNT(*) {base}', args).fetchone()[0]
@@ -217,6 +230,8 @@ def rem_row(db, rid, alias, texts, causes):
     if alias:
         row['aliasId'] = alias
     cards = db.execute('SELECT id, next_day, reps, lapses, ivl FROM cards WHERE rem = ?', (rid,)).fetchall()
+    row.update(memory(db, f'c.rem = ? ORDER BY {r_sql(time.time() * 1000)} IS NULL, {r_sql(time.time() * 1000)} ASC',
+                      rid))
     today = rs.today_day()
     due_days = [c[1] - today for c in cards if c[1] is not None]
     row.update(
@@ -230,10 +245,23 @@ def rem_row(db, rid, alias, texts, causes):
     return row
 
 
+def memory(db, where, arg):
+    """stability, difficulty, retrievability now and scheduler name of one card."""
+    row = db.execute(
+        f"""SELECT c.mem_s, c.mem_d, {r_sql(time.time() * 1000)},
+                   (SELECT CASE WHEN x.id = (SELECT v FROM meta WHERE k = 'global_scheduler')
+                                THEN 'Global Default' ELSE x.name END FROM schedulers x WHERE x.id = c.sched)
+            FROM cards c WHERE {where} LIMIT 1""", (arg,)).fetchone()
+    if not row:
+        return {'stability': None, 'difficulty': None, 'retrievability': None, 'scheduler': None}
+    return {'stability': row[0], 'difficulty': row[1], 'retrievability': row[2], 'scheduler': row[3]}
+
+
 def card_row(db, cid, rid, texts, causes):
     row = _common(db, rid, texts)
     c = db.execute('SELECT kind, cloze, next_day, reps, lapses, ivl, ml, ny FROM cards WHERE id = ?', (cid,)).fetchone()
     cause = causes.get(cid)
+    row.update(memory(db, 'c.id = ?', cid))
     row.update(
         cardId=cid,
         kind=c[0],

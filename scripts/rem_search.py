@@ -57,6 +57,11 @@ Terms (plans/SEARCH_ENGINE_PLAN.md §4):
                     apart), direction off, cloze switched off (`dci`), text removed
     ml:new|acquiring|growing|solidifying|retaining|notyetlearned
     prop:due<=-7    days from today to the next time; prop:ivl, prop:reps, prop:lapses
+    prop:s>21, prop:d>7, prop:r<0.8  FSRS stability (days), difficulty (1-10) and
+                    retrievability now (0-1), from a replay with the card's own
+                    scheduler (rem_index.py, fsrs.py); none for SM-2 cards
+    scheduler:vocabulary, scheduler:global, is:fsrs, is:sm2  the card's scheduler (a name
+                    matches from its start; `*` for any part)
     rated:7, rated:7:forgot|hard|good|easy (or 1-4, Anki's buttons), rated:7:skip
     introduced:30   first answered in the last 30 days
     cid:a,b         these cards
@@ -87,7 +92,7 @@ REM_ID_RE = re.compile(r'^[A-Za-z0-9]{17}$')
 # Keys that belong to a later phase: a clear error rather than a silent text search.
 LATER_KEYS = {'sort'}
 NAME_KEYS = {'in', 'parent'}
-INDEX_KEYS = {'tag', 'is', 'has', 'source', 'refs', 'id', 'added', 'edited', 'field', 'card'}
+INDEX_KEYS = {'tag', 'is', 'has', 'source', 'refs', 'id', 'added', 'edited', 'field', 'card', 'scheduler'}
 
 # is: values. Read from RemNote's search record (s.doc), the Rem's type, or a powerup.
 IS_DOC_FLAGS = {'document': 'i', 'folder': 'l', 'flashcard': 'fl', 'image': 'g', 'pdf': 'd', 'website': 'w'}
@@ -103,6 +108,8 @@ IS_CARD = {
     'disabled': ('c.next IS NULL AND c.nogen = 0', False),
     'suspended': ('c.next IS NULL AND c.nogen = 0', False),
     'not-generated': ('c.nogen = 1', False),
+    'fsrs': ("c.sched IN (SELECT id FROM schedulers WHERE type = 'fsrs')", False),
+    'sm2': ("c.sched IN (SELECT id FROM schedulers WHERE type = 'sm2')", False),
 }
 IS_ALL = sorted([*IS_DOC_FLAGS, *IS_TYPES, *IS_POWERUPS, *IS_CARD, 'paused', 'suppressed'])
 SUPPRESSED = ['paused', 'ancestor', 'rem', 'table', 'direction', 'cloze', 'removed', 'other']
@@ -119,7 +126,12 @@ CARD_CAUSE = """CASE
     ELSE 'other' END"""
 CARD_KINDS = {'forward', 'backward', 'cloze'}
 MASTERY = {'new', 'acquiring', 'growing', 'solidifying', 'retaining', 'notyetlearned'}
-CARD_PROPS = {'due': 'c.next_day - :today', 'ivl': 'c.ivl', 'reps': 'c.reps', 'lapses': 'c.lapses'}
+# Retrievability now, from the card's FSRS memory state (rem_index: mem_s, decay,
+# mem_last): R = (1 + factor · t / S)^decay, factor = 0.9^(1/decay) − 1, t in days.
+R_SQL = ('(CASE WHEN c.mem_s IS NULL OR c.mem_s <= 0 THEN NULL ELSE '
+         'pow(1 + (pow(0.9, 1.0 / c.decay) - 1) * ((:now - c.mem_last) / 86400000.0) / c.mem_s, c.decay) END)')
+CARD_PROPS = {'due': 'c.next_day - :today', 'ivl': 'c.ivl', 'reps': 'c.reps', 'lapses': 'c.lapses',
+              's': 'c.mem_s', 'd': 'c.mem_d', 'r': R_SQL}
 RATINGS = {'forgot': 0, 'again': 0, '1': 0, 'hard': 0.5, '2': 0.5, 'good': 1, '3': 1, 'easy': 1.5, '4': 1.5,
            'skip': 0.01}
 
@@ -420,6 +432,10 @@ class Parser:
                 self.fail('unknown-value', 'Try rated:7:forgot, rated:7:hard, rated:7:good, rated:7:easy '
                           '(or 1 to 4, as Anki\'s buttons) or rated:7:skip.', at)
             return Term('card', rating.lower(), at=at, name=k, num=float(days))
+        if k == 'scheduler':
+            if not value.strip():
+                self.fail('missing-value', 'Put a scheduler name after "scheduler:" (or scheduler:global).', at)
+            return Term('card', value.strip(), at=at, name='scheduler')
         if k == 'cid':
             ids = [i for i in re.split(r'[,\s]+', value.strip()) if i]
             if not ids or not all(REM_ID_RE.match(i) for i in ids):
@@ -452,7 +468,8 @@ class Parser:
                             num=float(compare.group(3)))
             alias = PROP_ALIASES.get((compare.group(1) if compare else value.split(':')[0]).strip().lower())
             if not compare or not alias:
-                self.fail('unknown-value', 'Try prop:due, prop:ivl, prop:reps, prop:lapses (cards), prop:priority, '
+                self.fail('unknown-value', 'Try prop:due, prop:ivl, prop:reps, prop:lapses, prop:s, prop:d, prop:r '
+                          '(cards), prop:priority, '
                           'prop:incpriority or prop:incdue (the plugin\'s slots), as in prop:due<=0; '
                           'for any other slot or property, write owner.name<5 or owner.name:text.', at)
             return Term('field', value, at=at, owner=alias[0], name=alias[1], op=compare.group(2),
@@ -708,6 +725,14 @@ class Compiler:
         if t.name == 'cid':
             ids = t.value.split(',')
             return f'c.id IN ({",".join("?" * len(ids))})', ids, False
+        if t.name == 'scheduler':
+            name = fold(t.value)
+            if name in ('global', 'default', 'global default'):
+                return "c.sched = (SELECT v FROM meta WHERE k = 'global_scheduler')", [], False
+            # A name matches from its start: scheduler:vocabulary is "Vocabulary (FSRS default)".
+            cmp, pattern = like_or_equal(name if '*' in name else name + '*')
+            return (f'c.sched IN (SELECT id FROM schedulers WHERE lower(name) {cmp} OR id = ?)',
+                    [pattern, t.value], False)
         raise SearchError('parse', f'Unknown card term {t.name}.')
 
     def paused_sql(self):
