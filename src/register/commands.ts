@@ -3359,6 +3359,17 @@ export async function registerCommands(plugin: ReactRNPlugin) {
     },
   });
 
+  // Search & Browse: an Anki-Browser-like table over the AI helper's Search Engine
+  // (components/SearchBrowseView.tsx, plans/SEARCH_ENGINE_PLAN.md phase 4).
+  plugin.app.registerCommand({
+    id: 'search-and-browse',
+    name: 'Search & Browse',
+    quickCode: 'sb',
+    action: async () => {
+      await plugin.widget.openPopup('search_browse_popup');
+    },
+  });
+
   // Dismiss Incremental Rem command (Ctrl+D)
   // In Queue: replicates the Dismiss button (card priority inheritance, review time, transfer to dismissed, remove powerup)
   // In Editor: dismisses the focused Incremental Rem (transfer history to dismissed, remove powerup)

@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rem_index as ri  # noqa: E402
 import rem_search as rs  # noqa: E402
+import rem_browse as rb  # noqa: E402
 from rem_search import And, Not, Or, SearchError, Term  # noqa: E402
 
 KB = '0123456789abcdef01234567'
@@ -81,6 +82,7 @@ DOCS = {
             'createdAt': NOW - 300 * DAY, 'key,u': NOW - 2 * 3600_000,
             'ps': {'os_os': slot('Wärtsilä Encyclopedia of Ship Technology', 1, [{'i': 'q', '_id': BOOK}])}},
     MARGIN: {'key': ['Service power margin'], 'type': 1, 'createdAt': NOW - 3600_000,
+             'al': [{'aliasId': ids('ALIAS'), 'alias': 'sea margin'}],
              'tp': {PW_INC: {'t': True}},
              # An old `ps` copy of the slot, and a newer one in a property child (below).
              'ps': {'incremental_nextRepDate': slot(date_name(30), NOW - 100 * DAY),
@@ -133,6 +135,7 @@ DOCS.update({
     DIR: {'key': ['one way only'], 'parent': ROOT, 'createdAt': 1, 'efc': True, 'enableBackSR': True},
     CLZ: {'key': ['a cloze switched off'], 'parent': ROOT, 'createdAt': 1, 'dci': ['777']},
     DUP2: {'key': ['notes'], 'parent': ARCHIVE, 'createdAt': 1},
+    ROOT: {'key': ['PSCPP'], 'createdAt': 1},
 })
 # ARCHIVE is a paused deck: DUP2 (under it) is paused.
 DOCS[ARCHIVE] = {'key': ['Archive'], 'createdAt': 1, 'ps': {'de_s': slot('Paused', 1)}, 'apu': {'de': {'v': True}}}
@@ -486,6 +489,37 @@ class IndexSearchTest(unittest.TestCase):
         db.commit()
         db.close()
         self.assertEqual(rs.card_causes(KB, self.db, self.index)['causes'][ids('CD')], 'missing')
+
+    def test_browse_rems(self):
+        out = rb.browse(KB, 'bow', db_path=self.db, index_file=self.index)
+        self.assertEqual(out['total'], 3)
+        by_id = {r['remId']: r for r in out['rows']}
+        flare = by_id[FLARE]
+        self.assertEqual(flare['path'], ['PSCPP', 'Wärtsilä Encyclopedia of Ship Technology', 'Bow flare'])
+        self.assertTrue(flare['text'].startswith('Ships with'))
+        self.assertIn('sea margin becomes', flare['text'])  # the reference shows its alias
+        self.assertEqual(by_id[BOW]['tags'], ['Anki Card'])
+        self.assertEqual(by_id[BOW]['cards'], 2)
+        self.assertEqual(by_id[BOW]['due'], -2)
+        self.assertEqual(by_id[BOW]['type'], 'concept')
+
+    def test_browse_sort_and_page(self):
+        out = rb.browse(KB, 'bow', sort='text', db_path=self.db, index_file=self.index)
+        texts = [r['text'].lower() for r in out['rows']]
+        self.assertEqual(texts, sorted(texts))
+        page = rb.browse(KB, 'bow', sort='text', offset=1, limit=1, db_path=self.db, index_file=self.index)
+        self.assertEqual(page['rows'][0]['remId'], out['rows'][1]['remId'])
+        due = rb.browse(KB, 'is:review', sort='due', db_path=self.db, index_file=self.index)
+        self.assertEqual(due['rows'][0]['remId'], BOW)  # earliest next time first, no time last
+
+    def test_browse_cards(self):
+        out = rb.browse(KB, 'is:due card:forward', mode='cards', db_path=self.db, index_file=self.index)
+        self.assertEqual([r['cardId'] for r in out['rows']], [C_DUE])  # not BOW's backward card
+        self.assertEqual(out['rows'][0]['lapses'], 2)
+        sup = rb.browse(KB, 'suppressed:cloze', mode='cards', db_path=self.db, index_file=self.index)
+        self.assertIn('cloze', {c for r in sup['rows'] for c in r['suppressed']})
+        with self.assertRaises(SearchError):
+            rb.browse(KB, 'bow', mode='notes', db_path=self.db, index_file=self.index)
 
     def test_card_refresh(self):
         self.assertEqual(self.card_rems('is:disabled'), {OTHER})

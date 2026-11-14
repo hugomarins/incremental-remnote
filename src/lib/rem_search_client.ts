@@ -14,14 +14,22 @@ import type { RNPlugin } from '@remnote/plugin-sdk';
 import { aiHelperPairingTokenId } from './consts';
 import { getIESetting } from './settings';
 import {
+  BrowseMode,
+  BrowseSort,
+  HelperBrowseResult,
   HelperSearchResult,
   HelperSuppression,
+  parseBrowseResponse,
   parseRemIdsResponse,
   parseSearchResponse,
   parseSuppressionResponse,
 } from './rem_search_protocol';
 
 export type {
+  BrowseMode,
+  BrowseRow,
+  BrowseSort,
+  HelperBrowseResult,
   HelperQueryError,
   HelperSearchHit,
   HelperSearchResult,
@@ -35,7 +43,7 @@ const TIMEOUT_MS = 1500;
 
 let kbIdCache: string | null | undefined;
 
-async function currentKbId(plugin: RNPlugin): Promise<string | null> {
+export async function currentKbId(plugin: RNPlugin): Promise<string | null> {
   if (kbIdCache === undefined) {
     try {
       kbIdCache = (await plugin.kb.getCurrentKnowledgeBaseData())?._id ?? null;
@@ -119,4 +127,14 @@ export async function remsWithSourceViaHelper(
 export async function suppressionCausesViaHelper(plugin: RNPlugin): Promise<HelperSuppression | null> {
   const res = await postToHelper(plugin, '/search/suppression', {}, { timeoutMs: 20_000 });
   return res.status === 'ok' ? parseSuppressionResponse(res.body) : null;
+}
+
+/** A page of Search & Browse rows (scripts/rem_browse.py). Never throws. */
+export async function browseViaHelper(
+  plugin: RNPlugin,
+  req: { query: string; mode: BrowseMode; sort: BrowseSort; desc: boolean; offset: number; limit: number },
+  opts?: { signal?: AbortSignal }
+): Promise<HelperBrowseResult> {
+  const res = await postToHelper(plugin, '/search/browse', req, { signal: opts?.signal, timeoutMs: 8000 });
+  return res.status === 'ok' ? parseBrowseResponse(res.body) : res;
 }

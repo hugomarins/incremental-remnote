@@ -102,6 +102,10 @@ try:
     import rem_search  # rem_search.py + rem_index.py, downloaded next to this file (needs history_archive.py)
 except ImportError:
     rem_search = None
+try:
+    import rem_browse  # rem_browse.py, for the plugin's Search & Browse popup
+except ImportError:
+    rem_browse = None
 
 PORT = int(os.environ.get('IR_AI_PORT', '3457'))
 MODEL = os.environ.get('IR_AI_MODEL', 'sonnet')
@@ -110,7 +114,7 @@ ALLOWED_ORIGINS = {o.strip() for o in os.environ.get('IR_AI_ORIGINS', '').split(
 HOME = Path.home() / '.incremental-remnote' / 'ai-ocr'
 TOKEN_FILE = HOME / 'pairing-token'
 # Routes that hand out the knowledge base's content: only a caller with the token.
-TOKEN_ROUTES = {'/search', '/search/source', '/search/suppression'}
+TOKEN_ROUTES = {'/search', '/search/source', '/search/suppression', '/search/browse'}
 TOKEN_HEADER = 'X-IR-Token'
 PDF_CACHE = HOME / 'pdf-cache'
 CROPS = HOME / 'crops'
@@ -1337,6 +1341,21 @@ def handle_search_suppression(req, entry):
     return out
 
 
+def handle_search_browse(req, entry):
+    """A page of Search & Browse rows (rem_browse.browse): every column from the index."""
+    if rem_browse is None or rem_search is None:
+        raise RuntimeError('rem_browse.py, rem_search.py or rem_index.py is missing: download them next to ai_ocr_helper.py')
+    kb_id = history_archive.check_kb_id(req.get('kbId'))
+    try:
+        out = rem_browse.browse(kb_id, req.get('query'), req.get('mode') or 'rems', req.get('sort') or 'relevance',
+                                bool(req.get('desc')), req.get('offset') or 0, req.get('limit') or 100, wait=False)
+    except rem_search.SearchError as e:
+        entry['queryError'] = e.kind
+        return {'queryError': e.to_json()}
+    entry.update(results=len(out['rows']), total=out['total'])
+    return out
+
+
 MEDIA_PREFIX = '/media/'
 MEDIA_CHUNK = 1 << 20
 
@@ -1349,7 +1368,8 @@ ROUTES = {'/ocr': handle_ocr, '/locate': handle_locate, '/find-source': handle_f
           '/video-file': handle_video_file,
           '/history/scan': handle_history_scan, '/history/ghosts': handle_history_ghosts,
           '/history/status': handle_history_status, '/search': handle_search,
-          '/search/source': handle_search_source, '/search/suppression': handle_search_suppression}
+          '/search/source': handle_search_source, '/search/suppression': handle_search_suppression,
+          '/search/browse': handle_search_browse}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1375,7 +1395,7 @@ class Handler(BaseHTTPRequestHandler):
                                         'ytDlp': find_tool('yt-dlp'), 'ffmpeg': find_tool('ffmpeg'),
                                         'transcripts': True, 'whisper': whisper_ready(), 'localVideo': True,
                                         'extractTitles': True, 'historyArchive': history_archive is not None,
-                                        'search': rem_search is not None})
+                                        'search': rem_search is not None, 'browse': rem_browse is not None})
         if self.path.startswith(MEDIA_PREFIX):
             return self.send_media()
         self.send_json(404, {'ok': False, 'error': 'POST /ocr or /locate'})

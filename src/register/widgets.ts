@@ -600,6 +600,16 @@ export async function registerWidgets(plugin: ReactRNPlugin) {
     },
   });
 
+  // Search & Browse (components/SearchBrowseView.tsx): a table over the AI helper's
+  // Search Engine, wide enough for its columns.
+  plugin.app.registerWidget('search_browse_popup', WidgetLocation.Popup, {
+    dimensions: {
+      width: '1300px',
+      // As tall as the screen allows (90%), so the table shows more rows.
+      height: screenFittedHeight(640, 1300),
+    },
+  });
+
   // Wide variant: same component, registered at ~2× width so the `wsh` command
   // can show Incremental Rems and Cards side-by-side when both groups are present.
   plugin.app.registerWidget('weighted_shield_popup_wide', WidgetLocation.Popup, {

@@ -902,6 +902,44 @@ def open_index_for_search(kb_id, db_path=None, index_file=None, wait=True):
     return db
 
 
+def match(db, tree):
+    """Every Rem the query tree matches, best first: [(remId, aliasId or None)], plus
+    the Compiler (its card terms are what browse lists in card mode)."""
+    compiler = Compiler(db)
+    where = compiler.compile(tree)
+    try:
+        rows = db.execute(
+            f'''SELECT s.id, s.aliasId, s.ftsRowId, IFNULL(r.rank, 1e9)
+                FROM remsSearchInfos s LEFT JOIN remsSearchRanks r ON r.ftsRowId = s.ftsRowId
+                WHERE {where}''',
+            compiler.args).fetchall()
+    except sqlite3.OperationalError as e:
+        raise SearchError('query', f'The search could not run: {e}.') from e
+
+    # One result per Rem. Its own row wins over an alias row; an alias-only match
+    # reports which alias, so a reference can be made to show it.
+    by_rem = {}
+    for rid, alias_id, fts_row, static in rows:
+        own = alias_id == rid
+        prev = by_rem.get(rid)
+        if prev is None or (own and not prev['own']) or (own == prev['own'] and static < prev['static']):
+            by_rem[rid] = {'own': own, 'alias': None if own else alias_id, 'row': fts_row, 'static': static}
+
+    # Relevance: score every row the positive words match and keep the result rows.
+    # Asking FTS for scores of a list of rowids is ~300× slower than this (measured:
+    # 600 ms vs 2 ms for 505 rows; a one-letter word scores 159k rows in 92 ms).
+    relevance = {}
+    if compiler.rank_terms and rows:
+        match_expr = ' OR '.join(dict.fromkeys(compiler.rank_terms))
+        wanted = {v['row'] for v in by_rem.values()}
+        for row_id, score in db.execute(
+                'SELECT rowid, bm25(remsContents) FROM remsContents WHERE remsContents MATCH ?', (match_expr,)):
+            if row_id in wanted:
+                relevance[row_id] = score
+    ordered = sorted(by_rem.items(), key=lambda kv: (relevance.get(kv[1]['row'], 0.0), kv[1]['static']))
+    return [(rid, v['alias']) for rid, v in ordered], compiler
+
+
 def search(kb_id, query, limit=DEFAULT_LIMIT, db_path=None, index_file=None, wait=True):
     """{results: [{remId, aliasId?}], total, ms}; raises SearchError."""
     started = time.time()
@@ -912,45 +950,14 @@ def search(kb_id, query, limit=DEFAULT_LIMIT, db_path=None, index_file=None, wai
     else:
         db = open_kb(kb_id, db_path)
     try:
-        compiler = Compiler(db)
-        where = compiler.compile(tree)
-        try:
-            rows = db.execute(
-                f'''SELECT s.id, s.aliasId, s.ftsRowId, IFNULL(r.rank, 1e9)
-                    FROM remsSearchInfos s LEFT JOIN remsSearchRanks r ON r.ftsRowId = s.ftsRowId
-                    WHERE {where}''',
-                compiler.args).fetchall()
-        except sqlite3.OperationalError as e:
-            raise SearchError('query', f'The search could not run: {e}.') from e
-
-        # One result per Rem. Its own row wins over an alias row; an alias-only match
-        # reports which alias, so a reference can be made to show it.
-        by_rem = {}
-        for rid, alias_id, fts_row, static in rows:
-            own = alias_id == rid
-            prev = by_rem.get(rid)
-            if prev is None or (own and not prev['own']) or (own == prev['own'] and static < prev['static']):
-                by_rem[rid] = {'own': own, 'alias': None if own else alias_id, 'row': fts_row, 'static': static}
-
-        # Relevance: score every row the positive words match and keep the result rows.
-        # Asking FTS for scores of a list of rowids is ~300× slower than this (measured:
-        # 600 ms vs 2 ms for 505 rows; a one-letter word scores 159k rows in 92 ms).
-        relevance = {}
-        if compiler.rank_terms and rows:
-            match = ' OR '.join(dict.fromkeys(compiler.rank_terms))
-            wanted = {v['row'] for v in by_rem.values()}
-            for row_id, score in db.execute(
-                    'SELECT rowid, bm25(remsContents) FROM remsContents WHERE remsContents MATCH ?', (match,)):
-                if row_id in wanted:
-                    relevance[row_id] = score
-        ordered = sorted(by_rem.items(), key=lambda kv: (relevance.get(kv[1]['row'], 0.0), kv[1]['static']))
+        hits, _ = match(db, tree)
         results = []
-        for rid, v in ordered[:limit]:
+        for rid, alias in hits[:limit]:
             item = {'remId': rid}
-            if v['alias']:
-                item['aliasId'] = v['alias']
+            if alias:
+                item['aliasId'] = alias
             results.append(item)
-        return {'results': results, 'total': len(by_rem), 'ms': int((time.time() - started) * 1000)}
+        return {'results': results, 'total': len(hits), 'ms': int((time.time() - started) * 1000)}
     finally:
         db.close()
 

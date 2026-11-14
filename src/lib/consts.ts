@@ -895,3 +895,8 @@ export const menuHubWidgetId = 'menu_hub';
 export const menuHubTargetKey = 'menu-hub-target';
 export const menuHubActiveIdKey = 'menu-hub-active-id';
 export const menuHubAnchorPosition = { top: 1, left: 1 };
+
+// Search & Browse (plans/SEARCH_ENGINE_PLAN.md phase 4; lib/search_browse.ts).
+export const searchBrowseWidgetId = 'search_browse_popup';
+export const savedSearchesKey = 'search-browse-saved'; // synced: SavedSearch[]
+export const searchQueuesParentName = 'Search Queues';

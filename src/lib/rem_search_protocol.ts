@@ -84,6 +84,75 @@ export function parseSuppressionResponse(body: any): HelperSuppression | null {
   return { causes, inTable };
 }
 
+/** One row of the Search & Browse table (scripts/rem_browse.py), a Rem or a card. */
+export interface BrowseRow {
+  remId: string;
+  aliasId?: string;
+  /** Set in card mode. */
+  cardId?: string;
+  text: string;
+  back: string;
+  /** Ancestor names, top first. */
+  path: string[];
+  type: '' | 'concept' | 'descriptor' | 'portal';
+  isDocument: boolean;
+  created: number | null;
+  edited: number | null;
+  tags: string[];
+  incremental: boolean;
+  dismissed: boolean;
+  /** Card priority (0–100), when the Rem has one. */
+  priority: number | null;
+  incPriority: number | null;
+  /** IncRem next date, in days from today. */
+  incDue: number | null;
+  /** Rem mode: how many cards. */
+  cards?: number;
+  /** Next review, in days from today (rem mode: its earliest card). */
+  due: number | null;
+  reps: number | null;
+  lapses: number | null;
+  ivl: number | null;
+  /** Card mode. */
+  kind?: 'forward' | 'backward' | 'cloze';
+  ml?: string | null;
+  learnNew?: boolean;
+  /** Suppression causes of its cards (rem_search SUPPRESSED names). */
+  suppressed: string[];
+}
+
+export type BrowseMode = 'rems' | 'cards';
+export type BrowseSort =
+  | 'relevance' | 'text' | 'created' | 'edited' | 'due' | 'priority' | 'incpriority' | 'reps' | 'lapses' | 'ivl';
+
+export type HelperBrowseResult =
+  | { status: 'ok'; rows: BrowseRow[]; total: number; ms: number }
+  | { status: 'query-error'; error: HelperQueryError }
+  | { status: 'unpaired' }
+  | { status: 'unavailable' };
+
+/** The helper's /search/browse answer → a result. */
+export function parseBrowseResponse(body: any): HelperBrowseResult {
+  if (!body || body.ok !== true) return { status: 'unavailable' };
+  if (body.queryError && typeof body.queryError === 'object') {
+    const e = body.queryError;
+    return {
+      status: 'query-error',
+      error: { kind: String(e.kind ?? 'query'), message: String(e.message ?? 'The search could not run.'),
+        ...(typeof e.at === 'number' ? { at: e.at } : {}) },
+    };
+  }
+  if (!Array.isArray(body.rows)) return { status: 'unavailable' };
+  const rows = body.rows.filter((r: any) => r && typeof r.remId === 'string') as BrowseRow[];
+  for (const r of rows) {
+    r.path = Array.isArray(r.path) ? r.path : [];
+    r.tags = Array.isArray(r.tags) ? r.tags : [];
+    r.suppressed = Array.isArray(r.suppressed) ? r.suppressed : [];
+  }
+  return { status: 'ok', rows, total: typeof body.total === 'number' ? body.total : rows.length,
+    ms: typeof body.ms === 'number' ? body.ms : 0 };
+}
+
 /**
  * Whether a query uses the helper's syntax (operators, quotes, brackets, keys), so
  * RemNote's word search can't stand in for it. Plain words return false.
