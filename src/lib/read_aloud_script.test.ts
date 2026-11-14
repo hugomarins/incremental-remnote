@@ -41,10 +41,28 @@ function fakeRem(f: Fake): any {
 const refTargets: Record<string, El[]> = {
   ALIAS: ['canal de navegação'],
   TARGET: ['Canal Principal'],
+  MARGIN: ['Service power margin'],
+};
+/**
+ * Aliases as RemNote now stores them: on the target, not as rems. `findOne` cannot
+ * reach them; only the raw `getAliases` bridge call, as `{aliasId, text}`.
+ */
+const storedAliases: Record<string, { aliasId: string; text: El[] }[]> = {
+  MARGIN: [
+    { aliasId: 'OTHER', text: ['service power'] },
+    { aliasId: 'SEA', text: ['sea margin'] },
+  ],
 };
 const plugin: any = {
   rem: {
-    findOne: async (id: string) => (refTargets[id] ? { _id: id, text: refTargets[id] } : undefined),
+    findOne: async (id: string) =>
+      refTargets[id]
+        ? {
+            _id: id,
+            text: refTargets[id],
+            call: async (name: string) => (name === 'getAliases' ? (storedAliases[id] ?? []) : undefined),
+          }
+        : undefined,
   },
   richText: {
     toString: async (rt: El[]) =>
@@ -192,6 +210,25 @@ describe('buildRemScript (pronunciation)', () => {
       '[pt] Chamado em inglês de <en>approach channel</en>.',
     ]);
     assert.equal(out.stats.skipped.pins, 1);
+  });
+  it('reads an alias stored on its target (post-overhaul), and the target when the alias is gone', async () => {
+    const out = await buildRemScript(
+      plugin,
+      fakeRem({
+        _id: 'FLARE',
+        text: [
+          'Ships with an excessive bow flare are exposed to much higher sea loads. ',
+          { i: 'q', _id: 'MARGIN', aliasId: 'SEA' },
+          ' becomes useless, unlike the ',
+          { i: 'q', _id: 'MARGIN', aliasId: 'GONE' },
+          '.',
+        ],
+      })
+    );
+    assert.equal(
+      out.script,
+      'Ships with an excessive bow flare are exposed to much higher sea loads. sea margin becomes useless, unlike the Service power margin.'
+    );
   });
   it('takes an undecided side from the other side, then from the parents', async () => {
     const parent: Fake = { _id: 'P', text: ['Termos do canal de navegação do porto'] };

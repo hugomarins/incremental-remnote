@@ -76,7 +76,7 @@ It brings across the source's **full rich text**, not just a plain label:
 - **Front/back cards bring the back too.** If the source is a Concept↔definition (or any front/back) card, the back text is included after the front, joined by a **practice-direction arrow** (`⇒`, `⇐`, or `⇔`) instead of RemNote's card delimiter.
 - **The source's clozes are marked, not re-clozed.** Any cloze deletions in the source are inserted as **highlighted text (yellow background + reference-coloured font)** — the same visual mark the plugin's cloze command (`Opt+Z`) leaves behind — so they still *read* as clozes without becoming functional clozes in your target (no "clozes out of clozes").
 
-Alias matches use the alias Rem's text; the trailing pin still links to the owning Rem.
+Alias matches use the alias text; the trailing pin still links to the owning Rem.
 
 ### Pin a source at the end of a Rem
 

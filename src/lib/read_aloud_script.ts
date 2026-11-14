@@ -5,6 +5,7 @@
  * (read_aloud_script.test.ts). Rules: see lib/read_aloud.ts.
  */
 import type { PluginRem, RichTextInterface, RNPlugin } from '@remnote/plugin-sdk';
+import { aliasTextOf } from './rem_aliases';
 
 /** RemType.PORTAL. A type-only import keeps this module loadable outside RemNote (tests). */
 const REM_TYPE_PORTAL = 6;
@@ -85,6 +86,21 @@ const count = (stats: ReadAloudStats, what: string) => {
   stats.skipped[what] = (stats.skipped[what] ?? 0) + 1;
 };
 
+/**
+ * The text a reference shows: its alias when it names one, else its target's text, else
+ * the text kept for a deleted target.
+ *
+ * An alias is no longer a rem since RemNote's storage overhaul (lib/rem_aliases.ts).
+ */
+async function referenceText(plugin: RNPlugin, el: any): Promise<RichTextInterface | undefined> {
+  const target = await plugin.rem.findOne(el._id);
+  if (el.aliasId) {
+    const alias = await aliasTextOf(plugin, target, el.aliasId);
+    if (alias) return alias;
+  }
+  return target?.text ?? (el.textOfDeletedRem as RichTextInterface | undefined);
+}
+
 async function spansOf(
   plugin: RNPlugin,
   rt: RichTextInterface | undefined,
@@ -111,9 +127,8 @@ async function spansOf(
           count(stats, 'pins');
           break;
         }
-        const target = await plugin.rem.findOne(el.aliasId ?? el._id);
-        const targetText = target?.text ?? (el.textOfDeletedRem as RichTextInterface | undefined);
-        if (!targetText) break;
+        const targetText = await referenceText(plugin, el);
+        if (!targetText?.length) break;
         if (depth >= MAX_REF_DEPTH) {
           out.push({ text: await plugin.richText.toString(targetText), italic: false });
         } else {

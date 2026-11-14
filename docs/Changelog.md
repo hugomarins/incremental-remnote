@@ -2,6 +2,18 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.230 - November 14th, 2026
+
+### 🐛 Fixed
+
+**Read Aloud**: a reference to one of a Rem's aliases is read again (it was left out of the script), in Read aloud and Add pronunciation alike.
+
+📖 [Read Aloud → Reading rules](Read-Aloud.md#reading-rules)
+
+**Find Rem**: a Rem picked through one of its aliases is inserted showing that alias again, not the Rem's main name, and **text + pin** copies the alias text.
+
+📖 [Find Rem → Find by alias](Utilities-Finding-and-Navigating.md#find-by-alias)
+
 ## v1.0.229 - November 13th, 2026
 
 ### ✨ New

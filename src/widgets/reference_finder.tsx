@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { resolveRemTextForBreadcrumb, buildAncestorBreadcrumb } from '../lib/richTextRemRefs';
 import { sanitizeRichTextForSetText, isHintNode } from '../lib/richTextSanitize';
 import { remHasImage } from '../lib/image_scan';
+import { aliasesWithIds, aliasIdForText, aliasTextOf } from '../lib/rem_aliases';
 import { useFloatingWidgetDrag, FloatingPosition } from '../lib/floating_widget_drag';
 
 // Report each step of the alias-id resolution as a toast. Off by default: the
@@ -12,13 +13,6 @@ import { useFloatingWidgetDrag, FloatingPosition } from '../lib/floating_widget_
 // noise in daily use. Flip to true when re-testing alias insertion (e.g. after
 // RemNote answers on how a plugin should obtain an alias's id).
 const ALIAS_REPAIR_DEBUG = false;
-
-// The rem id of an alias returned by `rem.getAliases()`. Historically that is
-// `_id`; the fallbacks are here because a candidate matched by alias text has
-// been coming back without one, which is exactly what leaves the inserted
-// reference showing the rem's primary name instead of the alias.
-const aliasRemId = (a: any): string =>
-  a?._id ?? a?.id ?? a?.remId ?? a?.rem?._id ?? a?._rem?._id ?? '';
 
 // ---------------------------------------------------------------------------
 // Find & Insert Reference
@@ -130,10 +124,8 @@ interface Candidate {
   // reference so it renders the alias text and links back to this rem.
   aliasId?: string;
   aliasText?: string;
-  // Debug only: set when the alias object came back without a usable rem id.
-  aliasKeys?: string;
-  // The matched alias's own rich text. Aliases are no longer rems, so their id
-  // can only be recovered by handing this back to getOrCreateAliasWithText().
+  // The matched alias's own rich text: the fallback for recovering its id
+  // through getOrCreateAliasWithText() when the search found none.
   aliasRichText?: any;
 }
 
@@ -431,7 +423,7 @@ function ReferenceFinder() {
         // for the rems we'll actually show, to keep per-keystroke cost low.)
         type Scored = {
           r: any; id: string; name: string; normName: string; type: number; times: number;
-          score: number; aliasId?: string; aliasText?: string; aliasKeys?: string; aliasRichText?: any;
+          score: number; aliasId?: string; aliasText?: string; aliasRichText?: any;
           matchFold: string; // folded text the match was made on (alias or name)
         };
         const scored: Scored[] = [];
@@ -450,7 +442,6 @@ function ReferenceFinder() {
           // Accent-insensitive: every typed token must appear in the folded name…
           let aliasId: string | undefined;
           let aliasText: string | undefined;
-          let aliasKeys: string | undefined; // debug: shape of the alias object when it has no id
           let aliasRichText: any; // the alias's own rich text — resolves its id at pick time
           let matchFold = foldName;
           if (!foldedTokens.every((t) => foldName.includes(t))) {
@@ -460,14 +451,15 @@ function ReferenceFinder() {
             // capture which alias to reference. Only the non-matching results
             // pay this extra lookup, so per-keystroke cost stays low.
             let matched: { id: string; text: string; fold: string; rt: any } | undefined;
+            // `aliasesWithIds`, not `r.getAliases()`: the SDK's version drops each
+            // alias's id, and an alias reference cannot be written without it.
             try {
-              for (const a of await r.getAliases()) {
+              for (const a of await aliasesWithIds(r)) {
                 const atRaw = (await resolveRemTextForBreadcrumb(plugin, a.text)).trim();
                 const at = atRaw === 'Untitled' ? '' : atRaw;
                 const fa = canonFig(fold(at));
                 if (at && foldedTokens.every((t) => fa.includes(t))) {
-                  matched = { id: aliasRemId(a), text: at, fold: fa, rt: a.text };
-                  if (!matched.id) aliasKeys = Object.keys(a ?? {}).join(',').slice(0, 120);
+                  matched = { id: a.aliasId, text: at, fold: fa, rt: a.text };
                   break;
                 }
               }
@@ -488,7 +480,7 @@ function ReferenceFinder() {
           if (matchFold === qf) score = 0;
           else if (matchFold.startsWith(qf)) score = 1;
           else if (matchFold.includes(qf)) score = 2;
-          scored.push({ r, id: r._id, name, normName: normalize(name), type, times, score, aliasId, aliasText, aliasKeys, aliasRichText, matchFold });
+          scored.push({ r, id: r._id, name, normName: normalize(name), type, times, score, aliasId, aliasText, aliasRichText, matchFold });
         }
 
         scored.sort((a, b) => {
@@ -521,7 +513,7 @@ function ReferenceFinder() {
             id: s.id, name: s.name, normName: s.normName, type: s.type,
             times: s.times, score: s.score, backText, breadcrumb, isPdfHighlight,
             hasImage: remHasImage(s.r),
-            aliasId: s.aliasId, aliasText: s.aliasText, aliasKeys: s.aliasKeys,
+            aliasId: s.aliasId, aliasText: s.aliasText,
             aliasRichText: s.aliasRichText,
           });
         }
@@ -567,23 +559,17 @@ function ReferenceFinder() {
         if (sel) {
           sawSelection = true;
           targetRemId = (sel as any).remId;
-          // An alias reference needs the alias's id, and `getAliases()` no
-          // longer supplies one — the objects it returns are rem shells whose
-          // `_id` is empty, because a built-in powerup's data is not stored as
-          // rems any more. `getOrCreateAliasWithText` is the surviving route:
-          // "if an equivalent alias already exists, that alias will be
-          // returned". Feeding it the alias's OWN rich text (not a re-typed
-          // string) is what keeps it a lookup rather than a create.
+          // Normally the search already found the alias's id. If not, look it up
+          // by the alias's OWN rich text (not a re-typed string), which keeps
+          // getOrCreateAliasWithText a lookup rather than a create.
           if (!cand.aliasId && cand.aliasText && cand.aliasRichText) {
             try {
               const owner = await plugin.rem.findOne(cand.id);
-              const alias: any = await owner?.getOrCreateAliasWithText(cand.aliasRichText);
-              if (typeof alias?._id === 'string' && alias._id) {
-                cand = { ...cand, aliasId: alias._id };
+              const aliasId = await aliasIdForText(owner, cand.aliasRichText);
+              if (aliasId) {
+                cand = { ...cand, aliasId };
               } else if (ALIAS_REPAIR_DEBUG) {
-                await plugin.app.toast(
-                  `alias id lookup: getOrCreateAliasWithText returned ${alias ? 'an object with no _id' : 'nothing'}`
-                );
+                await plugin.app.toast('alias id lookup: getOrCreateAliasWithText returned no id');
               }
             } catch (e) {
               console.warn('[reference-finder] alias id lookup failed:', e);
@@ -676,10 +662,24 @@ function ReferenceFinder() {
               delete n[RICH_TEXT_FORMATTING.HIDDEN_CLOZE];
               delete n[RICH_TEXT_FORMATTING.REVEALED_CLOZE];
             };
+            //  • picked through an alias, the text is the alias alone (an alias
+            //    has no back), as the reference itself would show it. An alias
+            //    is no longer a rem (lib/rem_aliases.ts), so it is read off its
+            //    owner rather than with findOne(aliasId).
             let srcRem: any;
-            try { srcRem = await plugin.rem.findOne(cand.aliasId || cand.id); } catch { /* ignore */ }
-            const frontRt: any[] = Array.isArray(srcRem?.text) ? srcRem.text : [];
-            const backRt: any[] = Array.isArray(srcRem?.backText) ? srcRem.backText : [];
+            let frontRt: any[] = [];
+            let backRt: any[] = [];
+            try {
+              srcRem = await plugin.rem.findOne(cand.id);
+              if (cand.aliasId) {
+                const aliasRt = await aliasTextOf(plugin, srcRem, cand.aliasId);
+                frontRt = Array.isArray(aliasRt) ? aliasRt : [];
+                srcRem = undefined; // no practice direction to read off an alias
+              } else {
+                frontRt = Array.isArray(srcRem?.text) ? srcRem.text : [];
+                backRt = Array.isArray(srcRem?.backText) ? srcRem.backText : [];
+              }
+            } catch { /* ignore */ }
             // Arrow reflects the card's practice direction, like the Opt+Z command.
             let arrowChar = '⇔';
             try {
@@ -833,12 +833,8 @@ function ReferenceFinder() {
               if (ALIAS_REPAIR_DEBUG) await plugin.app.toast(`alias repair failed: ${(e as any)?.message ?? e}`);
             }
           } else if (inserted && ALIAS_REPAIR_DEBUG && cand.aliasText) {
-            // Matched by alias text but no alias rem id came back from
-            // getAliases() — report the object's shape so we can see what the
-            // id now lives under.
-            await plugin.app.toast(
-              `alias repair: no aliasId for "${cand.aliasText}" — alias object keys: ${cand.aliasKeys || '(none)'}`
-            );
+            // Matched by alias text but no alias id could be recovered.
+            await plugin.app.toast(`alias repair: no aliasId for "${cand.aliasText}"`);
           } else if (inserted && ALIAS_REPAIR_DEBUG) {
             // Distinguishes "the picked candidate had no alias" from "this code
             // isn't running at all" — silence would look the same either way.

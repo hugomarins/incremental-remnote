@@ -15,7 +15,7 @@ A reference is a rich-text element in a Rem's `key` (front) or `value` (back):
 | `pin: true` | The pin-only form: renders just the 📍 and is left out of plain text and AI context. Stored pins look like `{"i":"q","_id":…,"pin":true,"content":false}`. |
 | `content` | **Show Content**: render the referenced Rem's content. |
 | `showFullName` | **Show Full Name**: render the ancestor path. |
-| `aliasId` | Show one of the target's aliases (an alias Rem, child of the target) instead of its text. |
+| `aliasId` | Show one of the target's aliases instead of its text. Since the storage overhaul an alias is **not a Rem**: it is stored on the target as `al: [{aliasId, alias}]`, and the id sits in `missing_ids_quanta`, so `findOne(aliasId)` returns nothing (aliases made before the overhaul can still be Rems). The bridge's `getAliases` returns `{aliasId, text}`, but the SDK wraps each as a Rem shell keeping only `.text`; so does `getOrCreateAliasWithText`. Go through `src/lib/rem_aliases.ts`, which calls the bridge via `(rem as any).call(...)` to keep the ids. Reported to RemNote: `support-reports/REMNOTE_SUPPORT_REPORT_sdk_aliases_drop_alias_id.md` (Nov 2026). |
 | `textOfDeletedRem` | Fallback text kept once the target is deleted. |
 | `cId` | A cloze placed on the reference. |
 
