@@ -10,6 +10,10 @@ This page documents the major changes and improvements for each version of the I
 
 📖 [Priority Bridge for Other Plugins → Storing audio](Priority-Bridge-for-Other-Plugins.md#store-media)
 
+**Local Media Bridge**: a new helper command, `notice`, lets an outside tool (an AI assistant that just wrote into RemNote, say) show you a notice in RemNote with an **Open Rem** button that takes you to the result.
+
+📖 [Local Media Bridge → Notices from outside tools](Local-Media-Bridge.md#notice)
+
 ### ✨ Improved
 
 **Read Aloud**: **Generate** now makes the audio in the background, so the popup closes at once and you can keep working; a notice at the top right says when the audio is in, with an **Open Rem** button that takes you to it, and never closes the popup you are working in.

@@ -170,5 +170,15 @@ Each command prints the plugin's answer as JSON and exits with `0` when everythi
 
 Unlike `localize`, these commands never run late: if the plugin does not answer before the command gives up, a job still waiting is cancelled, and a job the plugin took but never finished (for example because the plugin reloaded) is reported as lost rather than run again. Check the rems and run the command again.
 
+## Notices from outside tools { #notice }
+
+`notice` shows a message in RemNote, in the plugin's notice card at the top right, the same card that says a [Read aloud](Read-Aloud.md#use) audio is in. With `--rem`, the card has an **Open Rem** button that opens that rem. An outside tool, or an AI assistant that just wrote an explanation into RemNote, uses it to say *it is done, and here it is*:
+
+```bash
+python3 media_bridge.py notice --title "Paralelos: Regra 13" --message "4 books, 1 divergence" --rem AbC123
+```
+
+`--tone` is `success` (default), `info` or `error`; `--detail` adds a smaller line. The card never takes the focus or closes a popup you are working in, and it stays until you dismiss it. The command never fails its caller: when RemNote is closed it prints `"status": "queued"`, and the notice shows as soon as a RemNote window connects to the helper.
+
 !!! note "Plugin and helper versions"
-    These operations need this plugin version and the matching `media_bridge.py`; **Upscale image with ChatGPT** needs helper version 3, [Read aloud](Read-Aloud.md) version 12, [Copy Rem ID](Utilities-Finding-and-Navigating.md#copy-rem-id) copies silently only with version 4, `pin`, `pin-quote` and `card` need version 5, `tag` needs version 6, and `restore-audio` needs version 13 (`media_bridge.py status` shows the version). An older plugin still gets `localize` jobs; the others wait, and the command warns that the plugin does not know them yet. After updating the script, restart the helper (`media_bridge.py stop`, or `launchctl kickstart -k …` when it runs at login).
+    These operations need this plugin version and the matching `media_bridge.py`; **Upscale image with ChatGPT** needs helper version 3, [Read aloud](Read-Aloud.md) version 12, [Copy Rem ID](Utilities-Finding-and-Navigating.md#copy-rem-id) copies silently only with version 4, `pin`, `pin-quote` and `card` need version 5, `tag` needs version 6, `restore-audio` needs version 13, and `notice` version 14 (`media_bridge.py status` shows the version). An older plugin still gets `localize` jobs; the others wait, and the command warns that the plugin does not know them yet. After updating the script, restart the helper (`media_bridge.py stop`, or `launchctl kickstart -k …` when it runs at login).

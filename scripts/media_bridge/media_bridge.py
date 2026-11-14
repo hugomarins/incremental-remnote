@@ -101,7 +101,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 13  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs, 11: /tts/play, 12: /tts purpose, 13: POST /files, restore-audio
+VERSION = 14  # 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs, 11: /tts/play, 12: /tts purpose, 13: POST /files, restore-audio, 14: notice
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},
@@ -111,7 +111,11 @@ OPS_BY_PLUGIN_VERSION = {
     5: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card", "audio"},
     6: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card", "audio",
         "restore-audio"},
+    7: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card", "audio",
+        "restore-audio", "notice"},
 }
+# Jobs that may name no rem at all.
+OPS_WITHOUT_REMS = {"notice"}
 KNOWN_OPS = OPS_BY_PLUGIN_VERSION[max(OPS_BY_PLUGIN_VERSION)]
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("REMNOTE_MEDIA_BRIDGE_PORT", "3460"))
@@ -284,7 +288,7 @@ class Handler(BaseHTTPRequestHandler):
             if op not in KNOWN_OPS:
                 return self._json(400, {"error": f"unknown op {op!r}"})
             rem_ids = [r for r in body.pop("remIds", []) if isinstance(r, str) and r]
-            if not rem_ids:
+            if not rem_ids and op not in OPS_WITHOUT_REMS:
                 return self._json(400, {"error": "remIds required"})
             job = {
                 "id": uuid.uuid4().hex[:12], "op": op, "remIds": rem_ids, "args": body,
@@ -808,6 +812,32 @@ def audio(parent: str, path: str, caption: str | None, position: str | None, tim
     finish(result, bool(result.get("ok")))
 
 
+def notice(title: str, message: str, detail: str | None, rem: str | None, tone: str, wait: float) -> None:
+    """Show a notice in RemNote (the plugin's floating card, with Open Rem when a rem is given).
+
+    Never fails the caller: when RemNote is closed or the plugin has not polled yet, the
+    job stays queued in the helper and shows as soon as a RemNote window polls.
+    """
+    h = ensure_running()
+    if h.get("version", 1) < VERSION:
+        sys.exit(
+            f"the running helper is an older version ({h.get('version')}); restart it so it knows 'notice': "
+            f"`{Path(__file__).name} stop` (or `launchctl kickstart -k gui/$(id -u)/com.incrementalremnote.media-bridge`)"
+        )
+    args = {"title": title, "message": message, "tone": tone}
+    if detail:
+        args["detail"] = detail
+    job_id = _request("POST", "/jobs", {"op": "notice", "remIds": [rem] if rem else [], **args})["jobId"]
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        job = _request("GET", f"/jobs/{job_id}")
+        if job and job["status"] == "done":
+            finish({"jobId": job_id, "status": "shown", **(job["result"] or {})}, True)
+        time.sleep(0.5)
+    finish({"jobId": job_id, "status": "queued",
+            "message": "RemNote has not picked it up yet; it shows when a RemNote window polls the bridge"}, True)
+
+
 def restore_audio(rems: str, chunk: int, timeout: float) -> None:
     """Runs in small jobs: a job taken and unanswered for REDELIVER_AFTER_S counts as lost."""
     ids = split_ids(rems)
@@ -981,6 +1011,14 @@ def main() -> None:
     p_ra.add_argument("rems", help="rem id(s), comma-separated")
     p_ra.add_argument("--chunk", type=int, default=5, help="rems per plugin job (default 5)")
     p_ra.add_argument("--timeout", type=float, default=600, help="seconds to wait for each job")
+    p_no = sub.add_parser("notice", help="show a notice in RemNote (floating card; Open Rem when --rem is given)")
+    p_no.add_argument("--title", required=True)
+    p_no.add_argument("--message", default="", help="one or two lines under the title")
+    p_no.add_argument("--detail", help="smaller text under the message")
+    p_no.add_argument("--rem", help="rem id the Open Rem button opens")
+    p_no.add_argument("--tone", choices=["success", "info", "error"], default="success")
+    p_no.add_argument("--wait", type=float, default=10,
+                      help="seconds to wait for RemNote to show it (it stays queued after that)")
     a = ap.parse_args()
     if a.cmd == "serve":
         serve()
@@ -1015,6 +1053,8 @@ def main() -> None:
         audio(a.parent, a.file, a.caption, a.position, a.timeout)
     elif a.cmd == "restore-audio":
         restore_audio(a.rems, max(1, a.chunk), a.timeout)
+    elif a.cmd == "notice":
+        notice(a.title, a.message, a.detail, a.rem, a.tone, a.wait)
 
 
 if __name__ == "__main__":
