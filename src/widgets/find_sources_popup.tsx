@@ -404,7 +404,7 @@ function FindSourcesPopup() {
               {rem.title}
             </div>
             {(rem.outline || rem.context) && (
-              <div className="text-xs" style={muted} data-tip="Where the note sits, as sent with it: the outline path to the AI only, a descriptor's concept to the search too">
+              <div className="text-xs" style={muted} data-tip="Where the note sits, as sent with it: the outline path to the AI only, the parent heading or a descriptor's concept to the search too">
                 {[rem.outline, rem.context].filter(Boolean).join(' › ')} › <i>this note</i>
               </div>
             )}

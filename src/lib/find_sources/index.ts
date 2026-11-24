@@ -110,8 +110,9 @@ export interface FindSourcesItem {
   texts: string[];
   ancestors: string[];
   /**
-   * A descriptor's concept and the descriptors above it ("Rebocadores com tubulão"), which
-   * the note means nothing without: searched with it, and given to Claude as its CONTEXT.
+   * What the note is about (surroundings.ts): a descriptor's concept and the descriptors above
+   * it ("Rebocadores com tubulão"), or the heading a Rem sits under. Searched with the note,
+   * and given to Claude as its CONTEXT.
    */
   context?: string;
   /** Ask Your Sources / Check Statement: the Rems above (noteSurroundings), for Claude only. */
@@ -178,7 +179,7 @@ export interface ReviewRem {
   members?: StatementMember[];
   /** Ask Your Sources: the answer to the Rem's question or topic. */
   answer?: SourcesAnswer;
-  /** A descriptor's concept (FindSourcesItem.context), shown above the review. */
+  /** What the note is about (FindSourcesItem.context), shown above the review. */
   context?: string;
   /** The Rems above the note sent to Claude (FindSourcesItem.outline), shown above the review. */
   outline?: string;

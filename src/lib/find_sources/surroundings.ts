@@ -15,8 +15,11 @@ const MAX_ANCESTORS = 40;
 /**
  * What a run sends about where a note sits, from one walk up its ancestors:
  * - `ancestors`: their ids, for the provider;
- * - `context`: a descriptor's chain (lib/descriptor_chain) as one line, "Concept ›
- *   descriptor above", for the search and for Claude: the note means nothing without it;
+ * - `context`: what the note is about, for the search and for Claude: a descriptor's chain
+ *   (lib/descriptor_chain) as one line, "Concept › descriptor above"; for any other Rem,
+ *   its parent (the heading it sits under: "Potencialmente o maior fator relacionado ao
+ *   navio" under "Margem de Resposta a Ondas" says nothing about waves on its own), unless
+ *   the parent is a long note of its own or a top-level Rem (a library, a book's folder);
  * - `outline` (with `withOutline`): up to OUTLINE_LEVELS Rems above that, up to and with
  *   the document, outermost first, for Claude only (in a search query they would pull in
  *   passages about the whole topic).
@@ -41,10 +44,14 @@ export async function noteSurroundings(
       .join(' \u203a ') || undefined;
 
   // A descriptor: its descriptor ancestors, and the first one that is not (its concept).
+  // Any other Rem: its parent, when that reads as a heading (short, not top-level).
   let chainLength = 0;
   if ((rem.type as number) === REM_TYPE_DESCRIPTOR) {
     while (chainLength < above.length && (above[chainLength].type as number) === REM_TYPE_DESCRIPTOR) chainLength++;
     chainLength = Math.min(chainLength + 1, above.length);
+  } else if (above.length > 1) {
+    const parentText = (await textOf(above[0]).catch(() => '')).trim();
+    if (parentText && parentText.length <= OUTLINE_MAX_CHARS) chainLength = 1;
   }
   const context = chainLength
     ? (await Promise.all(above.slice(0, chainLength).map((r) => textOf(r).catch(() => ''))))

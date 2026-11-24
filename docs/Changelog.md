@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.257 - November 24th, 2026
+
+### ✨ Improved
+
+**Find Sources**: a note now searches with the heading it sits under, so *Potencialmente o maior fator relacionado ao navio* under *Margem de Resposta a Ondas* finds the passage on the wave response allowance. This applies to Check Statement, Ask Your Sources and Find Interference too.
+
+📖 [Source Pins → Descriptors and where the note sits](Source-Pins.md#find-sources-context)
+
 ## v1.0.256 - November 24th, 2026
 
 ### ✨ New

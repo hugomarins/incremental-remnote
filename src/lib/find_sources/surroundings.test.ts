@@ -1,6 +1,7 @@
 /**
  * Where a note sits, as Find Sources / Check Statement / Ask Your Sources send it
- * (noteSurroundings): a descriptor's chain as CONTEXT, the Rems above as OUTLINE PATH.
+ * (noteSurroundings): a descriptor's chain or the parent heading as CONTEXT, the Rems above as
+ * OUTLINE PATH.
  * Run with `npm test`. The outline follows a real one (PSCPP › Tug Use › …).
  */
 import { describe, it } from 'node:test';
@@ -45,12 +46,25 @@ describe('noteSurroundings', () => {
     assert.equal(s.context, 'Rebocadores com tubulão › no gelo');
   });
 
-  it('any other Rem: no CONTEXT, the outline up to its document, never a long note', async () => {
+  it('any other Rem: its parent heading as CONTEXT, the outline above it, up to its document', async () => {
+    const q = rem({ _id: 'Q', text: 'Potencialmente o maior fator relacionado ao navio.', parent: ice });
+    const s = await noteSurroundings(q, textOf, true);
+    assert.equal(s.context, '3.3) Tug assistance in ice');
+    assert.equal(s.outline, '3) Assisting methods');
+  });
+
+  it('any other Rem under a long note: no CONTEXT, the outline up to its document, never the long note', async () => {
     const long: Fake = { _id: 'L', text: 'x'.repeat(200), parent: ice };
     const q = rem({ _id: 'Q', text: 'Quando se aceita rebocar com cabo longo no gelo?', parent: long });
     const s = await noteSurroundings(q, textOf, true);
     assert.equal(s.context, undefined);
     assert.equal(s.outline, '3) Assisting methods › 3.3) Tug assistance in ice');
+  });
+
+  it('a Rem right under a top-level Rem: no CONTEXT', async () => {
+    const q = rem({ _id: 'Q', text: 'Uma nota solta.', parent: root });
+    const s = await noteSurroundings(q, textOf, true);
+    assert.equal(s.context, undefined);
   });
 
   it('Find Sources: no outline', async () => {

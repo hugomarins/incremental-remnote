@@ -160,8 +160,10 @@ Neither part is a statement alone, so Find Sources and Check Statement read them
 
 A note often means something only in its place in the outline. What is sent with it:
 
-- **A descriptor** (*Não pode rebocar em que método? → no cabo longo* under *Rebocadores com tubulão*) names no subject on its own, so it goes with its **concept**: the first Rem above it that is not a descriptor, then any descriptors in between, front only. The concept is searched with the note, and Claude reads the note as being about it. This applies to Find Sources, Check Statement and Ask Your Sources.
-- **Check Statement and Ask Your Sources** also give Claude up to three Rems above the note (above the concept, for a descriptor), up to and including its document, so a question under *3.3) Tug assistance in ice* is read as being about ice. Rems longer than a heading are left out. These go to Claude only, never to the search, where they would pull in passages about the whole topic.
+- **A descriptor** (*Não pode rebocar em que método? → no cabo longo* under *Rebocadores com tubulão*) names no subject on its own, so it goes with its **concept**: the first Rem above it that is not a descriptor, then any descriptors in between, front only.
+- **Any other note** goes with the **heading it sits under**, its parent: *Potencialmente o maior fator relacionado ao navio* under *Margem de Resposta a Ondas* says nothing about waves on its own. A parent longer than a heading, or a top-level Rem (a library, a book's folder), is left out.
+- The concept or heading is **searched with the note**, and Claude reads the note as being about it. This applies to Find Sources, Check Statement, Ask Your Sources and Find Interference.
+- **Check Statement and Ask Your Sources** also give Claude up to three Rems above that, up to and including the document, so a question under *3.3) Tug assistance in ice* is read as being about ice. Rems longer than a heading are left out. These go to Claude only, never to the search, where they would pull in passages about the whole topic.
 - **The review** shows what was sent, under each note's title: *3) Assisting methods › 3.3) Tug assistance in ice › Rebocadores com tubulão › this note*.
 
 ## Check Statement: is my note right? { #check-statement }

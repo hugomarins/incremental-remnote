@@ -57,8 +57,8 @@ point (the term, number, condition), copied exactly; shown in bold.
 "emphasis"; shown in bold italics. "" when none stands out.`;
 
 /**
- * Where the note sits, for Claude only (the search gets the descriptor chain alone,
- * lib/find_sources enqueueStatements): `context` = a descriptor's concept and the
+ * Where the note sits, for Claude (the search gets `context` alone, lib/find_sources
+ * enqueueStatements): `context` = the parent heading, or a descriptor's concept and the
  * descriptors above it, which complete the note; `outline` = a few Rems above that, up to
  * the document, as background.
  */
@@ -71,9 +71,9 @@ export const SETTING_RULES = `Where the note sits in the student's outline may b
 - OUTLINE PATH: the Rems above the note, outermost first, up to its document. Background \
 only, to tell what the note is about (a question under "Tug assistance in ice" is about ice \
 even when it does not say so); never a claim to check or a question to answer.
-- CONTEXT: the topic the note is a descriptor of (e.g. "Rebocadores com tubulão" above \
-"Não pode rebocar em que método?"). The note means nothing without it: read the note as \
-being about that topic.`;
+- CONTEXT: the topic the note is about: the concept it is a descriptor of, or the heading it \
+sits under (e.g. "Rebocadores com tubulão" above "Não pode rebocar em que método?"). The note \
+may mean nothing without it: read the note as being about that topic.`;
 
 /** The OUTLINE PATH and CONTEXT lines of a prompt, outermost first; none when not given. */
 export function settingLines(s: NoteSetting | undefined): string[] {
