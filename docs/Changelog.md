@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.258 - November 25th, 2026
+
+### ♻️ Changed
+
+**Corpus Provider**: passages now mark what the exam asks for with the `syllabus` field (`in`, `section-out`, `book-out`), which writes *fora do edital* in the attribution; providers that still send the older `edital` field keep working.
+
+📖 [Corpus Provider → find-passages](Corpus-Provider.md#op-find-passages)
+
 ## v1.0.257 - November 24th, 2026
 
 ### ✨ Improved
