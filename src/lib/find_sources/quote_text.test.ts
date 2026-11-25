@@ -45,6 +45,15 @@ assert.equal(
   '(BPG, PDF p. 95; out of the exam syllabus)'
 );
 assert.equal(attribution({ cite: 'BPG', page: 95, edital: 'sim', lang: 'en' }), '(BPG, PDF p. 95)');
+// The provider's `syllabus` (in / section-out / book-out) wins over the older `edital`.
+assert.equal(attribution({ cite: 'BPG', page: 95, syllabus: 'in' }), '(BPG, PDF p. 95)');
+assert.equal(attribution({ cite: 'BPG', page: 95, syllabus: 'book-out' }), '(BPG, PDF p. 95; fora do edital)');
+assert.equal(
+  attribution({ cite: 'BPG', page: 95, syllabus: 'section-out', lang: 'en' }),
+  '(BPG, PDF p. 95; out of the exam syllabus)'
+);
+assert.equal(attribution({ cite: 'BPG', page: 95, syllabus: 'in', edital: 'secao-fora' }), '(BPG, PDF p. 95)');
+assert.equal(attribution({ cite: 'BPG', page: 95 }), '(BPG, PDF p. 95)');
 
 // Claude's **bold** as rich text (Ask Your Sources).
 assert.deepEqual(boldToRichText('mede **45°**, não **35°**.'), [

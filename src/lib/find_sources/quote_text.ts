@@ -67,6 +67,16 @@ export function segmentsToRichText(segments: QuoteSegment[]): RichElement[] {
 export const OUTSIDE_SYLLABUS = { pt: 'fora do edital', en: 'out of the exam syllabus' } as const;
 
 /**
+ * Whether the exam does not ask for this passage: the provider's `syllabus` (`in`,
+ * `section-out`, `book-out`), or, from providers written before it, `edital` (`sim`,
+ * `secao-fora`, `obra-fora`).
+ */
+export function isOutsideSyllabus(p: { syllabus?: string | null; edital?: string | null }): boolean {
+  if (p.syllabus) return p.syllabus !== 'in';
+  return !!p.edital && p.edital !== 'sim';
+}
+
+/**
  * The attribution the skills use: (cite, §x.y, PDF p. N; fora do edital). The section
  * only when the book numbers it; "fora do edital" ("out of the exam syllabus" in an
  * English note) for a passage the exam does not ask for.
@@ -75,11 +85,12 @@ export function attribution(p: {
   cite: string;
   sectionNumber?: string | null;
   page?: number | null;
+  syllabus?: string | null;
   edital?: string | null;
   lang?: 'pt' | 'en';
 }): string {
   const parts = [p.cite, p.sectionNumber ? `§${p.sectionNumber}` : '', p.page ? `PDF p. ${p.page}` : ''].filter(Boolean);
-  const outside = p.edital && p.edital !== 'sim' ? `; ${OUTSIDE_SYLLABUS[p.lang ?? 'pt']}` : '';
+  const outside = isOutsideSyllabus(p) ? `; ${OUTSIDE_SYLLABUS[p.lang ?? 'pt']}` : '';
   return `(${parts.join(', ')}${outside})`;
 }
 

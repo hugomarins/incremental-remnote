@@ -15,7 +15,7 @@ import {
   ReviewPassage,
 } from '../lib/find_sources';
 import { Verdict, VERDICTS } from '../lib/find_sources/check';
-import { emphasisSegments, OUTSIDE_SYLLABUS } from '../lib/find_sources/quote_text';
+import { emphasisSegments, isOutsideSyllabus, OUTSIDE_SYLLABUS } from '../lib/find_sources/quote_text';
 import {
   CARD_KINDS,
   cardPreview,
@@ -574,7 +574,7 @@ function FindSourcesPopup() {
                         {p.book.cite || p.book.title}
                       </span>
                       <span>{p.pdfPage ? `PDF p. ${p.pdfPage}` : p.page ? `p. ${p.page}` : ''}</span>
-                      {p.edital && p.edital !== 'sim' && <span>· {OUTSIDE_SYLLABUS[review.rems[row.rem].lang]}</span>}
+                      {isOutsideSyllabus(p) && <span>· {OUTSIDE_SYLLABUS[review.rems[row.rem].lang]}</span>}
                       {p.unpinnable && <span style={{ color: '#F59E0B' }}>· no pin: {p.unpinnable}</span>}
                       {p.diverges && p.role !== 'diverges' && <span style={{ color: '#EF4444' }}>· ⚠ diverges</span>}
                       {p.basis && (

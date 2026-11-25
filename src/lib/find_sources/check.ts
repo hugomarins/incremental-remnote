@@ -118,6 +118,7 @@ export function passageLines(
     pdfPage?: number;
     page?: number | null;
     sectionNumber?: string | null;
+    syllabus?: string | null;
     edital?: string | null;
     context?: string;
   },
@@ -127,6 +128,7 @@ export function passageLines(
     cite: p.book.cite || p.book.title,
     sectionNumber: p.sectionNumber,
     page: p.pdfPage ?? p.page,
+    syllabus: p.syllabus,
     edital: p.edital,
   });
   return ['', `[${k + 1}] ${where}`, p.context?.trim() || `\u201c${p.quote}\u201d`];

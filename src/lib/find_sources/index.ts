@@ -98,6 +98,9 @@ export interface FoundPassage {
   why: string;
   role: PassageRole;
   diverges?: boolean;
+  /** `in`, `section-out` or `book-out`; anything but `in` gets "fora do edital". */
+  syllabus?: string | null;
+  /** The same from older providers: `sim`, `secao-fora`, `obra-fora`. */
   edital?: string | null;
 }
 
@@ -254,6 +257,7 @@ export function quoteRichText(p: ReviewPassage, lang: 'pt' | 'en'): RichElement[
       cite: p.book.cite || p.book.title,
       sectionNumber: p.sectionNumber,
       page: p.pdfPage ?? p.page,
+      syllabus: p.syllabus,
       edital: p.edital,
       lang,
     })}`,
