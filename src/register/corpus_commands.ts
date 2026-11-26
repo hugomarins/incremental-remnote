@@ -6,8 +6,10 @@ import {
   findInterferenceCommandId,
   findSourcesCommandId,
   findSourcesInTreeCommandId,
+  openInCorpusReaderCommandId,
 } from '../lib/consts';
 import { getCorpusStatus } from '../lib/corpus';
+import { OPEN_IN_READER, openInCorpusReader } from '../lib/corpus/open_in_reader';
 import {
   askYourSourcesCommand,
   checkStatementCommand,
@@ -23,12 +25,16 @@ const FIRST_CHECK_MS = 8_000;
 const RECHECK_MS = 5 * 60_000;
 
 let registered = false;
+let readerRegistered = false;
 
 /**
  * The commands that need a corpus provider able to search by meaning (`semantic-search`,
  * docs/Corpus-Provider.md), reached through the AI helper: Find Sources, Check Statement,
  * Ask Your Sources, Find Interference and the tree versions. They are not Media Bridge commands, and Pin
  * Source Quote, which only needs the AI helper, stays registered for everyone.
+ *
+ * Open in Corpus Reader is registered on its own capability, `open-in-reader`: a provider
+ * may have a reader and no search, or the reverse.
  *
  * Registered only once the provider reports the capability, so users without one never see
  * them: looked at shortly after startup, then every few minutes until it answers (the helper
@@ -39,14 +45,27 @@ let registered = false;
 export function registerCorpusCommands(plugin: ReactRNPlugin) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const check = async () => {
-    if (registered) return;
+    if (registered && readerRegistered) return;
     const status = await getCorpusStatus(plugin, { force: true });
-    if (!status.available || !status.capabilities.includes(SEMANTIC_SEARCH)) {
-      timer = setTimeout(() => void check(), RECHECK_MS);
-      return;
+    const offers = (capability: string) => status.available && status.capabilities.includes(capability);
+    if (!readerRegistered && offers(OPEN_IN_READER)) {
+      readerRegistered = true;
+      console.log(`[Corpus] ${status.name ?? 'provider'} has a reader: Open in Corpus Reader registered`);
+      // The provider's own reader (a page in the browser), opened on the passage the focused
+      // Rem comes from: a PDF highlight, a note under a book, an extract the reader made.
+      await plugin.app.registerCommand({
+        id: openInCorpusReaderCommandId,
+        name: 'Open in Corpus Reader',
+        description: "Open your corpus provider's reader on the passage this Rem comes from.",
+        quickCode: 'oir',
+        action: async () => openInCorpusReader(plugin),
+      });
     }
-    registered = true;
+    // Whatever is still missing is looked for again later (the helper may start after RemNote).
     if (timer) clearTimeout(timer);
+    if (!offers(SEMANTIC_SEARCH) || !readerRegistered) timer = setTimeout(() => void check(), RECHECK_MS);
+    if (registered || !offers(SEMANTIC_SEARCH)) return;
+    registered = true;
     console.log(`[Corpus] ${status.name ?? 'provider'} searches by meaning: Find Sources commands registered`);
 
     // Find the passages of the user's library that say what the selected Rems say, by

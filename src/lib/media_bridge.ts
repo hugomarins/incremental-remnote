@@ -35,7 +35,7 @@ import { MEDIA_BRIDGE_URL } from './media_bridge_url';
 export { MEDIA_BRIDGE_URL };
 const POLL_WAIT_S = 25;
 /** The bridge protocol this build speaks; see OPS_BY_PLUGIN_VERSION in media_bridge.py. */
-const PROTOCOL_VERSION = 14;
+const PROTOCOL_VERSION = 15;
 const RETRY_MS = 30_000;
 /**
  * A rem written through the MCP reaches this client by sync, a moment after the
@@ -192,13 +192,18 @@ async function handleNoticeJob(plugin: ReactRNPlugin, job: MediaJob) {
 }
 
 /** Ops whose result is only read back: no toast for them. */
-const QUIET_OPS = new Set(['get-image']);
+const QUIET_OPS = new Set(['get-image', 'open-rem', 'open-pdf', 'priority-get', 'priority-set']);
+/**
+ * Ops about Rems the user is looking at in another tool: a Rem that is not here is
+ * reported as missing at once, not waited for as one still arriving by sync.
+ */
+const NO_SYNC_WAIT_OPS = new Set(['open-rem', 'open-pdf', 'priority-get', 'priority-set']);
 
 async function handleOpJob(plugin: ReactRNPlugin, job: MediaJob & { op: string }) {
   console.log(`${LOG} job ${job.id} received: ${job.op} on ${job.remIds.length} rem(s)`, job);
   const ids = [...job.remIds];
   if (typeof job.parentId === 'string') ids.push(job.parentId);
-  await waitForRemsToExist(plugin, ids);
+  if (!NO_SYNC_WAIT_OPS.has(job.op)) await waitForRemsToExist(plugin, ids);
   const result = await runBridgeOp(plugin, { ...job, op: job.op, remIds: job.remIds });
   console.log(`${LOG} job ${job.id} ${job.op}: ${result.summary}`, result);
   if (!QUIET_OPS.has(job.op) || !result.ok) {

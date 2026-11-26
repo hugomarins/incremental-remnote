@@ -16,6 +16,7 @@ Each feature checks for its own **capability**. A provider offers only the capab
 | `quote-literal` | Pin Source Quote, same path | Also gives, per book, the exact text to search for when the Rem's text was corrected and no longer matches the PDF letter for letter |
 | `suggest-parent` | The [parent selector](Create-Incremental-Rem-from-PDF-Highlights.md#corpus-suggestion) | Names the Rem in your notes for the section the highlight comes from, so the selector can suggest it |
 | `semantic-search` | [Find Sources](Source-Pins.md#find-sources) | Finds the passages that say what a Rem says, by meaning: operation `find-passages` |
+| `open-in-reader` | [Open in Corpus Reader](#op-open-in-reader) | Gives the address of the passage a Rem comes from, in the provider's own reader |
 
 ## Setting one up { #setup }
 
@@ -118,6 +119,29 @@ Answer, sources first:
 - `context` (optional): the whole passage the quote was cut from, a few thousand characters at most. Never quoted as is: Check Statement and Ask Your Sources give it to Claude, which picks its own excerpts from it (checked against it before use).
 - Each excerpt should make sense on its own: when it says "these values" or "it", keep the words it points back to.
 
+### `open-in-reader` { #op-open-in-reader }
+
+For a provider that has a reader of its own: a page in the browser showing the books of your library. The command **Open in Corpus Reader** (`quick: oir`) asks where the focused Rem's passage is and opens the address in the browser. The command appears only when the provider lists the capability.
+
+```json
+{ "op": "open-in-reader", "remId": "FocusedRem", "ancestors": ["parent id", "grandparent id"],
+  "text": "The focused Rem's text, up to 300 characters",
+  "sourceRemId": "PdfRem", "page": 51 }
+```
+
+- `ancestors`: nearest first.
+- `sourceRemId` and `page` (optional): sent when the Rem is a PDF highlight (its PDF and 1-based page), `sourceRemId` alone when the Rem is the PDF itself.
+
+```json
+{ "url": "http://127.0.0.1:3470/#/b/pianc-121/c/1.4.3", "how": "by the notes" }
+```
+
+- `url`: an `http` or `https` address. Anything else is not opened.
+- `how` (optional): a word or two on how the place was found, shown in the toast.
+- When there is no place for the Rem: `{ "url": null, "reason": "this Rem is not under the notes of an indexed book" }`. The reason is shown as is.
+
+The reader can talk back to RemNote (open a Rem or a PDF, show and set priorities) through the [Local Media Bridge](Local-Media-Bridge.md#jobs).
+
 ### Unknown operations { #unknown-op }
 
 A provider that gets an `op` it does not implement should answer `{"error": "unsupported op"}` (exit 0) or exit with an error. The plugin only sends the operations listed under `capabilities`, so this happens only with a mismatch.
@@ -132,6 +156,7 @@ A provider that gets an `op` it does not implement should answer `{"error": "uns
   - **Outside the tree:** when the suggested Rem is outside the tree the selector shows, it gets a row of its own at the top.
 - **Pin Source Quote:** when a book in the `find-source` answer carries `quote`, that text is searched first, then the Rem's own.
 - **Find Sources:** runs only when the provider lists `semantic-search`; its operation is `find-passages`.
+- **Open in Corpus Reader:** registered only when the provider lists `open-in-reader`, whether or not it searches by meaning.
 
 ## For developers { #developers }
 

@@ -315,6 +315,37 @@ class PdfHighlightIndex {
   }
 }
 
+/**
+ * Where a short-lived highlight on `page` can be filed without creating anything: the
+ * page's own "Page NNN" Rem, else the nearest page that has one (the viewer draws a
+ * highlight from its Data, not from the page Rem it sits under), else the Highlights
+ * container. Null when the PDF has no Highlights container yet.
+ */
+export async function existingPageRemNear(plugin: ReactRNPlugin, source: PluginRem, page: number) {
+  const container = await findHighlightsContainer(plugin, source);
+  if (!container) return null;
+  const pages = new Map<number, string>();
+  for (const child of await container.getChildrenRem()) {
+    const n = pageNumberOfLabel(await safeRemTextToString(plugin, child.text));
+    if (n !== null && !pages.has(n)) pages.set(n, child._id);
+  }
+  if (!pages.has(page)) {
+    // RemNote may not have loaded the container's children: the database has them all.
+    const stored = await storedHighlights(plugin, source._id);
+    for (const item of stored?.items ?? []) {
+      if (item.parentId !== container._id) continue;
+      const n = pageNumberOfLabel(item.text);
+      if (n !== null && !pages.has(n) && (n === page || pages.size < 400)) pages.set(n, item.remId);
+    }
+  }
+  const nearest = [...pages.keys()].sort((a, b) => Math.abs(a - page) - Math.abs(b - page));
+  for (const n of nearest) {
+    const id = pages.get(n)!;
+    if (await plugin.rem.findOne(id)) return { parentId: id, exact: n === page };
+  }
+  return { parentId: container._id, exact: false };
+}
+
 async function ensurePdfPins(
   plugin: ReactRNPlugin,
   source: PluginRem,

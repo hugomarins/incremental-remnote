@@ -814,6 +814,7 @@ export const findSourcesCommandId = 'find-sources';
 export const checkStatementCommandId = 'check-statement';
 export const askYourSourcesCommandId = 'ask-your-sources';
 export const findInterferenceCommandId = 'find-interference';
+export const openInCorpusReaderCommandId = 'open-in-corpus-reader';
 export const findSourcesInTreeCommandId = 'find-sources-in-tree';
 export const checkStatementsInTreeCommandId = 'check-statements-in-tree';
 export const FIND_SOURCES_POPUP = 'find_sources_popup';

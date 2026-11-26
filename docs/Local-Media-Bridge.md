@@ -199,9 +199,28 @@ A `create` plan (a quote with Extra Card Detail right after an alternative, then
  {"key": "new:n1", "parent": "new:q1", "markdown": "Plain note under the quote"}]
 ```
 
-Each command prints the plugin's answer as JSON and exits with `0` when everything worked, `1` when something failed (the message says what), and `2` when the plugin did not answer in time. RemNote shows a toast for each operation except `get-image`; the console logs them under `[MediaBridge]`.
+Each command prints the plugin's answer as JSON and exits with `0` when everything worked, `1` when something failed (the message says what), and `2` when the plugin did not answer in time. RemNote shows a toast for each operation except `get-image` and the [jobs for other programs](#jobs); the console logs them under `[MediaBridge]`.
 
 Unlike `localize`, these commands never run late: if the plugin does not answer before the command gives up, a job still waiting is cancelled, and a job the plugin took but never finished (for example because the plugin reloaded) is reported as lost rather than run again. Check the rems and run the command again.
+
+## Jobs for other programs { #jobs }
+
+A program that shows your notes outside RemNote (a reader, a search page) can open a Rem or a PDF in RemNote and read or set priorities. These four operations have no command: the program posts a job to the helper and reads its answer.
+
+```bash
+curl -s -X POST http://127.0.0.1:3460/jobs -H 'Content-Type: application/json' \
+  -d '{"op": "open-pdf", "remIds": ["PdfRem"], "page": 51, "y": 0.4}'      # → {"jobId": "…"}
+curl -s http://127.0.0.1:3460/jobs/<jobId>                                  # → {"status": "done", "result": {…}}
+```
+
+| Job | Fields | What the plugin does |
+|---|---|---|
+| `open-rem` | `remIds: [rem]`, `pane` (optional) | Opens the Rem. `"pane": "new"` opens it beside what is on screen; without it, the focused pane changes. |
+| `open-pdf` | `remIds: [pdf rem]`, `page` (from 1), `y` (0 to 1 down the page, or `null`), `quote` (optional), `pane` (optional) | Opens the PDF at that page. With `y`, a blue line marks the spot for a few seconds. The answer has `reached: false` when the PDF has no highlights yet: it then opens where you last read it. |
+| `priority-get` | `remIds: [rems…]` (hundreds are fine) | Answers `priorities`: per Rem, `priority`, `source` (`own`, `inherited` or `default`), `from` (the ancestor it is inherited from) and `kind` (`IncRem` or `Card`). |
+| `priority-set` | `remIds: [rem]`, `priority` (0 to 100), `dryRun` (optional) | Sets the Rem's own priority: its Incremental priority, else a manual [card priority](Prioritization-&-Sorting.md), which the Rems below it then inherit. With `"dryRun": true` nothing changes, and `summary` says in one sentence what would: how many cards in how many Rems would inherit the new value. |
+
+RemNote shows no toast for these unless one fails. `GET /health` answers `pluginVersion`: the jobs need 15 or more.
 
 ## Notices from outside tools { #notice }
 
@@ -226,4 +245,4 @@ python3 media_bridge.py answer 3ac21c70f41a,138ff0c45f91 --any --wait 3600
 The answer is the label pressed, or `dismissed` when the card was closed without one (**Dismiss all**, Esc). Answers are kept in `~/.remnote-media-bridge/answers.json`, so they survive a restart of the helper; a question not yet answered disappears with the RemNote window that shows it (reloading RemNote), and the tool can ask again. Ask one thing per card: put several changes in one card only when a single answer fits them all.
 
 !!! note "Plugin and helper versions"
-    These operations need this plugin version and the matching `media_bridge.py`; **Upscale image with ChatGPT** needs helper version 3, [Read aloud](Read-Aloud.md) version 12, [Copy Rem ID](Utilities-Finding-and-Navigating.md#copy-rem-id) copies silently only with version 4, `pin`, `pin-quote` and `card` need version 5, `tag` needs version 6, `restore-audio` needs version 13, `notice` version 14, `set-text` and `remove` version 15, `heading` version 16, `portal` version 17, `ask`, `answer` and `outline` version 18, `strip-priority` and `card --practice` version 19, and `create` version 21 (`media_bridge.py status` shows the version). An older plugin still gets `localize` jobs; the others wait, and the command warns that the plugin does not know them yet. After updating the script, restart the helper (`media_bridge.py stop`, or `launchctl kickstart -k …` when it runs at login).
+    These operations need this plugin version and the matching `media_bridge.py`; **Upscale image with ChatGPT** needs helper version 3, [Read aloud](Read-Aloud.md) version 12, [Copy Rem ID](Utilities-Finding-and-Navigating.md#copy-rem-id) copies silently only with version 4, `pin`, `pin-quote` and `card` need version 5, `tag` needs version 6, `restore-audio` needs version 13, `notice` version 14, `set-text` and `remove` version 15, `heading` version 16, `portal` version 17, `ask`, `answer` and `outline` version 18, `strip-priority` and `card --practice` version 19, `create` version 21, and the [jobs for other programs](#jobs) version 22 (`media_bridge.py status` shows the version). An older plugin still gets `localize` jobs; the others wait, and the command warns that the plugin does not know them yet. After updating the script, restart the helper (`media_bridge.py stop`, or `launchctl kickstart -k …` when it runs at login).

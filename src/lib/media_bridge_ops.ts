@@ -31,6 +31,8 @@ import { isPin, pinFromSourceFinder, pinOneQuote, SourceView, sourceViews } from
 import { quoteCandidates } from './pdf_source_pins/quote';
 import { applyHeadingLevel, clearHeading, getHeadingLevel, HeadingLevel } from './outline_restructure';
 import { removeCardPriorityFromRems } from './card_priority/remove_scoped';
+import { runOpenPdf, runOpenRem } from './media_bridge_open_ops';
+import { runPriorityGet, runPrioritySet } from './media_bridge_priority_ops';
 
 export interface BridgeOpJob {
   id: string;
@@ -1308,6 +1310,10 @@ const OPS: Record<string, (plugin: ReactRNPlugin, job: BridgeOpJob) => Promise<B
   remove: runRemove,
   outline: runOutline,
   create: runCreate,
+  'open-rem': runOpenRem,
+  'open-pdf': runOpenPdf,
+  'priority-get': runPriorityGet,
+  'priority-set': runPrioritySet,
 };
 
 /** Runs a non-localize job. Errors come back as `{ok: false, message}`, never thrown. */

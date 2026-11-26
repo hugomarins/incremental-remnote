@@ -106,7 +106,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-VERSION = 21  # 21: create (bulk rems with Quote/Extra Card Detail/tags, placed), 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs, 11: /tts/play, 12: /tts purpose, 13: POST /files, restore-audio, 14: notice, 15: set-text, remove, 16: heading, 17: portal, 18: ask + /answers, outline, 19: strip-priority, card --practice, 20: /tts/write simplifyLongFormulas
+VERSION = 22  # 22: open-rem, open-pdf, priority-get, priority-set (jobs only, POST /jobs), 21: create (bulk rems with Quote/Extra Card Detail/tags, placed), 3: /upscale, 4: /clipboard, 5: pin, pin-quote, card, 6: tag, 7: audio, 8: /tts, 9: /tts/plan lists engines, 10: /tts/write, ElevenLabs, 11: /tts/play, 12: /tts purpose, 13: POST /files, restore-audio, 14: notice, 15: set-text, remove, 16: heading, 17: portal, 18: ask + /answers, outline, 19: strip-priority, card --practice, 20: /tts/write simplifyLongFormulas
 # The jobs a plugin build understands, by the protocol version it polls with.
 OPS_BY_PLUGIN_VERSION = {
     1: {"localize"},
@@ -133,6 +133,9 @@ OPS_BY_PLUGIN_VERSION = {
     14: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card", "audio",
          "restore-audio", "notice", "set-text", "remove", "heading", "portal", "ask", "outline", "strip-priority",
          "create"},
+    15: {"localize", "move", "tag", "untag", "get-image", "incrementalize", "pin", "pin-quote", "card", "audio",
+         "restore-audio", "notice", "set-text", "remove", "heading", "portal", "ask", "outline", "strip-priority",
+         "create", "open-rem", "open-pdf", "priority-get", "priority-set"},
 }
 # Jobs that may name no rem at all.
 OPS_WITHOUT_REMS = {"notice", "ask"}

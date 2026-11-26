@@ -234,6 +234,9 @@ In the [Menu Hub](Plugin-Widgets-Reference.md#menu-hub) opened from the queue's 
 - **[Find Interference](Source-Pins.md#find-interference)** — `quick: intf`
   What in your library the focused or selected note could be confused with (≈ similar but distinct: the same frame with another value or referent), and what contradicts it (≠, differences of scope included) or confirms it (=), sorted by Claude from the passages found; after review, written under the note as a dated Interference Check with pinned quotes, and `C` turns ≈ and ≠ rows into [discrimination cards](Source-Pins.md#discrimination-cards). Needs a corpus provider with semantic search and the Claude CLI.
 
+- **[Open in Corpus Reader](Corpus-Provider.md#op-open-in-reader)** — `quick: oir`
+  Opens your corpus provider's reader, in the browser, on the passage the focused Rem comes from: a PDF highlight, a note under a book's notes, an extract the reader made. Appears only when the provider has a reader.
+
 - **[Find Sources (by meaning) in descendants](Source-Pins.md#find-sources-in-descendants)** — `quick: fsqd`
   Find Sources on every statement under the focused or selected Rems (a summary or course document): lists read as one statement with their lead-in, headings and short labels left out, statements already pinned skipped; three at a time in the background, one review for the run.
 
