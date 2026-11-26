@@ -16,6 +16,8 @@ import { setCardPriority, updateCardPriorityCache } from './card_priority';
 import { getIncrementalRemFromRem, setIncRemPriority, updateIncrementalRemCache } from './incremental_rem';
 import { resolveRemTextForBreadcrumb } from './richTextRemRefs';
 import { getIESetting } from './settings';
+import { readPriorityColorScale } from './priority_color_scale';
+import { scalePercentile } from './unified_percentile';
 
 type Kind = 'IncRem' | 'Card';
 
@@ -41,6 +43,11 @@ export interface PriorityAnswer {
   source: 'own' | 'inherited' | 'default';
   from: string | null;
   kind: Kind;
+  /**
+   * The priority's place on the unified IncRems + cards scale, the number every priority
+   * colour in the plugin is drawn from. Absent until the scale has been built.
+   */
+  percentile?: number;
 }
 
 const fail = (summary: string): BridgeOpResult => ({ ok: false, summary, message: summary });
@@ -169,15 +176,18 @@ export async function runPriorityGet(plugin: ReactRNPlugin, job: BridgeOpJob): P
   const ids = [...new Set(job.remIds)];
   const reader = new PriorityReader(plugin);
   for (const rem of (await plugin.rem.findMany(ids)) ?? []) reader.seed(rem);
-  const defaultPriority = await getIESetting(plugin, defaultCardPriorityId);
+  const [defaultPriority, scale] = await Promise.all([
+    getIESetting(plugin, defaultCardPriorityId),
+    readPriorityColorScale(plugin),
+  ]);
 
   const priorities: Record<string, PriorityAnswer> = {};
   const missing: string[] = [];
   await pooled(ids, async (id) => {
     try {
       const answer = await reader.answer(id, defaultPriority);
-      if (answer) priorities[id] = answer;
-      else missing.push(id);
+      if (!answer) missing.push(id);
+      else priorities[id] = scale ? { ...answer, percentile: scalePercentile(scale, answer.priority) } : answer;
     } catch (e) {
       console.warn('[MediaBridge] priority-get failed for', id, e);
       missing.push(id);
