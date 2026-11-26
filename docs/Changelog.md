@@ -2,6 +2,18 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.259 - November 26th, 2026
+
+### ✨ New
+
+**Corpus Provider**: Added **Open in Corpus Reader** (`quick: oir`), which opens your provider's own reader on the passage the focused Rem comes from; it appears only when the provider offers `open-in-reader`.
+
+📖 [Corpus Provider → open-in-reader](Corpus-Provider.md#op-open-in-reader)
+
+**Local Media Bridge**: Added four jobs for programs that show your notes outside RemNote: open a Rem, open a PDF at a page, read the priorities of many Rems, and set one with a preview of what would inherit it.
+
+📖 [Local Media Bridge → Jobs for other programs](Local-Media-Bridge.md#jobs)
+
 ## v1.0.258 - November 25th, 2026
 
 ### ♻️ Changed
