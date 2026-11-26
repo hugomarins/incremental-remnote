@@ -62,3 +62,11 @@ rm -f ../companion-store.zip && zip -X ../companion-store.zip manifest.json back
 ## Tests
 
 `node --test companion/anchors.test.js companion/integration.test.js`, also part of `npm test`. Add `REAL_PAGE=<saved html>` to check the text-finding and outline logic against a saved page.
+
+## Turning the Companion off on a site
+
+- **Off on this site** in the page bar stops the marks, the extract menu and the reading clock on
+  that site (its origin is kept in `offSites`, in the extension's storage). With that site in the
+  active tab, the side panel shows **Turn on for this site**, which also reloads the page.
+- A page can ask the Companion to stay out by itself, for a reader that has extracts and
+  highlights of its own: `<meta name="ie-companion" content="off">` in its `<head>`.

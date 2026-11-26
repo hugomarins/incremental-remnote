@@ -153,6 +153,7 @@ function runInPage() {
         <button id="setRead">Set read point</button>
         <button id="goRead">Go to read point</button>
         <button id="import">Import headings</button>
+        <button id="siteOff" title="Stop marking, extracting and timing on this site. Turn it back on from the side panel">Off on this site</button>
       </div>
       <button id="toggle"></button>
     </div>`;
@@ -826,14 +827,40 @@ function runInPage() {
     }).observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
-  if (document.readyState === 'complete') attach();
-  else window.addEventListener('load', attach);
+  // The Companion stays out of a page that asks it to (a reader with its own extracts and
+  // highlights: <meta name="ie-companion" content="off">) and out of the sites the user
+  // turned it off on (`offSites` in chrome.storage.local: origins; the panel turns one back on).
+  let off = false;
+  const pageOptsOut = () =>
+    document.querySelector('meta[name="ie-companion"]')?.getAttribute('content')?.trim().toLowerCase() === 'off';
+  async function attachUnlessOff() {
+    let sites = [];
+    try {
+      sites = (await chrome.storage.local.get('offSites')).offSites ?? [];
+    } catch {
+      // storage unreachable: behave as before
+    }
+    off = pageOptsOut() || (Array.isArray(sites) && sites.includes(location.origin));
+    if (!off) attach();
+  }
+  $('siteOff').addEventListener('click', async () => {
+    if (refuseIfGone()) return;
+    const { offSites } = await chrome.storage.local.get('offSites');
+    const sites = Array.isArray(offSites) ? offSites : [];
+    if (!sites.includes(location.origin)) await chrome.storage.local.set({ offSites: [...sites, location.origin] });
+    off = true;
+    host.remove();
+    if (typeof CSS !== 'undefined' && CSS.highlights) for (const name of [...CSS.highlights.keys()]) if (name.startsWith('ie-')) CSS.highlights.delete(name);
+  });
+
+  if (document.readyState === 'complete') attachUnlessOff();
+  else window.addEventListener('load', attachUnlessOff);
 
   chrome.runtime.onMessage.addListener((message, _sender, respond) => {
     if (message.ie === 'opDone' || message.ie === 'readDone') {
       pending.get(message.id)?.(message);
       pending.delete(message.id);
-    } else if (message.ie === 'pluginReady' || message.ie === 'pageChanged') {
+    } else if (!off && (message.ie === 'pluginReady' || message.ie === 'pageChanged')) {
       loadFromPlugin();
     }
     respond(true);

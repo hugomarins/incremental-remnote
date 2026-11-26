@@ -885,6 +885,32 @@ setInterval(() => {
 
 // ---- Status ----
 
+// A site the user turned the Companion off on (the page bar's "Off on this site"): the
+// panel is where it is turned back on, since the page no longer shows the bar.
+async function activeOrigin() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  try {
+    return { tab, origin: new URL(tab?.url ?? '').origin };
+  } catch {
+    return { tab, origin: null };
+  }
+}
+async function showSiteToggle() {
+  const { origin } = await activeOrigin();
+  const { offSites } = await chrome.storage.local.get('offSites');
+  document.getElementById('siteToggle').hidden = !(origin && Array.isArray(offSites) && offSites.includes(origin));
+}
+document.getElementById('siteToggle').addEventListener('click', async () => {
+  const { tab, origin } = await activeOrigin();
+  const { offSites } = await chrome.storage.local.get('offSites');
+  await chrome.storage.local.set({ offSites: (Array.isArray(offSites) ? offSites : []).filter((site) => site !== origin) });
+  if (tab?.id !== undefined) chrome.tabs.reload(tab.id).catch(() => {});
+});
+chrome.storage.onChanged.addListener((changes) => changes.offSites && showSiteToggle());
+chrome.tabs.onActivated?.addListener(() => showSiteToggle());
+chrome.tabs.onUpdated?.addListener((_id, info) => info.url && showSiteToggle());
+showSiteToggle().catch(() => {});
+
 document.getElementById('diagnostics').addEventListener('click', () => {
   const text = [
     `Chrome: ${navigator.userAgent}`,
