@@ -2,6 +2,14 @@
 
 This page documents the major changes and improvements for each version of the Incremental RemNote plugin.
 
+## v1.0.260 - November 26th, 2026
+
+### ✨ Improved
+
+**Local Media Bridge**: the `priority-get` job now answers each Rem's `percentile` too, so a program outside RemNote can colour priorities exactly as the plugin's own badges do.
+
+📖 [Local Media Bridge → Jobs for other programs](Local-Media-Bridge.md#jobs)
+
 ## v1.0.259 - November 26th, 2026
 
 ### ✨ New
